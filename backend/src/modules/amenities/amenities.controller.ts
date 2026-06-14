@@ -1,0 +1,52 @@
+import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { AmenitiesService } from './amenities.service';
+import { CreateAmenityDto, UpdateAmenityDto } from './dto/create-amenity.dto';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { ROLES } from 'src/common/constants';
+
+@ApiTags('Amenities')
+@Controller('amenities')
+export class AmenitiesController {
+  constructor(private readonly amenitiesService: AmenitiesService) {}
+
+  @Get()
+  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @ApiOperation({ summary: 'Listar todas las amenidades' })
+  @ApiQuery({ name: 'page', required: false, description: 'Número de página' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Resultados por página' })
+  async findAll(
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return this.amenitiesService.findAll(+page, +limit);
+  }
+
+  @Get(':id')
+  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @ApiOperation({ summary: 'Obtener amenidad por ID' })
+  async findOne(@Param('id') id: string) {
+    return this.amenitiesService.findOne(id);
+  }
+
+  @Post()
+  @Roles(ROLES.ADMIN)
+  @ApiOperation({ summary: 'Crear amenidad' })
+  async create(@Body() createDto: CreateAmenityDto) {
+    return this.amenitiesService.create(createDto);
+  }
+
+  @Put(':id')
+  @Roles(ROLES.ADMIN)
+  @ApiOperation({ summary: 'Actualizar amenidad' })
+  async update(@Param('id') id: string, @Body() updateDto: UpdateAmenityDto) {
+    return this.amenitiesService.update(id, updateDto);
+  }
+
+  @Delete(':id')
+  @Roles(ROLES.ADMIN)
+  @ApiOperation({ summary: 'Eliminar amenidad' })
+  async remove(@Param('id') id: string) {
+    return this.amenitiesService.remove(id);
+  }
+}
