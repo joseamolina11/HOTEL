@@ -1,6 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/main-layout';
-import { ProtectedRoute } from './protected-route';
+import { ProtectedRoute, RoleGuard } from './protected-route';
 import { LoginPage } from '@/pages/auth/login.page';
 import { DashboardPage } from '@/pages/dashboard/dashboard.page';
 import { ReservationsListPage } from '@/pages/reservations/reservations-list.page';
@@ -21,6 +21,15 @@ import { CalendarPage } from '@/pages/calendar/calendar.page';
 import { OrdersPage } from '@/pages/orders/orders.page';
 import { PaymentsPage } from '@/pages/payments/payments.page';
 import { CashRegisterPage } from '@/pages/cash-register/cash-register.page';
+import { UsersListPage } from '@/pages/users/users-list.page';
+import { HousekeepingPage } from '@/pages/housekeeping/housekeeping.page';
+import { ExpenseCategoriesListPage } from '@/pages/expense-categories/expense-categories-list.page';
+import { SuppliersListPage } from '@/pages/suppliers/suppliers-list.page';
+import { PurchaseOrdersListPage } from '@/pages/purchase-orders/purchase-orders-list.page';
+import { ExpensesListPage } from '@/pages/expenses/expenses-list.page';
+import { ServicesListPage } from '@/pages/services/services-list.page';
+import { TaxConfigListPage } from '@/pages/tax-config/tax-config-list.page';
+import { AccountsPayableListPage } from '@/pages/accounts-payable/accounts-payable-list.page';
 
 export const router = createBrowserRouter([
   {
@@ -55,6 +64,15 @@ export const router = createBrowserRouter([
       { path: 'orders', element: <OrdersPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       { path: 'cash-register', element: <CashRegisterPage /> },
+      { path: 'expense-categories', element: <ExpenseCategoriesListPage /> },
+      { path: 'suppliers', element: <SuppliersListPage /> },
+      { path: 'purchase-orders', element: <PurchaseOrdersListPage /> },
+      { path: 'expenses', element: <ExpensesListPage /> },
+      { path: 'services', element: <ServicesListPage /> },
+      { path: 'tax-config', element: <TaxConfigListPage /> },
+      { path: 'accounts-payable', element: <AccountsPayableListPage /> },
+      { path: 'users', element: <RoleGuard roles={['admin']}><UsersListPage /></RoleGuard> },
+      { path: 'housekeeping', element: <HousekeepingPage /> },
     ],
   },
   {

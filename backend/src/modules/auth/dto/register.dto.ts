@@ -19,8 +19,8 @@ export class RegisterDto {
   @IsString()
   apellidos: string;
 
-  @ApiPropertyOptional({ example: 'admin', enum: ['admin', 'reception'] })
+  @ApiPropertyOptional({ example: 'admin', enum: ['admin', 'reception', 'limpieza', 'mantenimiento'] })
   @IsOptional()
-  @IsEnum(['admin', 'reception'], { message: 'El rol debe ser admin o reception' })
-  role?: 'admin' | 'reception';
+  @IsEnum(['admin', 'reception', 'limpieza', 'mantenimiento'], { message: 'El rol debe ser admin, reception, limpieza o mantenimiento' })
+  role?: 'admin' | 'reception' | 'limpieza' | 'mantenimiento';
 }

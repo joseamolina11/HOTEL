@@ -86,7 +86,7 @@ export function SuppliesPage() {
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" /> Nuevo Insumo</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Nuevo Insumo</DialogTitle>
               </DialogHeader>
@@ -186,7 +186,7 @@ export function SuppliesPage() {
       <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
 
       <Dialog open={openEdit} onOpenChange={(v) => { setOpenEdit(v); if (!v) setEditingItem(null); }}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Insumo</DialogTitle>
           </DialogHeader>

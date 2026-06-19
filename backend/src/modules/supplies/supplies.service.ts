@@ -124,6 +124,7 @@ export class SuppliesService {
       stockPosterior,
       precioUnitario: createMovementDto.precioUnitario ?? 0,
       observaciones: createMovementDto.observaciones,
+      expenseId: createMovementDto.expenseId || undefined,
     });
     await this.supplyItemRepository.update(item.id, { stockActual: stockPosterior });
     return this.supplyMovementRepository.save(movement);

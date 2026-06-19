@@ -10,6 +10,7 @@ export interface HotelConfig {
   moneda: string;
   checkInTime: string;
   checkOutTime: string;
+  contratoHtml?: string;
 }
 
 export interface RoomType {

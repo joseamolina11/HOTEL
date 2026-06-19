@@ -42,13 +42,13 @@ export class CheckOutService {
         fechaSalida: Between(startOfDay, endOfDay),
         estado: 'checkin',
       },
-      relations: ['room', 'room.roomType', 'guest', 'companions'],
+      relations: ['room', 'room.roomType', 'guest', 'companions', 'contratoFile'],
       order: { fechaSalida: 'ASC' },
     });
 
     const allCheckedIn = await this.reservationRepository.find({
       where: { estado: 'checkin' },
-      relations: ['room', 'room.roomType', 'guest', 'companions'],
+      relations: ['room', 'room.roomType', 'guest', 'companions', 'contratoFile'],
       order: { fechaSalida: 'ASC' },
     });
 
@@ -62,6 +62,7 @@ export class CheckOutService {
         'room', 'room.roomType',
         'guest', 'companions',
         'consumptions', 'consumptions.inventoryItem',
+        'contratoFile',
       ],
     });
 

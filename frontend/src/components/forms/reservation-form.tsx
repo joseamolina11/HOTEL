@@ -75,10 +75,7 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
     : null;
 
   const onSubmit = async (data: ReservationFormData) => {
-    await createReservation.mutateAsync({
-      ...data,
-      estado: 'confirmada',
-    });
+    await createReservation.mutateAsync({ ...data, estado: 'confirmada' });
     onSuccess();
   };
 

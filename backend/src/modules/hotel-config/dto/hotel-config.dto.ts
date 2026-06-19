@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsDate } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateHotelConfigDto {
@@ -45,9 +45,29 @@ export class CreateHotelConfigDto {
   @IsOptional()
   @IsString()
   checkOutTime?: string;
+
+  @ApiPropertyOptional({ example: '<h1>Contrato de Hospedaje</h1>...' })
+  @IsOptional()
+  @IsString()
+  contratoHtml?: string;
 }
 
 export class UpdateHotelConfigDto {
+
+  @ApiPropertyOptional({ example: 'Hotel Paraíso' })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @ApiPropertyOptional({ example: 'Hotel Paraíso' })
+  @IsOptional()
+  @IsDate()
+  createdAt?: Date;
+  @ApiPropertyOptional({ example: 'Hotel Paraíso' })
+  @IsOptional()
+  @IsDate()
+  updatedAt?: Date;
+
   @ApiPropertyOptional({ example: 'Hotel Paraíso' })
   @IsOptional()
   @IsString()
@@ -97,4 +117,9 @@ export class UpdateHotelConfigDto {
   @IsOptional()
   @IsString()
   checkOutTime?: string;
+
+  @ApiPropertyOptional({ example: '<h1>Contrato de Hospedaje</h1>...' })
+  @IsOptional()
+  @IsString()
+  contratoHtml?: string;
 }

@@ -1,0 +1,78 @@
+import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { PurchaseOrdersService } from './purchase-orders.service';
+import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto, UpdateOrderStatusDto } from './dto/create-purchase-order.dto';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { ROLES } from 'src/common/constants';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { JwtPayload } from '../auth/interfaces/auth.interface';
+
+@ApiTags('Purchase Orders')
+@Controller('purchase-orders')
+export class PurchaseOrdersController {
+  constructor(private readonly service: PurchaseOrdersService) {}
+
+  @Get()
+  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @ApiOperation({ summary: 'Listar órdenes de compra' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'estado', required: false })
+  @ApiQuery({ name: 'supplierId', required: false })
+  @ApiQuery({ name: 'desde', required: false })
+  @ApiQuery({ name: 'hasta', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async findAll(
+    @Query('search') search?: string,
+    @Query('estado') estado?: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return this.service.findAll({ search, estado, supplierId, desde, hasta }, +page, +limit);
+  }
+
+  @Get(':id')
+  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @ApiOperation({ summary: 'Obtener orden de compra por ID' })
+  async findOne(@Param('id') id: string) {
+    return this.service.findOne(id);
+  }
+
+  @Get('code/:codigo')
+  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @ApiOperation({ summary: 'Buscar orden por código' })
+  async findByCode(@Param('codigo') codigo: string) {
+    return this.service.findByCode(codigo);
+  }
+
+  @Post()
+  @Roles(ROLES.ADMIN)
+  @ApiOperation({ summary: 'Crear orden de compra' })
+  async create(@Body() dto: CreatePurchaseOrderDto, @CurrentUser() user: JwtPayload) {
+    return this.service.create(dto, user.sub);
+  }
+
+  @Put(':id')
+  @Roles(ROLES.ADMIN)
+  @ApiOperation({ summary: 'Actualizar orden de compra' })
+  async update(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto) {
+    return this.service.update(id, dto);
+  }
+
+  @Put(':id/status')
+  @Roles(ROLES.ADMIN)
+  @ApiOperation({ summary: 'Cambiar estado de orden de compra' })
+  async updateStatus(@Param('id') id: string, @Body() dto: UpdateOrderStatusDto) {
+    return this.service.updateStatus(id, dto);
+  }
+
+  @Delete(':id')
+  @Roles(ROLES.ADMIN)
+  @ApiOperation({ summary: 'Eliminar orden de compra' })
+  async remove(@Param('id') id: string) {
+    return this.service.remove(id);
+  }
+}

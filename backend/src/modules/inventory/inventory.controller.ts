@@ -19,17 +19,19 @@ export class InventoryController {
   @Get()
   @Roles(ROLES.ADMIN, ROLES.RECEPTION)
   @ApiOperation({ summary: 'Listar productos de inventario' })
+  @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'categoria', required: false })
   @ApiQuery({ name: 'bajoStock', required: false })
   @ApiQuery({ name: 'page', required: false, description: 'Número de página' })
   @ApiQuery({ name: 'limit', required: false, description: 'Resultados por página' })
   async findAll(
+    @Query('search') search?: string,
     @Query('categoria') categoria?: string,
     @Query('bajoStock') bajoStock?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 10,
   ) {
-    return this.inventoryService.findAll({ categoria, bajoStock: bajoStock === 'true' }, +page, +limit);
+    return this.inventoryService.findAll({ search, categoria, bajoStock: bajoStock === 'true' }, +page, +limit);
   }
 
   @Get('low-stock')

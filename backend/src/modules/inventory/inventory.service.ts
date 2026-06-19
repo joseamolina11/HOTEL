@@ -14,11 +14,14 @@ export class InventoryService {
     private readonly inventoryMovementRepository: Repository<InventoryMovement>,
   ) {}
 
-  async findAll(filters?: { categoria?: string; bajoStock?: boolean }, page = 1, limit = 10) {
+  async findAll(filters?: { search?: string; categoria?: string; bajoStock?: boolean }, page = 1, limit = 10) {
     const query = this.inventoryItemRepository.createQueryBuilder('item')
       .leftJoinAndSelect('item.category', 'category')
       .orderBy('item.nombre', 'ASC');
 
+    if (filters?.search) {
+      query.andWhere('item.nombre ILIKE :search', { search: `%${filters.search}%` });
+    }
     if (filters?.categoria) {
       query.andWhere('item.categoria = :categoria', { categoria: filters.categoria });
     }
@@ -124,6 +127,7 @@ export class InventoryService {
       stockPosterior,
       precioUnitario: createMovementDto.precioUnitario ?? 0,
       observaciones: createMovementDto.observaciones,
+      expenseId: createMovementDto.expenseId || undefined,
     });
     await this.inventoryItemRepository.update(item.id, { stockActual: stockPosterior });
     return this.inventoryMovementRepository.save(movement);

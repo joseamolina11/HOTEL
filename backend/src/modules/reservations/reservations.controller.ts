@@ -1,9 +1,16 @@
 import { Controller, Get, Post, Put, Param, Body, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiProperty } from '@nestjs/swagger';
+import { IsString } from 'class-validator';
 import { ReservationsService } from './reservations.service';
 import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto } from './dto/create-reservation.dto';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { ROLES } from 'src/common/constants';
+
+class UpdateContractDto {
+  @ApiProperty()
+  @IsString()
+  contratoFileId: string;
+}
 
 @ApiTags('Reservations')
 @Controller('reservations')
@@ -68,5 +75,12 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Confirmar reserva' })
   async confirm(@Param('id') id: string) {
     return this.reservationsService.confirm(id);
+  }
+
+  @Put(':id/contract')
+  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @ApiOperation({ summary: 'Asignar contrato a reserva' })
+  async updateContract(@Param('id') id: string, @Body() dto: UpdateContractDto) {
+    return this.reservationsService.updateContract(id, dto.contratoFileId);
   }
 }

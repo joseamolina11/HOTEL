@@ -128,4 +128,9 @@ export class CreateSupplyMovementDto {
   @IsOptional()
   @IsString()
   observaciones?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-expense' })
+  @IsOptional()
+  @IsString()
+  expenseId?: string;
 }

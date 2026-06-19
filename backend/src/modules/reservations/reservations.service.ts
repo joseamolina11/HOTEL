@@ -32,6 +32,7 @@ export class ReservationsService {
     const query = this.reservationRepository.createQueryBuilder('reservation')
       .leftJoinAndSelect('reservation.room', 'room')
       .leftJoinAndSelect('reservation.guest', 'guest')
+      .leftJoinAndSelect('reservation.contratoFile', 'contratoFile')
       .leftJoinAndSelect('room.roomType', 'roomType')
       .skip(skip)
       .take(limit)
@@ -73,6 +74,7 @@ export class ReservationsService {
         'checkIn', 'checkIn.user',
         'checkOut', 'checkOut.user',
         'consumptions', 'consumptions.inventoryItem',
+        'contratoFile',
       ],
     });
     if (!reservation) {
@@ -81,10 +83,19 @@ export class ReservationsService {
     return reservation;
   }
 
+  async updateContract(id: string, contratoFileId: string): Promise<Reservation> {
+    const reservation = await this.findOne(id);
+    if (['cancelada', 'checkout'].includes(reservation.estado)) {
+      throw new BadRequestException('No se puede modificar una reserva en este estado');
+    }
+    reservation.contratoFileId = contratoFileId;
+    return this.reservationRepository.save(reservation);
+  }
+
   async findByCode(codigo: string): Promise<Reservation> {
     const reservation = await this.reservationRepository.findOne({
       where: { codigo },
-      relations: ['room', 'room.roomType', 'guest', 'companions'],
+      relations: ['room', 'room.roomType', 'guest', 'companions', 'contratoFile'],
     });
     if (!reservation) {
       throw new NotFoundException('Reserva no encontrada');

@@ -1,6 +1,8 @@
 export const ROLES = {
   ADMIN: 'admin',
   RECEPTION: 'reception',
+  LIMPIEZA: 'limpieza',
+  MANTENIMIENTO: 'mantenimiento',
 } as const;
 
 export const ROOM_STATUS = {

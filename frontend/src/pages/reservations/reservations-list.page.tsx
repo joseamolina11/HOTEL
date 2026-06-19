@@ -1,17 +1,19 @@
 import { useState, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reservationsApi } from '@/api/reservations.api';
 import { checkoutApi } from '@/api/checkout.api';
+import { filesApi } from '@/api/files.api';
+import apiClient from '@/api/client';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ReservationForm } from '@/components/forms/reservation-form';
-import { Search, Plus, Pencil, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, Pencil, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { useUpdateReservation, useCancelReservation, useConfirmReservation } from '@/hooks/useReservations';
-import { confirmAction } from '@/lib/notifications';
+import { confirmAction, toastSuccess } from '@/lib/notifications';
 import { useForm } from 'react-hook-form';
 import { printReceipt } from '@/components/checkout/receipt-ticket';
 
@@ -22,7 +24,34 @@ export function ReservationsListPage() {
   const [detailRes, setDetailRes] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
+  const [uploadingContract, setUploadingContract] = useState(false);
   const qc = useQueryClient();
+
+  const contractMut = useMutation({
+    mutationFn: ({ id, contratoFileId }: { id: string; contratoFileId: string }) =>
+      apiClient.put(`/reservations/${id}/contract`, { contratoFileId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reservations'] });
+      toastSuccess('Contrato asignado a la reserva');
+    },
+  });
+
+  const uploadContract = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !detailRes) return;
+    setUploadingContract(true);
+    try {
+      const result = await filesApi.upload(file, 'contratos');
+      await contractMut.mutateAsync({ id: detailRes.id, contratoFileId: result.id });
+      setDetailRes((prev: any) => ({
+        ...prev,
+        contratoFile: { ...result, url: `/uploads/contratos/${result.fileName}` },
+        contratoFileId: result.id,
+      }));
+    } finally {
+      setUploadingContract(false);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['reservations', { search, estado: statusFilter, page }],
@@ -233,7 +262,7 @@ export function ReservationsListPage() {
       )}
 
       <Dialog open={!!detailRes} onOpenChange={(v) => !v && setDetailRes(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Reserva {detailRes?.codigo}</DialogTitle>
           </DialogHeader>
@@ -262,6 +291,26 @@ export function ReservationsListPage() {
               <div className="space-y-1">
                 <label className="text-xs font-medium">Observaciones</label>
                 <Input {...register('observaciones')} placeholder="Opcional" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium">Contrato</label>
+                {detailRes.contratoFile && (
+                  <div className="flex items-center gap-2 rounded-lg border p-3 text-sm mb-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex-1 truncate">{detailRes.contratoFile.originalName}</span>
+                    <a href={detailRes.contratoFile.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                      Ver <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
+                {detailRes.estado !== 'cancelada' && detailRes.estado !== 'checkout' && (
+                  <Button type="button" variant="outline" size="sm" disabled={uploadingContract} className="relative">
+                    {uploadingContract ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Upload className="mr-1 h-4 w-4" />}
+                    {uploadingContract ? 'Subiendo...' : detailRes.contratoFile ? 'Reemplazar Contrato' : 'Subir Contrato'}
+                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={uploadContract} accept=".pdf,.doc,.docx,.jpg,.png" />
+                  </Button>
+                )}
               </div>
 
               <div className="flex items-center justify-between">

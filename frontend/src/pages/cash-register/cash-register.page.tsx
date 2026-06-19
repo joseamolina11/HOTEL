@@ -155,7 +155,7 @@ function OpenDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Abrir Caja</DialogTitle>
         </DialogHeader>
@@ -221,7 +221,7 @@ function CloseDialog({ open, onClose, register }: { open: boolean; onClose: () =
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Cerrar Caja</DialogTitle>
         </DialogHeader>
@@ -295,7 +295,7 @@ function DetailDialog({ register, onClose }: { register: any; onClose: () => voi
 
   return (
     <Dialog open={!!register} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Detalle de Caja</DialogTitle>
         </DialogHeader>

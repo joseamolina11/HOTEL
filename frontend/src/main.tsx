@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
   },
 });
 
-useUIStore.getState().setTheme('dark');
+useUIStore.getState().setTheme('light');
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

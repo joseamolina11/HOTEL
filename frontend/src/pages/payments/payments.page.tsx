@@ -124,7 +124,7 @@ function PaymentFormDialog({ open, onClose, room }: { open: boolean; onClose: ()
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Registrar Pago</DialogTitle>
         </DialogHeader>
@@ -170,7 +170,7 @@ function PaymentHistoryDialog({ open, onClose, room }: { open: boolean; onClose:
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Historial de Pagos</DialogTitle>
         </DialogHeader>
@@ -180,6 +180,7 @@ function PaymentHistoryDialog({ open, onClose, room }: { open: boolean; onClose:
             <span className="font-medium">{room.room.numero} - {room.room.nombre}</span>
           </div>
         )}
+        <h4 className="text-sm font-medium mb-2">Pagos registrados</h4>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

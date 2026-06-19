@@ -9,6 +9,7 @@ import { ReservationGuest } from './reservation-guest.entity';
 import { CheckIn } from 'src/modules/check-in/entities/check-in.entity';
 import { CheckOut } from 'src/modules/check-out/entities/check-out.entity';
 import { Consumption } from 'src/modules/consumptions/entities/consumption.entity';
+import { FileRecord } from 'src/modules/files/entities/file.entity';
 
 @Entity('reservations')
 export class Reservation {
@@ -48,6 +49,9 @@ export class Reservation {
   @Column({ name: 'ota_reservation_id', nullable: true })
   otaReservationId: string;
 
+  @Column({ name: 'contrato_file_id', nullable: true })
+  contratoFileId?: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -73,4 +77,8 @@ export class Reservation {
 
   @OneToMany(() => Consumption, (consumption) => consumption.reservation)
   consumptions: Consumption[];
+
+  @ManyToOne(() => FileRecord)
+  @JoinColumn({ name: 'contrato_file_id' })
+  contratoFile?: FileRecord;
 }

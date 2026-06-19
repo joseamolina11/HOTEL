@@ -52,7 +52,7 @@ export function RoomTypesPage() {
             <DialogTrigger asChild>
               <Button onClick={() => setEditing(null)}><Plus className="mr-2 h-4 w-4" /> Nuevo Tipo</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editing ? 'Editar Tipo de Habitación' : 'Nuevo Tipo de Habitación'}</DialogTitle>
               </DialogHeader>

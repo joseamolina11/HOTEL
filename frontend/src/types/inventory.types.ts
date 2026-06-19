@@ -37,4 +37,5 @@ export interface CreateMovementDto {
   cantidad: number;
   precioUnitario?: number;
   observaciones?: string;
+  expenseId?: string;
 }

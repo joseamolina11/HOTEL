@@ -3,7 +3,7 @@ export interface User {
   email: string;
   nombres: string;
   apellidos: string;
-  role: 'admin' | 'reception';
+  role: 'admin' | 'reception' | 'limpieza' | 'mantenimiento';
 }
 
 export interface LoginCredentials {

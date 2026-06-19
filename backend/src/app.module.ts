@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -22,6 +23,18 @@ import { SuppliesModule } from './modules/supplies/supplies.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { CashRegisterModule } from './modules/cash-register/cash-register.module';
+import { UsersModule } from './modules/users/users.module';
+import { HousekeepingModule } from './modules/housekeeping/housekeeping.module';
+import { FilesModule } from './modules/files/files.module';
+import { ExpenseCategoriesModule } from './modules/expense-categories/expense-categories.module';
+import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { ServicesModule } from './modules/services/services.module';
+import { TaxConfigModule } from './modules/tax-config/tax-config.module';
+import { AccountsPayableModule } from './modules/accounts-payable/accounts-payable.module';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -45,7 +58,21 @@ import { CashRegisterModule } from './modules/cash-register/cash-register.module
     ConsumptionsModule,
     DashboardModule,
     OtaModule,
+    UsersModule,
+    HousekeepingModule,
+    FilesModule,
+    ExpenseCategoriesModule,
+    SuppliersModule,
+    PurchaseOrdersModule,
+    ExpensesModule,
+    ServicesModule,
+    TaxConfigModule,
+    AccountsPayableModule,
   ],
   controllers: [AppController],
+  providers: [
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AppModule {}

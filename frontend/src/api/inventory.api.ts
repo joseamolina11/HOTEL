@@ -7,6 +7,11 @@ export const inventoryApi = {
     return data;
   },
 
+  searchProducts: async (query: string) => {
+    const { data } = await apiClient.get('/inventory', { params: { search: query || undefined, limit: 50 } });
+    return (data.data?.data || []).map((p: any) => ({ value: p.id, label: `${p.nombre} - $${Number(p.costoUnitario).toFixed(2)}` }));
+  },
+
   findLowStock: async (): Promise<InventoryItem[]> => {
     const { data } = await apiClient.get('/inventory/low-stock');
     return data.data;

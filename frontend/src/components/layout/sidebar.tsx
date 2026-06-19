@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui.store";
+import { useAuthStore } from "@/stores/auth.store";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -22,6 +23,15 @@ import {
   ShoppingCart,
   CreditCard,
   DollarSign,
+  Sparkles,
+  UserCog,
+  Receipt,
+  Truck,
+  ShoppingBag,
+  Landmark,
+  Percent,
+  Wrench,
+  BookOpen,
 } from "lucide-react";
 
 interface GroupItem {
@@ -74,6 +84,11 @@ const groups: GroupItem[] = [
 
 export function Sidebar() {
   const { sidebarOpen, toggleSidebar } = useUIStore();
+  const theme = useUIStore((s) => s.theme);
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === 'admin';
+  const isAdminOrReception = user?.role === 'admin' || user?.role === 'reception';
+  const showFullNav = user?.role && ['admin', 'reception'].includes(user.role);
 
   const [expandedGroups, setExpandedGroups] = useState<
     Record<string, boolean>
@@ -108,12 +123,16 @@ export function Sidebar() {
     label,
     icon: Icon,
     className,
+    show = true,
   }: {
     to: string;
     label: string;
     icon: any;
     className?: string;
-  }) => (
+    show?: boolean;
+  }) => {
+    if (!show) return null;
+    return (
     <NavLink
       to={to}
       className={({ isActive }) =>
@@ -142,9 +161,13 @@ export function Sidebar() {
       )}
     </NavLink>
   );
+  };
 
   return (
     <aside
+      style={!isAdminOrReception ? {
+        display: 'none' 
+      } : undefined}
       className={cn(
         "fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
         sidebarOpen ? "w-64" : "w-16",
@@ -155,11 +178,21 @@ export function Sidebar() {
         {sidebarOpen ? (
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <img
-                src="/logo-blanco.png"
-                alt="Hotel Luxury VIP"
-                className="h-8 w-8 object-contain"
-              />
+            {
+              theme === 'dark' ? (
+                <img
+                  src="/logo-blanco.png"
+                  alt="Hotel Luxury VIP"
+                  className="h-7 w-7 object-contain"
+                />
+              ) : (
+                <img
+                  src="/logo-negro.png"
+                  alt="Hotel Luxury VIP"
+                  className="h-7 w-7 object-contain"
+                />
+              )
+            }
             </div>
 
             <div>
@@ -211,30 +244,41 @@ export function Sidebar() {
           to="/dashboard"
           label="Dashboard"
           icon={LayoutDashboard}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/reservations"
           label="Reservas"
           icon={CalendarDays}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/rooms"
           label="Habitaciones"
           icon={BedDouble}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/calendar"
           label="Calendario"
           icon={CalendarRange}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/guests"
           label="Huéspedes"
           icon={Users}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/housekeeping"
+          label="Housekeeping"
+          icon={Sparkles}
         />
 
         <SectionTitle title="Hotel" />
@@ -243,24 +287,35 @@ export function Sidebar() {
           to="/room-types"
           label="Tipos Habitación"
           icon={Hotel}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/amenities"
           label="Beneficios"
           icon={BetweenHorizonalEnd}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/services"
+          label="Servicios"
+          icon={Wrench}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/check-in"
           label="Check-In"
           icon={LogIn}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/check-out"
           label="Check-Out"
           icon={LogOut}
+          show={showFullNav}
         />
 
         <SectionTitle title="Ventas" />
@@ -269,23 +324,26 @@ export function Sidebar() {
           to="/orders"
           label="Pedidos"
           icon={ShoppingCart}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/payments"
           label="Pagos"
           icon={CreditCard}
+          show={showFullNav}
         />
 
         <NavLinkItem
           to="/cash-register"
           label="Caja"
           icon={DollarSign}
+          show={showFullNav}
         />
 
         <SectionTitle title="Inventario" />
 
-        {groups.map((group) => (
+        {showFullNav && groups.map((group) => (
           <div
             key={group.to}
             className="relative"
@@ -364,14 +422,64 @@ export function Sidebar() {
               )}
           </div>
         ))}
+        <SectionTitle title="Contabilidad" />
+
+        <NavLinkItem
+          to="/expense-categories"
+          label="Categorías Egreso"
+          icon={Tags}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/suppliers"
+          label="Proveedores"
+          icon={Truck}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/purchase-orders"
+          label="Órdenes Compra"
+          icon={ShoppingBag}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/expenses"
+          label="Egresos"
+          icon={Receipt}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/accounts-payable"
+          label="Ctas. por Pagar"
+          icon={BookOpen}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/tax-config"
+          label="Impuestos"
+          icon={Percent}
+          show={showFullNav}
+        />
       </nav>
 
       {/* FOOTER */}
       <div className="border-t border-sidebar-border py-2">
         <NavLinkItem
+          to="/users"
+          label="Usuarios"
+          icon={UserCog}
+          show={isAdmin}
+        />
+        <NavLinkItem
           to="/settings"
           label="Configuración"
           icon={Settings}
+          show={isAdmin}
         />
       </div>
     </aside>

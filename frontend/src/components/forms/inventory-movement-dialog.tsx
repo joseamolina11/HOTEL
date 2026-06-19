@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCreateMovement } from '@/hooks/useInventory';
+import { expensesApi } from '@/api/expenses.api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search, X } from 'lucide-react';
 
 const movementSchema = z.object({
   tipo: z.enum(['entrada', 'salida', 'ajuste']),
@@ -28,6 +30,9 @@ export function InventoryMovementDialog({ item, onClose, onSuccess }: Props) {
   if(!item) return null;
   const createMovement = useCreateMovement();
   const [precioVenta, setPrecioVenta] = useState(item?.precioVenta ?? 0);
+  const [expenseCodigo, setExpenseCodigo] = useState('');
+  const [selectedExpense, setSelectedExpense] = useState<any>(null);
+  const [searching, setSearching] = useState(false);
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(movementSchema),
@@ -35,6 +40,19 @@ export function InventoryMovementDialog({ item, onClose, onSuccess }: Props) {
   });
 
   const tipo = watch('tipo');
+
+  const searchExpense = async () => {
+    if (!expenseCodigo.trim()) return;
+    setSearching(true);
+    try {
+      const result = await expensesApi.findByCodigo(expenseCodigo.trim());
+      setSelectedExpense(result);
+    } catch {
+      setSelectedExpense(null);
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const onSubmit = async (data: FormData) => {
     if (!item) return;
@@ -44,6 +62,7 @@ export function InventoryMovementDialog({ item, onClose, onSuccess }: Props) {
       cantidad: data.cantidad,
       precioUnitario: data.precioUnitario || undefined,
       observaciones: data.observaciones || undefined,
+      expenseId: selectedExpense?.id || undefined,
     });
     if (precioVenta > 0 && precioVenta !== item.precioVenta) {
       const { inventoryApi } = await import('@/api/inventory.api');
@@ -55,7 +74,7 @@ export function InventoryMovementDialog({ item, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={!!item} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Movimiento — {item?.nombre}</DialogTitle>
         </DialogHeader>
@@ -74,11 +93,38 @@ export function InventoryMovementDialog({ item, onClose, onSuccess }: Props) {
             {errors.cantidad && <p className="text-xs text-destructive">{errors.cantidad.message}</p>}
           </div>
           {tipo === 'entrada' && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Costo unitario (entrada)</label>
-              <Input type="number" step="0.01" min={0} {...register('precioUnitario')} />
-              <p className="text-xs text-muted-foreground">Costo al que ingresó este producto</p>
-            </div>
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Costo unitario (entrada)</label>
+                <Input type="number" step="0.01" min={0} {...register('precioUnitario')} />
+                <p className="text-xs text-muted-foreground">Costo al que ingresó este producto</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Egreso asociado</label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Buscar por código de egreso..."
+                    value={expenseCodigo}
+                    onChange={(e) => setExpenseCodigo(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchExpense(); } }}
+                  />
+                  <Button type="button" variant="outline" size="icon" onClick={searchExpense} disabled={searching}>
+                    {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {selectedExpense && (
+                  <div className="flex items-center justify-between rounded-lg border p-2 text-sm">
+                    <div>
+                      <span className="font-mono font-medium">{selectedExpense.codigo}</span>
+                      <span className="text-muted-foreground ml-2">- {selectedExpense.concepto}</span>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedExpense(null)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
           <div className="space-y-2">
             <label className="text-sm font-medium">Precio de venta</label>

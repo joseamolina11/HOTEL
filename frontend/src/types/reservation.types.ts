@@ -23,6 +23,8 @@ export interface Reservation {
   estado: 'pendiente' | 'confirmada' | 'checkin' | 'checkout' | 'cancelada';
   origen: 'directo' | 'booking' | 'airbnb';
   otaReservationId?: string;
+  contratoFileId?: string;
+  contratoFile?: { id: string; url: string; originalName: string; mimeType: string; size: number };
   room?: Room;
   guest?: Guest;
   companions?: ReservationCompanion[];
@@ -35,6 +37,7 @@ export interface CreateReservationDto {
   fechaSalida: string;
   cantidadHuespedes: number;
   observaciones?: string;
+  contratoFileId?: string;
   estado?: string;
   companions?: ReservationCompanion[];
 }

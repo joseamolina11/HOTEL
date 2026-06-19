@@ -140,7 +140,7 @@ function OrderDetailDialog({ order, onClose }: { order: any; onClose: () => void
 
   return (
     <Dialog open={!!order} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Pedido {order.codigo}</DialogTitle>
         </DialogHeader>
@@ -289,7 +289,7 @@ function CreateOrderDialog({ open, onClose, roomId, onSuccess }: {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setItems([]); } }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nuevo Pedido</DialogTitle>
         </DialogHeader>

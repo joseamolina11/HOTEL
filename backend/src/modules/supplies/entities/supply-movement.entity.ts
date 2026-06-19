@@ -4,6 +4,7 @@ import {
 } from 'typeorm';
 import { SupplyItem } from './supply-item.entity';
 import { User } from 'src/modules/auth/entities/user.entity';
+import { Expense } from 'src/modules/expenses/entities/expense.entity';
 
 @Entity('supply_movements')
 export class SupplyMovement {
@@ -34,6 +35,9 @@ export class SupplyMovement {
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
+  @Column({ name: 'expense_id', nullable: true })
+  expenseId: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -44,4 +48,8 @@ export class SupplyMovement {
   @ManyToOne(() => User, (user) => user.supplyMovements)
   @JoinColumn({ name: 'user_id' })
   user: User;
+
+  @ManyToOne(() => Expense, { nullable: true })
+  @JoinColumn({ name: 'expense_id' })
+  expense: Expense;
 }

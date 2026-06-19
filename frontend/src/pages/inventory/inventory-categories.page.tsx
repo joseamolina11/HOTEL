@@ -100,7 +100,7 @@ export function InventoryCategoriesPage() {
       </Card>
 
       <Dialog open={openAdd || !!editing} onOpenChange={(v) => { if (!v) { setOpenAdd(false); setEditing(null); } }}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar' : 'Nueva'} Categoría</DialogTitle>
           </DialogHeader>

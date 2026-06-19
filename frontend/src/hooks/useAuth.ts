@@ -14,7 +14,11 @@ export function useLogin() {
     onSuccess: (response) => {
       login(response.user, response.tokens.accessToken, response.tokens.refreshToken);
       toastSuccess(`Bienvenido, ${response.user.nombres}`);
-      navigate('/dashboard');
+      if(response.user.role === 'admin' || response.user.role === 'reception') {
+        navigate('/dashboard');
+        return;
+      }
+      navigate('/housekeeping');
     },
   });
 }

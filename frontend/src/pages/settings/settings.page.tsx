@@ -4,8 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hotelConfigApi } from '@/api/hotel-config.api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Save, Building2, Loader2, Upload, ImageIcon } from 'lucide-react';
+import { Save, Building2, Loader2, Upload, ImageIcon, FileText } from 'lucide-react';
 import { toastSuccess } from '@/lib/notifications';
 
 export function SettingsPage() {
@@ -168,6 +169,26 @@ export function SettingsPage() {
             </Card>
           </div>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <FileText className="h-4 w-4" /> Plantilla de Contrato
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Variables disponibles: <code>{'{{nombre}}'}</code> <code>{'{{apellidos}}'}</code> <code>{'{{documento}}'}</code>{' '}
+              <code>{'{{nacionalidad}}'}</code> <code>{'{{habitacion}}'}</code> <code>{'{{tipo_habitacion}}'}</code>{' '}
+              <code>{'{{fecha_entrada}}'}</code> <code>{'{{fecha_salida}}'}</code>{' '}
+              <code>{'{{hotel_nombre}}'}</code> <code>{'{{hotel_direccion}}'}</code>{' '}
+              <code>{'{{hotel_ciudad}}'}</code> <code>{'{{hotel_pais}}'}</code> <code>{'{{hotel_telefono}}'}</code>{' '}
+              <code>{'{{hotel_email}}'}</code> <code>{'{{fecha_hoy}}'}</code>{' '}
+              <code>{'{{cantidad_huespedes}}'}</code> <code>{'{{huespedes_lista}}'}</code>
+            </p>
+            <Textarea {...register('contratoHtml')} rows={15} className="font-mono text-xs" placeholder="<h1>Contrato de Hospedaje</h1>..." />
+          </CardContent>
+        </Card>
       </div>
     </form>
   );

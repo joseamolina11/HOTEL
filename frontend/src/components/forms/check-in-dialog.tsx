@@ -5,12 +5,14 @@ import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { guestsApi } from '@/api/guests.api';
 import { reservationsApi } from '@/api/reservations.api';
+import { hotelConfigApi } from '@/api/hotel-config.api';
 import apiClient from '@/api/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Plus, X, UserPlus, LogIn, Loader2 } from 'lucide-react';
+import { Search, Plus, X, UserPlus, LogIn, Loader2, Printer } from 'lucide-react';
 import { toastSuccess } from '@/lib/notifications';
+import { renderContract, printContract } from '@/lib/print-contract';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const tomorrow = () => {
@@ -58,6 +60,11 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
 
   const { fields, append, remove } = useFieldArray({ control, name: 'companions' });
 
+  const { data: hotelConfig } = useQuery({
+    queryKey: ['hotel-config'],
+    queryFn: () => hotelConfigApi.getConfig(),
+  });
+
   const { data: guests } = useQuery({
     queryKey: ['guests', guestSearch],
     queryFn: () => guestsApi.findAll(guestSearch),
@@ -85,6 +92,43 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
     setSelectedGuest(guest);
     setShowNewGuest(false);
     setStep('checkin');
+  };
+
+  const handlePrintContract = () => {
+    if (!selectedGuest || !hotelConfig?.contratoHtml) return;
+    const formData = getValues();
+    const html = renderContract(hotelConfig.contratoHtml, {
+      guest: {
+        nombres: selectedGuest.nombres,
+        apellidos: selectedGuest.apellidos,
+        documento: selectedGuest.documento,
+        nacionalidad: selectedGuest.nacionalidad,
+        telefono: selectedGuest.telefono,
+        email: selectedGuest.email,
+      },
+      room: {
+        numero: room.numero,
+        nombre: room.nombre,
+        tipoHabitacion: room.roomType?.nombre || '',
+        precioBase: room.roomType?.precioBase,
+      },
+      hotel: {
+        nombre: hotelConfig.nombre,
+        direccion: hotelConfig.direccion,
+        ciudad: hotelConfig.ciudad,
+        pais: hotelConfig.pais,
+        telefono: hotelConfig.telefono,
+        email: hotelConfig.email,
+        logo: hotelConfig.logo,
+      },
+      fechaEntrada: formData.fechaEntrada,
+      fechaSalida: formData.fechaSalida,
+      cantidadHuespedes: 1 + (formData.companions?.filter((c: any) => c.documento).length || 0),
+      huespedesLista: (formData.companions || [])
+        .filter((c: any) => c.documento)
+        .map((c: any) => `${c.nombres} ${c.apellidos} (${c.documento})`).join(', '),
+    });
+    printContract(html);
   };
 
   const onSubmit = async (data: FormData) => {
@@ -263,13 +307,20 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                 <Input {...register('observaciones')} placeholder="Opcional" />
               </div>
 
-              <Button type="submit" className="w-full" disabled={isProcessing}>
-                {isProcessing ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
-                ) : (
-                  <><LogIn className="mr-2 h-4 w-4" /> Completar Check-In</>
+              <div className="flex gap-3">
+                {hotelConfig?.contratoHtml && (
+                  <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} className="flex-1">
+                    <Printer className="mr-2 h-4 w-4" /> Imprimir Contrato
+                  </Button>
                 )}
-              </Button>
+                <Button type="submit" className="flex-1" disabled={isProcessing}>
+                  {isProcessing ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
+                  ) : (
+                    <><LogIn className="mr-2 h-4 w-4" /> Completar Check-In</>
+                  )}
+                </Button>
+              </div>
             </form>
           )}
 

@@ -95,6 +95,11 @@ export class UpdateReservationDto {
   @IsOptional()
   @IsString()
   observaciones?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  contratoFileId?: string;
 }
 
 export class CancelReservationDto {

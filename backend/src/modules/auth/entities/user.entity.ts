@@ -26,7 +26,7 @@ export class User {
   apellidos: string;
 
   @Column({ type: 'varchar', default: 'reception' })
-  role: 'admin' | 'reception';
+  role: 'admin' | 'reception' | 'limpieza' | 'mantenimiento';
 
   @Column({ default: true })
   activo: boolean;

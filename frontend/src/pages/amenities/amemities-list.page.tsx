@@ -47,7 +47,7 @@ export function AmemitiesListPage() {
             <DialogTrigger asChild>
               <Button onClick={() => setEditing(null)}><Plus className="mr-2 h-4 w-4" /> Nueva Amenidad</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editing ? 'Editar Amenidad' : 'Nueva Amenidad'}</DialogTitle>
               </DialogHeader>

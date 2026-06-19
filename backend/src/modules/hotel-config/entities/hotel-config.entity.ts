@@ -35,6 +35,9 @@ export class HotelConfig {
   @Column({ name: 'check_out_time', default: '12:00' })
   checkOutTime: string;
 
+  @Column({ name: 'contrato_html', type: 'text', nullable: true })
+  contratoHtml: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
