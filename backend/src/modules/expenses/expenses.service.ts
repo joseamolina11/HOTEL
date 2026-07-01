@@ -1,28 +1,39 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Expense } from './entities/expense.entity';
 import { CreateExpenseDto, UpdateExpenseDto } from './dto/create-expense.dto';
+import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
+import { FinancialAccountsService } from '../financial-accounts/financial-accounts.service';
+import { AccountsPayableService } from '../accounts-payable/accounts-payable.service';
+import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 
 @Injectable()
 export class ExpensesService {
+  private readonly logger = new Logger(ExpensesService.name);
   constructor(
     @InjectRepository(Expense)
     private readonly repo: Repository<Expense>,
+    private readonly financialMovementsService: FinancialMovementsService,
+    private readonly financialAccountsService: FinancialAccountsService,
+    private readonly accountsPayableService: AccountsPayableService,
+    private readonly paymentMethodsService: PaymentMethodsService,
   ) {}
 
-  async findAll(filters?: { categoryId?: string; supplierId?: string; metodoPago?: string; desde?: string; hasta?: string; search?: string }, page = 1, limit = 10) {
+  async findAll(filters?: { categoryId?: string; supplierId?: string; metodoPagoId?: string; desde?: string; hasta?: string; search?: string }, page = 1, limit = 10) {
     const query = this.repo.createQueryBuilder('e')
       .leftJoinAndSelect('e.supplier', 'supplier')
       .leftJoinAndSelect('e.category', 'category')
       .leftJoinAndSelect('e.purchaseOrder', 'purchaseOrder')
       .leftJoinAndSelect('e.comprobanteFile', 'comprobanteFile')
+      .leftJoinAndSelect('e.accountsPayable', 'accountsPayable')
+      .leftJoinAndSelect('e.metodoPago', 'metodoPago')
       .orderBy('e.fecha', 'DESC')
       .addOrderBy('e.createdAt', 'DESC');
 
     if (filters?.categoryId) query.andWhere('e.categoryId = :categoryId', { categoryId: filters.categoryId });
     if (filters?.supplierId) query.andWhere('e.supplierId = :supplierId', { supplierId: filters.supplierId });
-    if (filters?.metodoPago) query.andWhere('e.metodoPago = :metodoPago', { metodoPago: filters.metodoPago });
+    if (filters?.metodoPagoId) query.andWhere('e.metodoPagoId = :metodoPagoId', { metodoPagoId: filters.metodoPagoId });
     if (filters?.desde) query.andWhere('e.fecha >= :desde', { desde: filters.desde });
     if (filters?.hasta) query.andWhere('e.fecha <= :hasta', { hasta: filters.hasta });
     if (filters?.search) {
@@ -40,7 +51,7 @@ export class ExpensesService {
   async findOne(id: string): Promise<Expense> {
     const expense = await this.repo.findOne({
       where: { id },
-      relations: ['supplier', 'category', 'purchaseOrder', 'comprobanteFile'],
+      relations: ['supplier', 'category', 'purchaseOrder', 'comprobanteFile', 'accountsPayable', 'metodoPago'],
     });
     if (!expense) throw new NotFoundException('Egreso no encontrado');
     return expense;
@@ -49,7 +60,7 @@ export class ExpensesService {
   async findByCodigo(codigo: string): Promise<Expense> {
     const expense = await this.repo.findOne({
       where: { codigo },
-      relations: ['supplier', 'category', 'purchaseOrder', 'comprobanteFile'],
+      relations: ['supplier', 'category', 'purchaseOrder', 'comprobanteFile', 'accountsPayable', 'metodoPago'],
     });
     if (!expense) throw new NotFoundException('Egreso no encontrado');
     return expense;
@@ -68,7 +79,47 @@ export class ExpensesService {
 
   async create(dto: CreateExpenseDto, userId: string): Promise<Expense> {
     const codigo = await this.generateCodigo();
-    return this.repo.save(this.repo.create({ ...dto, codigo, createdBy: userId }));
+    const expense = await this.repo.save(this.repo.create({ ...dto, codigo, createdBy: userId }));
+
+    try {
+      const paymentMethod = await this.paymentMethodsService.findOne(dto.metodoPagoId);
+      const accountId = paymentMethod.financialAccountId;
+      if (accountId) {
+        let conceptoMov = `Egreso ${codigo} - ${dto.concepto}`;
+        if (dto.accountsPayableId) {
+          try {
+            const ap = await this.accountsPayableService.findOne(dto.accountsPayableId);
+            conceptoMov += ` (${ap.codigo})`;
+          } catch {}
+        }
+        await this.financialMovementsService.create({
+          accountId,
+          tipo: 'EGRESO',
+          monto: Number(dto.monto),
+          concepto: conceptoMov,
+          referenciaTipo: 'expense',
+          referenciaId: expense.id,
+        }, userId);
+      }
+    } catch (e: any) {
+      this.logger.warn(`No se pudo crear movimiento financiero: ${e.message}`);
+    }
+
+    if (dto.accountsPayableId) {
+      try {
+        const ap = await this.accountsPayableService.registerPago(dto.accountsPayableId, {
+          monto: Number(dto.monto),
+          fechaPago: dto.fecha,
+          metodoPagoId: dto.metodoPagoId,
+          referencia: `Egreso ${codigo}`,
+        }, userId, true);
+        this.logger.log(`Cuenta por pagar ${dto.accountsPayableId} actualizada a estado ${ap.estado}`);
+      } catch (e: any) {
+        this.logger.error(`Error al registrar pago en cuenta por pagar: ${e.message}`);
+      }
+    }
+
+    return expense;
   }
 
   async update(id: string, dto: UpdateExpenseDto): Promise<Expense> {

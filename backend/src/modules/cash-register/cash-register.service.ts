@@ -3,12 +3,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CashRegister } from './entities/cash-register.entity';
 import { OpenCashRegisterDto, CloseCashRegisterDto } from './dto/create-cash-register.dto';
+import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
+import { FinancialAccountsService } from '../financial-accounts/financial-accounts.service';
 
 @Injectable()
 export class CashRegisterService {
   constructor(
     @InjectRepository(CashRegister)
     private readonly repo: Repository<CashRegister>,
+    private readonly financialMovementsService: FinancialMovementsService,
+    private readonly financialAccountsService: FinancialAccountsService,
   ) {}
 
   async findAll(page = 1, limit = 10) {
@@ -49,6 +53,23 @@ export class CashRegisterService {
       observaciones: dto.observaciones,
     });
 
+    try {
+      const defaultAccount = await this.financialAccountsService.findAllActive();
+      if (defaultAccount.length > 0) {
+        const account = defaultAccount.find(a => a.tipo === 'caja_principal') || defaultAccount[0];
+        await this.financialMovementsService.create({
+          accountId: account.id,
+          tipo: 'APERTURA_CAJA',
+          monto: dto.montoInicial,
+          concepto: 'Apertura de caja' + (dto.observaciones ? ` - ${dto.observaciones}` : ''),
+          referenciaTipo: 'cash_register',
+          referenciaId: register.id,
+        }, userId);
+      }
+    } catch (e) {
+      // silently skip
+    }
+
     return this.repo.save(register);
   }
 
@@ -71,6 +92,24 @@ export class CashRegisterService {
       observaciones: dto.observaciones,
       estado: 'cerrada' as const,
     });
+
+    try {
+      const defaultAccount = await this.financialAccountsService.findAllActive();
+      if (defaultAccount.length > 0) {
+        const account = defaultAccount.find(a => a.tipo === 'caja_principal') || defaultAccount[0];
+        const totalVentas = Number(register.totalVentas);
+        await this.financialMovementsService.create({
+          accountId: account.id,
+          tipo: 'CIERRE_CAJA',
+          monto: totalVentas,
+          concepto: 'Cierre de caja - Venta: ' + totalVentas,
+          referenciaTipo: 'cash_register',
+          referenciaId: id,
+        }, register.userId);
+      }
+    } catch (e) {
+      // silently skip
+    }
 
     return this.repo.save(register);
   }

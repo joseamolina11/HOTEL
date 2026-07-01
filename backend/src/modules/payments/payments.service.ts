@@ -4,6 +4,9 @@ import { Repository, Between } from 'typeorm';
 import { Payment } from './entities/payment.entity';
 import { Order } from '../orders/entities/order.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
+import { FinancialAccountsService } from '../financial-accounts/financial-accounts.service';
+import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 
 @Injectable()
 export class PaymentsService {
@@ -12,16 +15,19 @@ export class PaymentsService {
     private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(Order)
     private readonly orderRepo: Repository<Order>,
+    private readonly financialMovementsService: FinancialMovementsService,
+    private readonly financialAccountsService: FinancialAccountsService,
+    private readonly paymentMethodsService: PaymentMethodsService,
   ) {}
 
-  async findAll(filters?: { roomId?: string; metodoPago?: string }, page = 1, limit = 10) {
+  async findAll(filters?: { roomId?: string; metodoPagoId?: string }, page = 1, limit = 10) {
     const where: any = {};
     if (filters?.roomId) where.roomId = filters.roomId;
-    if (filters?.metodoPago) where.metodoPago = filters.metodoPago;
+    if (filters?.metodoPagoId) where.metodoPagoId = filters.metodoPagoId;
 
     const [data, total] = await this.paymentRepo.findAndCount({
       where,
-      relations: ['room', 'user', 'order'],
+      relations: ['room', 'user', 'order', 'metodoPago'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -33,12 +39,14 @@ export class PaymentsService {
   async findByRoom(roomId: string) {
     return this.paymentRepo.find({
       where: { roomId },
-      relations: ['order', 'user'],
+      relations: ['order', 'user', 'metodoPago'],
       order: { createdAt: 'DESC' },
     });
   }
 
   async create(dto: CreatePaymentDto, userId: string) {
+    const paymentMethod = await this.paymentMethodsService.findOne(dto.metodoPagoId);
+
     const payment = this.paymentRepo.create({
       ...dto,
       userId,
@@ -46,6 +54,22 @@ export class PaymentsService {
     });
 
     const saved = await this.paymentRepo.save(payment);
+
+    try {
+      const accountId = paymentMethod.financialAccountId;
+      if (accountId) {
+        await this.financialMovementsService.create({
+          accountId,
+          tipo: 'INGRESO',
+          monto: Number(dto.monto),
+          concepto: `Pago - ${paymentMethod.nombre} - ${dto.observaciones || 'Sin referencia'}`,
+          referenciaTipo: 'payment',
+          referenciaId: saved.id,
+        }, userId);
+      }
+    } catch (e) {
+      // Silently skip if account not configured
+    }
 
     if (dto.orderId) {
       const order = await this.orderRepo.findOne({
@@ -74,6 +98,7 @@ export class PaymentsService {
       where: {
         fecha: Between(fechaInicio, fechaFin),
       },
+      relations: ['metodoPago'],
     });
 
     let total = 0;
@@ -87,10 +112,11 @@ export class PaymentsService {
       const monto = Number(p.monto);
       total += monto;
       count++;
-      if (p.metodoPago === 'efectivo') efectivo += monto;
-      else if (p.metodoPago === 'transferencia') transferencia += monto;
-      else if (p.metodoPago === 'tarjeta') tarjeta += monto;
-      else if (p.metodoPago === 'otros') otros += monto;
+      const metodo = p.metodoPago?.nombre?.toLowerCase() || '';
+      if (metodo === 'efectivo') efectivo += monto;
+      else if (metodo === 'transferencia' || metodo === 'nequi' || metodo === 'bancolombia') transferencia += monto;
+      else if (metodo === 'tarjeta' || metodo === 'tarjeta débito' || metodo === 'tarjeta crédito') tarjeta += monto;
+      else otros += monto;
     }
 
     return { total, efectivo, transferencia, tarjeta, otros, count };

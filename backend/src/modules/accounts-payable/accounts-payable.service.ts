@@ -1,17 +1,24 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { AccountsPayable } from './entities/accounts-payable.entity';
 import { PagoCuenta } from './entities/pago-cuenta.entity';
 import { CreateAccountsPayableDto, UpdateAccountsPayableDto, RegisterPagoDto } from './dto/create-accounts-payable.dto';
+import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
+import { FinancialAccountsService } from '../financial-accounts/financial-accounts.service';
+import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 
 @Injectable()
 export class AccountsPayableService {
+  private readonly logger = new Logger(AccountsPayableService.name);
   constructor(
     @InjectRepository(AccountsPayable)
     private readonly repo: Repository<AccountsPayable>,
     @InjectRepository(PagoCuenta)
-    private readonly pagoRepo: Repository<PagoCuenta>,
+    private readonly pagosRepo: Repository<PagoCuenta>,
+    private readonly financialMovementsService: FinancialMovementsService,
+    private readonly financialAccountsService: FinancialAccountsService,
+    private readonly paymentMethodsService: PaymentMethodsService,
   ) {}
 
   async findAll(filters?: {
@@ -24,7 +31,7 @@ export class AccountsPayableService {
     const query = this.repo.createQueryBuilder('ap')
       .leftJoinAndSelect('ap.supplier', 'supplier')
       .leftJoinAndSelect('ap.purchaseOrder', 'purchaseOrder')
-      .leftJoinAndSelect('ap.expense', 'expense')
+      .leftJoinAndSelect('ap.sourceExpense', 'sourceExpense')
       .orderBy('ap.createdAt', 'DESC');
 
     if (filters?.search) {
@@ -46,7 +53,16 @@ export class AccountsPayableService {
   async findOne(id: string): Promise<AccountsPayable> {
     const ap = await this.repo.findOne({
       where: { id },
-      relations: ['supplier', 'purchaseOrder', 'expense', 'pagos'],
+      relations: ['supplier', 'purchaseOrder', 'sourceExpense'],
+    });
+    if (!ap) throw new NotFoundException('Cuenta por pagar no encontrada');
+    return ap;
+  }
+
+  async findOneWithPayingExpenses(id: string): Promise<AccountsPayable> {
+    const ap = await this.repo.findOne({
+      where: { id },
+      relations: ['supplier', 'purchaseOrder', 'sourceExpense', 'payingExpenses', 'payingExpenses.metodoPago', 'pagos', 'pagos.metodoPago'],
     });
     if (!ap) throw new NotFoundException('Cuenta por pagar no encontrada');
     return ap;
@@ -55,7 +71,7 @@ export class AccountsPayableService {
   async findByCodigo(codigo: string): Promise<AccountsPayable> {
     const ap = await this.repo.findOne({
       where: { codigo },
-      relations: ['supplier', 'purchaseOrder', 'expense', 'pagos'],
+      relations: ['supplier', 'purchaseOrder', 'sourceExpense'],
     });
     if (!ap) throw new NotFoundException('Cuenta por pagar no encontrada');
     return ap;
@@ -87,12 +103,16 @@ export class AccountsPayableService {
     if (ap.estado === 'pagada' || ap.estado === 'anulada') {
       throw new BadRequestException('No se puede modificar una cuenta pagada o anulada');
     }
-    Object.assign(ap, dto);
+
+    const updateData: any = { ...dto };
     if (dto.montoOriginal !== undefined) {
-      const totalPagado = ap.pagos?.reduce((sum, p) => sum + Number(p.monto), 0) || 0;
-      ap.saldoPendiente = dto.montoOriginal - totalPagado;
+      const pagos = await this.pagosRepo.find({ where: { cuentaId: id } });
+      const totalPagado = pagos.reduce((sum, p) => sum + Number(p.monto), 0);
+      updateData.saldoPendiente = Math.max(0, dto.montoOriginal - totalPagado);
     }
-    return this.repo.save(ap);
+
+    await this.repo.update(id, updateData);
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
@@ -100,12 +120,16 @@ export class AccountsPayableService {
     if (ap.estado === 'pagada') {
       throw new BadRequestException('No se puede eliminar una cuenta pagada');
     }
-    await this.pagoRepo.delete({ cuentaId: id });
+    await this.pagosRepo.delete({ cuentaId: id });
     await this.repo.delete(id);
   }
 
-  async registerPago(cuentaId: string, dto: RegisterPagoDto, userId: string): Promise<AccountsPayable> {
-    const ap = await this.findOne(cuentaId);
+  async registerPago(cuentaId: string, dto: RegisterPagoDto, userId: string, skipFinancialMovement = false): Promise<AccountsPayable> {
+    const ap = await this.repo.findOne({
+      where: { id: cuentaId },
+      select: ['id', 'codigo', 'estado', 'montoOriginal', 'saldoPendiente'],
+    });
+    if (!ap) throw new NotFoundException('Cuenta por pagar no encontrada');
     if (ap.estado === 'pagada' || ap.estado === 'anulada') {
       throw new BadRequestException('No se pueden registrar pagos en cuentas pagadas o anuladas');
     }
@@ -114,28 +138,63 @@ export class AccountsPayableService {
       throw new BadRequestException('El pago excede el saldo pendiente');
     }
 
-    await this.pagoRepo.save(this.pagoRepo.create({
+    const paymentMethod = await this.paymentMethodsService.findOne(dto.metodoPagoId);
+
+    await this.pagosRepo.save(this.pagosRepo.create({
       cuentaId,
       monto: dto.monto,
       fechaPago: dto.fechaPago,
-      metodoPago: dto.metodoPago,
+      metodoPagoId: dto.metodoPagoId,
       referencia: dto.referencia,
       userId,
     }));
 
-    const totalPagado = (await this.pagoRepo.find({ where: { cuentaId } }))
+    if (!skipFinancialMovement) {
+      try {
+        const accountId = paymentMethod.financialAccountId;
+        if (accountId) {
+          await this.financialMovementsService.create({
+            accountId,
+            tipo: 'EGRESO',
+            monto: Number(dto.monto),
+            concepto: `Pago cuenta por pagar ${ap.codigo} - ${paymentMethod.nombre}`,
+            referenciaTipo: 'accounts_payable',
+            referenciaId: cuentaId,
+          }, userId);
+        }
+      } catch (e: any) {
+        this.logger.warn(`No se pudo crear movimiento financiero en AP: ${e.message}`);
+      }
+    }
+
+    const totalPagado = (await this.pagosRepo.find({ where: { cuentaId } }))
       .reduce((sum, p) => sum + Number(p.monto), 0);
 
-    const nuevoSaldo = Number(ap.montoOriginal) - totalPagado;
-    ap.saldoPendiente = nuevoSaldo;
-    ap.estado = nuevoSaldo <= 0 ? 'pagada' : 'parcialmente_pagada';
+    const nuevoSaldo = Math.max(0, Number(ap.montoOriginal) - totalPagado);
 
-    return this.repo.save(ap);
+    await this.repo.update(cuentaId, {
+      saldoPendiente: nuevoSaldo,
+      estado: nuevoSaldo <= 0 ? 'pagada' : 'parcialmente_pagada',
+    });
+
+    return this.findOneWithPayingExpenses(cuentaId);
   }
 
   async getPagos(cuentaId: string): Promise<PagoCuenta[]> {
-    return this.pagoRepo.find({
+    return this.pagosRepo.find({
       where: { cuentaId },
+      relations: ['metodoPago'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findBySupplier(supplierId: string): Promise<AccountsPayable[]> {
+    return this.repo.find({
+      where: [
+        { supplierId, estado: 'pendiente' },
+        { supplierId, estado: 'parcialmente_pagada' },
+      ],
+      relations: ['supplier', 'purchaseOrder', 'sourceExpense'],
       order: { createdAt: 'DESC' },
     });
   }

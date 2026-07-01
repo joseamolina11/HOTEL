@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { checkoutApi, StaySummary } from '@/api/checkout.api';
+import { paymentMethodsApi } from '@/api/payment-methods.api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
@@ -217,11 +218,24 @@ function StaySummaryContent({
   setObservaciones: (v: string) => void;
 }) {
   const s = data.summary;
-  const [payments, setPayments] = useState<{ monto: number; metodoPago: string; comprobante?: string }[]>([]);
+  const [payments, setPayments] = useState<{ monto: number; metodoPagoId: string; comprobante?: string }[]>([]);
+
+  const { data: paymentMethods } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: () => paymentMethodsApi.findAllActive(),
+  });
 
   const addPayment = () => {
-    setPayments([...payments, { monto: 0, metodoPago: 'efectivo' }]);
+    const firstId = (paymentMethods || [])[0]?.id || '';
+    setPayments([...payments, { monto: 0, metodoPagoId: firstId }]);
   };
+
+  useEffect(() => {
+    if ((paymentMethods?.length || 0) > 0 && payments.length === 0) {
+      const firstId = paymentMethods[0].id;
+      setPayments([{ monto: 0, metodoPagoId: firstId }]);
+    }
+  }, [paymentMethods]);
 
   const updatePayment = (idx: number, field: string, value: any) => {
     const updated = [...payments];
@@ -343,7 +357,7 @@ function StaySummaryContent({
           </div>
           {s.payments.map((p: any) => (
             <div key={p.id} className="flex justify-between px-4 py-2 text-sm">
-              <span className="text-muted-foreground capitalize">{p.metodoPago} {p.comprobante ? `(${p.comprobante})` : ''}</span>
+              <span className="text-muted-foreground">{p.metodoPago?.nombre || '—'} {p.comprobante ? `(${p.comprobante})` : ''}</span>
               <span className="font-medium text-green-700">{formatCurrency(p.monto)}</span>
             </div>
           ))}
@@ -385,14 +399,13 @@ function StaySummaryContent({
                   onChange={(e) => updatePayment(idx, 'monto', Number(e.target.value))}
                 />
                 <select
-                  className="h-8 rounded-md border px-2 text-xs"
-                  value={p.metodoPago}
-                  onChange={(e) => updatePayment(idx, 'metodoPago', e.target.value)}
+                  className="h-8 rounded-md border px-2 text-xs flex-1"
+                  value={p.metodoPagoId}
+                  onChange={(e) => updatePayment(idx, 'metodoPagoId', e.target.value)}
                 >
-                  <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="tarjeta">Tarjeta</option>
-                  <option value="otros">Otros</option>
+                  {(paymentMethods || []).map((pm: any) => (
+                    <option key={pm.id} value={pm.id}>{pm.nombre}</option>
+                  ))}
                 </select>
                 <Input
                   placeholder="Comprobante"

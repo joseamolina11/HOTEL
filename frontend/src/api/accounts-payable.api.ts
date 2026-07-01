@@ -30,6 +30,11 @@ export const accountsPayableApi = {
     await apiClient.delete(`/accounts-payable/${id}`);
   },
 
+  findBySupplier: async (supplierId: string) => {
+    const { data } = await apiClient.get(`/accounts-payable/by-supplier/${supplierId}`);
+    return data.data;
+  },
+
   registerPago: async (cuentaId: string, dto: any) => {
     const { data } = await apiClient.post(`/accounts-payable/${cuentaId}/pagos`, dto);
     return data.data;

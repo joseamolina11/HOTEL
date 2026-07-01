@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsEnum, IsDateString, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsUUID, IsDateString, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateExpenseDto {
@@ -19,9 +19,9 @@ export class CreateExpenseDto {
   @IsString()
   concepto: string;
 
-  @ApiProperty({ example: 'transferencia', enum: ['efectivo', 'transferencia', 'tarjeta', 'otros'] })
-  @IsEnum(['efectivo', 'transferencia', 'tarjeta', 'otros'])
-  metodoPago: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+  @ApiProperty({ example: 'uuid-payment-method' })
+  @IsUUID()
+  metodoPagoId: string;
 
   @ApiPropertyOptional({ example: 'REF-2025-001' })
   @IsOptional()
@@ -47,6 +47,11 @@ export class CreateExpenseDto {
   @IsOptional()
   @IsString()
   purchaseOrderId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-accounts-payable' })
+  @IsOptional()
+  @IsString()
+  accountsPayableId?: string;
 }
 
 export class UpdateExpenseDto {
@@ -70,10 +75,10 @@ export class UpdateExpenseDto {
   @IsString()
   concepto?: string;
 
-  @ApiPropertyOptional({ example: 'transferencia', enum: ['efectivo', 'transferencia', 'tarjeta', 'otros'] })
+  @ApiPropertyOptional({ example: 'uuid-payment-method' })
   @IsOptional()
-  @IsEnum(['efectivo', 'transferencia', 'tarjeta', 'otros'])
-  metodoPago?: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+  @IsUUID()
+  metodoPagoId?: string;
 
   @ApiPropertyOptional({ example: 'REF-2025-001' })
   @IsOptional()
@@ -100,4 +105,9 @@ export class UpdateExpenseDto {
   @IsOptional()
   @IsString()
   purchaseOrderId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-accounts-payable' })
+  @IsOptional()
+  @IsString()
+  accountsPayableId?: string;
 }

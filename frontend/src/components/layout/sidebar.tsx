@@ -32,6 +32,8 @@ import {
   Percent,
   Wrench,
   BookOpen,
+  ArrowUpDown,
+  FileText,
 } from "lucide-react";
 
 interface GroupItem {
@@ -456,6 +458,34 @@ export function Sidebar() {
           to="/accounts-payable"
           label="Ctas. por Pagar"
           icon={BookOpen}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/payment-methods"
+          label="Métodos Pago"
+          icon={CreditCard}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/financial-accounts"
+          label="Cuentas Financieras"
+          icon={Landmark}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/financial-movements"
+          label="Movimientos Financieros"
+          icon={ArrowUpDown}
+          show={showFullNav}
+        />
+
+        <NavLinkItem
+          to="/recibo-caja"
+          label="Recibos de Caja"
+          icon={FileText}
           show={showFullNav}
         />
 

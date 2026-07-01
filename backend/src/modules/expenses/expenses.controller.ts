@@ -17,7 +17,7 @@ export class ExpensesController {
   @ApiOperation({ summary: 'Listar egresos' })
   @ApiQuery({ name: 'categoryId', required: false })
   @ApiQuery({ name: 'supplierId', required: false })
-  @ApiQuery({ name: 'metodoPago', required: false })
+  @ApiQuery({ name: 'metodoPagoId', required: false })
   @ApiQuery({ name: 'desde', required: false })
   @ApiQuery({ name: 'hasta', required: false })
   @ApiQuery({ name: 'search', required: false })
@@ -26,14 +26,14 @@ export class ExpensesController {
   async findAll(
     @Query('categoryId') categoryId?: string,
     @Query('supplierId') supplierId?: string,
-    @Query('metodoPago') metodoPago?: string,
+    @Query('metodoPagoId') metodoPagoId?: string,
     @Query('desde') desde?: string,
     @Query('hasta') hasta?: string,
     @Query('search') search?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 10,
   ) {
-    return this.service.findAll({ categoryId, supplierId, metodoPago, desde, hasta, search }, +page, +limit);
+    return this.service.findAll({ categoryId, supplierId, metodoPagoId, desde, hasta, search }, +page, +limit);
   }
 
   @Get('by-codigo/:codigo')

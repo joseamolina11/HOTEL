@@ -4,6 +4,8 @@ import { expensesApi } from '@/api/expenses.api';
 import { expenseCategoriesApi } from '@/api/expense-categories.api';
 import { suppliersApi } from '@/api/suppliers.api';
 import { purchaseOrdersApi } from '@/api/purchase-orders.api';
+import { accountsPayableApi } from '@/api/accounts-payable.api';
+import { paymentMethodsApi } from '@/api/payment-methods.api';
 import { filesApi } from '@/api/files.api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,23 +24,17 @@ import { formatCurrency } from '@/lib/utils';
 import { SupplierDetailDialog } from '@/components/dialogs/supplier-detail-dialog';
 import { PurchaseOrderDetailDialog } from '@/components/dialogs/purchase-order-detail-dialog';
 
-const paymentMethods = [
-  { value: 'efectivo', label: 'Efectivo' },
-  { value: 'transferencia', label: 'Transferencia' },
-  { value: 'tarjeta', label: 'Tarjeta' },
-  { value: 'otros', label: 'Otros' },
-];
-
   const schema = z.object({
     categoryId: z.string().min(1, 'Categoría requerida'),
     supplierId: z.string().optional(),
     fecha: z.string().min(1, 'Fecha requerida'),
     concepto: z.string().min(1, 'Concepto requerido'),
-    metodoPago: z.string().min(1, 'Método de pago requerido'),
+    metodoPagoId: z.string().min(1, 'Método de pago requerido'),
     referencia: z.string().optional(),
     monto: z.coerce.number().min(1, 'Monto requerido'),
     observaciones: z.string().optional(),
     purchaseOrderId: z.string().optional(),
+    accountsPayableId: z.string().optional(),
   });
 
 export function ExpensesListPage() {
@@ -96,11 +92,18 @@ export function ExpensesListPage() {
     resolver: zodResolver(schema),
   });
 
+  const { data: pendingAPs } = useQuery({
+    queryKey: ['accounts-payable-by-supplier', watch('supplierId')],
+    queryFn: () => accountsPayableApi.findBySupplier(watch('supplierId') || ''),
+    enabled: !!watch('supplierId'),
+  });
+
   const onSubmit = async (data: any) => {
     const dto = {
       ...data,
       supplierId: data.supplierId || undefined,
       purchaseOrderId: data.purchaseOrderId || undefined,
+      accountsPayableId: data.accountsPayableId || undefined,
       comprobante: contratoFileId || undefined,
     };
     if (editing) {
@@ -122,11 +125,12 @@ export function ExpensesListPage() {
       supplierId: exp.supplierId || '',
       fecha: exp.fecha,
       concepto: exp.concepto,
-      metodoPago: exp.metodoPago,
+      metodoPagoId: exp.metodoPagoId || '',
       referencia: exp.referencia || '',
       monto: exp.monto,
       observaciones: exp.observaciones || '',
       purchaseOrderId: exp.purchaseOrderId || '',
+      accountsPayableId: exp.accountsPayableId || '',
     });
     setContratoFileId(exp.comprobante || null);
     setContratoFileName(null);
@@ -140,11 +144,12 @@ export function ExpensesListPage() {
       supplierId: '',
       fecha: new Date().toISOString().slice(0, 10),
       concepto: '',
-      metodoPago: '',
+      metodoPagoId: '',
       referencia: '',
       monto: 0,
       observaciones: '',
       purchaseOrderId: '',
+      accountsPayableId: '',
     });
     setContratoFileId(null);
     setContratoFileName(null);
@@ -219,13 +224,8 @@ export function ExpensesListPage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Método de Pago</label>
-                    <select {...register('metodoPago')} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm">
-                      <option value="">Seleccionar...</option>
-                      {paymentMethods.map((pm) => (
-                        <option key={pm.value} value={pm.value}>{pm.label}</option>
-                      ))}
-                    </select>
-                    {errors.metodoPago && <p className="text-xs text-destructive">{errors.metodoPago.message as string}</p>}
+                    <MetodoPagoSelect value={watch('metodoPagoId') || ''} onChange={(v) => setValue('metodoPagoId', v, { shouldValidate: true })} />
+                    {errors.metodoPagoId && <p className="text-xs text-destructive">{errors.metodoPagoId.message as string}</p>}
                   </div>
                 </div>
 
@@ -251,6 +251,32 @@ export function ExpensesListPage() {
                     placeholder="Sin orden de compra"
                   />
                 </div>
+
+                {watch('supplierId') && pendingAPs?.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Pagar Cuenta por Pagar (opcional)</label>
+                    <select
+                      value={watch('accountsPayableId') || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setValue('accountsPayableId', val);
+                        const ap = pendingAPs.find((a: any) => a.id === val);
+                        if (ap) {
+                          setValue('monto', Number(ap.saldoPendiente), { shouldValidate: true });
+                          setValue('concepto', `Pago ${ap.codigo} - ${ap.observaciones || ap.concepto || ''}`, { shouldValidate: true });
+                        }
+                      }}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    >
+                      <option value="">Sin cuenta asociada</option>
+                      {pendingAPs.map((ap: any) => (
+                        <option key={ap.id} value={ap.id}>
+                          {ap.codigo} - ${Number(ap.saldoPendiente).toLocaleString()} ({ap.estado === 'parcialmente_pagada' ? 'Parcial' : 'Pendiente'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Observaciones</label>
@@ -326,7 +352,7 @@ export function ExpensesListPage() {
                           </button>
                         ) : '—'}
                        </td> 
-                      <td className="px-4 py-3 capitalize">{e.metodoPago}</td>
+                      <td className="px-4 py-3">{e.metodoPago?.nombre || '—'}</td>
                       <td className="px-4 py-3 text-right font-medium">{formatCurrency(e.monto)}</td>
                       <td className="px-4 py-3 text-center">
                         {e.comprobante ? (
@@ -358,5 +384,20 @@ export function ExpensesListPage() {
       <SupplierDetailDialog supplierId={supplierDetailId} open={!!supplierDetailId} onClose={() => setSupplierDetailId(null)} />
       <PurchaseOrderDetailDialog purchaseOrderId={poDetailId} open={!!poDetailId} onClose={() => setPoDetailId(null)} />
     </div>
+  );
+}
+
+function MetodoPagoSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { data: methods } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: () => paymentMethodsApi.findAllActive(),
+  });
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+      <option value="">Seleccionar...</option>
+      {(methods || []).map((pm: any) => (
+        <option key={pm.id} value={pm.id}>{pm.nombre}{pm.financialAccount ? ` (${pm.financialAccount.nombre})` : ''}</option>
+      ))}
+    </select>
   );
 }

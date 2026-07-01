@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { PaginationBar } from '@/components/shared/pagination-bar';
-import { Plus, Pencil, Trash2, Search, DollarSign, History } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, DollarSign, History, FileText } from 'lucide-react';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,6 +20,7 @@ import { formatCurrency } from '@/lib/utils';
 import { SupplierDetailDialog } from '@/components/dialogs/supplier-detail-dialog';
 import { PurchaseOrderDetailDialog } from '@/components/dialogs/purchase-order-detail-dialog';
 import { ExpenseDetailDialog } from '@/components/dialogs/expense-detail-dialog';
+import { paymentMethodsApi } from '@/api/payment-methods.api';
 
 const estadoColors: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'warning'> = {
   pendiente: 'default',
@@ -50,7 +51,7 @@ const schema = z.object({
 const pagoSchema = z.object({
   monto: z.coerce.number().min(1, 'Mín 1'),
   fechaPago: z.string().min(1, 'Requerido'),
-  metodoPago: z.string().min(1, 'Requerido'),
+  metodoPagoId: z.string().min(1, 'Requerido'),
   referencia: z.string().optional(),
 });
 
@@ -61,13 +62,6 @@ const statusOptions = [
   { value: 'pagada', label: 'Pagada' },
   { value: 'vencida', label: 'Vencida' },
   { value: 'anulada', label: 'Anulada' },
-];
-
-const paymentMethods = [
-  { value: 'efectivo', label: 'Efectivo' },
-  { value: 'transferencia', label: 'Transferencia' },
-  { value: 'tarjeta', label: 'Tarjeta' },
-  { value: 'otros', label: 'Otros' },
 ];
 
 export function AccountsPayableListPage() {
@@ -113,7 +107,7 @@ export function AccountsPayableListPage() {
     resolver: zodResolver(schema),
   });
 
-  const { register: pagoRegister, handleSubmit: pagoHandleSubmit, reset: pagoReset, watch: pagoWatch, formState: { errors: pagoErrors } } = useForm({
+  const { register: pagoRegister, handleSubmit: pagoHandleSubmit, reset: pagoReset, watch: pagoWatch, setValue: pagoSetValue, formState: { errors: pagoErrors } } = useForm({
     resolver: zodResolver(pagoSchema),
   });
 
@@ -150,7 +144,7 @@ export function AccountsPayableListPage() {
 
   const openPago = (cuenta: any) => {
     setPagoCuenta(cuenta);
-    pagoReset({ monto: Number(cuenta.saldoPendiente), fechaPago: new Date().toISOString().slice(0, 10), metodoPago: '', referencia: '' });
+    pagoReset({ monto: Number(cuenta.saldoPendiente), fechaPago: new Date().toISOString().slice(0, 10), metodoPagoId: '', referencia: '' });
     setPagoOpen(true);
   };
 
@@ -231,9 +225,9 @@ export function AccountsPayableListPage() {
                         ) : '—'}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">
-                        {c.expense ? (
-                          <button className="text-primary hover:underline cursor-pointer" onClick={() => setExpenseDetailId(c.expenseId)}>
-                            {c.expense.codigo}
+                        {c.sourceExpense ? (
+                          <button className="text-primary hover:underline cursor-pointer" onClick={() => setExpenseDetailId(c.sourceExpenseId)}>
+                            {c.sourceExpense.codigo}
                           </button>
                         ) : '—'}
                       </td>
@@ -244,11 +238,11 @@ export function AccountsPayableListPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
-                          {c.estado !== 'pagada' && c.estado !== 'anulada' && (
+                          {/* {c.estado !== 'pagada' && c.estado !== 'anulada' && (
                             <Button variant="ghost" size="icon" onClick={() => openPago(c)} title="Registrar pago">
                               <DollarSign className="h-4 w-4" />
                             </Button>
-                          )}
+                          )} */}
                           <Button variant="ghost" size="icon" onClick={() => openPagos(c)} title="Historial de pagos">
                             <History className="h-4 w-4" />
                           </Button>
@@ -383,13 +377,8 @@ export function AccountsPayableListPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Método de Pago</label>
-                  <select {...pagoRegister('metodoPago')} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
-                    <option value="">Seleccionar...</option>
-                    {paymentMethods.map((pm) => (
-                      <option key={pm.value} value={pm.value}>{pm.label}</option>
-                    ))}
-                  </select>
-                  {pagoErrors.metodoPago && <p className="text-xs text-destructive">{pagoErrors.metodoPago.message as string}</p>}
+                  <MetodoPagoSelect value={pagoWatch('metodoPagoId') || ''} onChange={(v) => pagoSetValue('metodoPagoId', v)} />
+                  {pagoErrors.metodoPagoId && <p className="text-xs text-destructive">{pagoErrors.metodoPagoId.message as string}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Referencia</label>
@@ -406,21 +395,11 @@ export function AccountsPayableListPage() {
 
       {/* Payment History Dialog */}
       <Dialog open={pagosOpen} onOpenChange={(v) => { if (!v) setPagosOpen(false); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Historial de Pagos — {pagosCuenta?.codigo}</DialogTitle>
+            <DialogTitle>Detalle — {pagosCuenta?.codigo}</DialogTitle>
           </DialogHeader>
-          {pagosCuenta && (
-            <>
-              <div className="rounded-lg bg-muted p-3 text-sm mb-2">
-                <span className="text-muted-foreground">Proveedor: </span>
-                <span className="font-medium">{pagosCuenta.supplier?.razonSocial}</span>
-                <span className="ml-4 text-muted-foreground">Saldo: </span>
-                <span className="font-bold">{formatCurrency(pagosCuenta.saldoPendiente)}</span>
-              </div>
-              <PaymentHistoryTable cuentaId={pagosCuenta.id} />
-            </>
-          )}
+          {pagosCuenta && <ApDetailContent cuentaId={pagosCuenta.id} />}
         </DialogContent>
       </Dialog>
     </div>
@@ -455,7 +434,7 @@ function PaymentHistoryTable({ cuentaId }: { cuentaId: string }) {
               <tr key={p.id} className="border-b">
                 <td className="px-3 py-2 text-muted-foreground">{p.fechaPago}</td>
                 <td className="px-3 py-2 text-right font-medium">{formatCurrency(p.monto)}</td>
-                <td className="px-3 py-2 capitalize">{p.metodoPago}</td>
+                <td className="px-3 py-2">{p.metodoPago?.nombre || '—'}</td>
                 <td className="px-3 py-2 text-muted-foreground">{p.referencia || '—'}</td>
               </tr>
             ))
@@ -463,5 +442,83 @@ function PaymentHistoryTable({ cuentaId }: { cuentaId: string }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function MetodoPagoSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { data: methods } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: () => paymentMethodsApi.findAllActive(),
+  });
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+      <option value="">Seleccionar...</option>
+      {(methods || []).map((pm: any) => (
+        <option key={pm.id} value={pm.id}>{pm.nombre}{pm.financialAccount ? ` (${pm.financialAccount.nombre})` : ''}</option>
+      ))}
+    </select>
+  );
+}
+
+function ApDetailContent({ cuentaId }: { cuentaId: string }) {
+  const { data: ap, isLoading } = useQuery({
+    queryKey: ['accounts-payable-detail', cuentaId],
+    queryFn: () => accountsPayableApi.findOne(cuentaId),
+  });
+
+  if (isLoading) return <div className="text-sm text-muted-foreground">Cargando detalle...</div>;
+  if (!ap) return <div className="text-sm text-destructive">No se pudo cargar el detalle</div>;
+
+  return (
+    <>
+      <div className="rounded-lg bg-muted p-3 text-sm mb-4">
+        <span className="text-muted-foreground">Proveedor: </span>
+        <span className="font-medium">{ap.supplier?.razonSocial}</span>
+        <span className="ml-4 text-muted-foreground">Saldo: </span>
+        <span className="font-bold">{formatCurrency(ap.saldoPendiente)}</span>
+        <span className="ml-4 text-muted-foreground">Estado: </span>
+        <Badge variant={estadoColors[ap.estado] || 'secondary'} className="capitalize">{estadoLabels[ap.estado] || ap.estado}</Badge>
+        {ap.sourceExpense && (
+          <>
+            <span className="ml-4 text-muted-foreground">Egreso origen: </span>
+            <span className="font-medium">{ap.sourceExpense.codigo}</span>
+          </>
+        )}
+      </div>
+
+      {ap.payingExpenses && ap.payingExpenses.length > 0 && (
+        <div className="mb-4">
+          <h3 className="text-sm font-medium mb-2">Egresos aplicados a esta cuenta</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="px-3 py-2 text-left font-medium">Código</th>
+                  <th className="px-3 py-2 text-left font-medium">Concepto</th>
+                  <th className="px-3 py-2 text-left font-medium">Fecha</th>
+                  <th className="px-3 py-2 text-left font-medium">Método</th>
+                  <th className="px-3 py-2 text-right font-medium">Monto</th>
+                  <th className="px-3 py-2 text-center font-medium">Comprobante</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ap.payingExpenses.map((exp: any) => (
+                  <tr key={exp.id} className="border-b hover:bg-muted/50">
+                    <td className="px-3 py-2 font-mono text-xs">{exp.codigo}</td>
+                    <td className="px-3 py-2">{exp.concepto}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{exp.fecha}</td>
+                    <td className="px-3 py-2">{exp.metodoPago?.nombre || '—'}</td>
+                    <td className="px-3 py-2 text-right font-medium">{formatCurrency(exp.monto)}</td>
+                    <td className="px-3 py-2 text-center">{exp.comprobante ? <FileText className="h-3 w-3 inline" /> : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <PaymentHistoryTable cuentaId={cuentaId} />
+    </>
   );
 }

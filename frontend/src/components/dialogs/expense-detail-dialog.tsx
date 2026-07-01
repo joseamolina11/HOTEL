@@ -18,7 +18,7 @@ export function ExpenseDetailDialog({ expenseId, open, onClose }: Props) {
     queryFn: () => expensesApi.findOne(expenseId!),
     enabled: !!expenseId && open,
   });
-
+  console.log(expense);
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -48,7 +48,7 @@ export function ExpenseDetailDialog({ expenseId, open, onClose }: Props) {
               </div>
               <div>
                 <p className="text-muted-foreground">Método de Pago</p>
-                <p className="font-medium capitalize">{expense.metodoPago}</p>
+                <p className="font-medium capitalize">{expense.metodoPago?.nombre || '—' + (expense.metodoPago?.tipo || '—')}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Referencia</p>

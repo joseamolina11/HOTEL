@@ -3,6 +3,8 @@ import { Supplier } from 'src/modules/suppliers/entities/supplier.entity';
 import { ExpenseCategory } from 'src/modules/expense-categories/entities/expense-category.entity';
 import { PurchaseOrder } from 'src/modules/purchase-orders/entities/purchase-order.entity';
 import { FileRecord } from '@/modules/files/entities/file.entity';
+import { AccountsPayable } from 'src/modules/accounts-payable/entities/accounts-payable.entity';
+import { PaymentMethod } from 'src/modules/payment-methods/entities/payment-method.entity';
 
 @Entity('expenses')
 export class Expense {
@@ -29,6 +31,13 @@ export class Expense {
   @Column({ name: 'purchase_order_id', nullable: true })
   purchaseOrderId: string;
 
+  @Column({ name: 'accounts_payable_id', nullable: true })
+  accountsPayableId: string;
+
+  @ManyToOne(() => AccountsPayable, (ap) => ap.payingExpenses, { nullable: true })
+  @JoinColumn({ name: 'accounts_payable_id' })
+  accountsPayable: AccountsPayable;
+
   @ManyToOne(() => PurchaseOrder, { nullable: true })
   @JoinColumn({ name: 'purchase_order_id' })
   purchaseOrder: PurchaseOrder;
@@ -39,8 +48,12 @@ export class Expense {
   @Column()
   concepto: string;
 
-  @Column({ name: 'metodo_pago' })
-  metodoPago: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+  @Column({ name: 'metodo_pago_id', nullable: true })
+  metodoPagoId: string;
+
+  @ManyToOne(() => PaymentMethod)
+  @JoinColumn({ name: 'metodo_pago_id' })
+  metodoPago: PaymentMethod;
 
   @Column({ nullable: true })
   referencia: string;

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsEnum, IsArray, Min, ValidateNested, ArrayMinSize } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsUUID, IsArray, Min, ValidateNested, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -8,9 +8,14 @@ export class PaymentSplitDto {
   @Min(0.01)
   monto: number;
 
-  @ApiProperty({ example: 'efectivo', enum: ['efectivo', 'transferencia', 'tarjeta', 'otros'] })
-  @IsEnum(['efectivo', 'transferencia', 'tarjeta', 'otros'])
-  metodoPago: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+  @ApiProperty({ example: 'uuid-payment-method' })
+  @IsUUID()
+  metodoPagoId: string;
+
+  @ApiPropertyOptional({ example: 'Hospedaje' })
+  @IsOptional()
+  @IsString()
+  concepto?: string;
 
   @ApiPropertyOptional({ example: 'Recibo #001' })
   @IsOptional()

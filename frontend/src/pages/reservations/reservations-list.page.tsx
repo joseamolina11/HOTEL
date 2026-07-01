@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reservationsApi } from '@/api/reservations.api';
 import { checkoutApi } from '@/api/checkout.api';
 import { filesApi } from '@/api/files.api';
+import { reciboCajaApi } from '@/api/recibo-caja.api';
 import apiClient from '@/api/client';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ReservationForm } from '@/components/forms/reservation-form';
-import { Search, Plus, Pencil, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload } from 'lucide-react';
+import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
+import { ReservationDetailDialog } from '@/components/dialogs/reservation-detail-dialog';
+import { Search, Plus, Pencil, Eye, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload, Receipt } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { useUpdateReservation, useCancelReservation, useConfirmReservation } from '@/hooks/useReservations';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
@@ -22,6 +25,8 @@ export function ReservationsListPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [open, setOpen] = useState(false);
   const [detailRes, setDetailRes] = useState<any>(null);
+  const [fullDetailRes, setFullDetailRes] = useState<any>(null);
+  const [reciboDetailId, setReciboDetailId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [uploadingContract, setUploadingContract] = useState(false);
@@ -62,6 +67,13 @@ export function ReservationsListPage() {
 
   const reservations = data?.data?.data || [];
   const totalPages = data?.data?.totalPages || 1;
+
+  const { data: reciboData } = useQuery({
+    queryKey: ['recibo-by-reservation', detailRes?.id],
+    queryFn: () => reciboCajaApi.findByReservation(detailRes!.id),
+    enabled: !!detailRes && detailRes.estado === 'checkout',
+  });
+  const reciboVinculado = reciboData?.recibo;
 
   const updateMut = useUpdateReservation();
   const cancelMut = useCancelReservation();
@@ -224,9 +236,14 @@ export function ReservationsListPage() {
                       <td className="px-4 py-3"><StatusBadge status={res.estado} /></td>
                       <td className="px-4 py-3 capitalize">{res.origen}</td>
                       <td className="px-4 py-3">
-                        <Button variant="ghost" size="icon" onClick={() => openDetail(res)} title="Ver / Editar">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setFullDetailRes(res)} title="Ver detalle completo">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => openDetail(res)} title="Editar">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -275,6 +292,14 @@ export function ReservationsListPage() {
                 <div><span className="text-muted-foreground">Estado:</span> <StatusBadge status={detailRes.estado} /></div>
                 <div><span className="text-muted-foreground">Origen:</span> <span className="font-medium capitalize">{detailRes.origen}</span></div>
                 <div><span className="text-muted-foreground">Huéspedes:</span> <span className="font-medium">{detailRes.cantidadHuespedes}</span></div>
+                {reciboVinculado && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Recibo de Caja: </span>
+                    <button className="text-primary hover:underline cursor-pointer font-medium inline-flex items-center gap-1" onClick={() => setReciboDetailId(reciboVinculado.id)}>
+                      <Receipt className="h-3 w-3" /> {reciboVinculado.codigo}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -351,6 +376,12 @@ export function ReservationsListPage() {
           )}
         </DialogContent>
       </Dialog>
+      <ReciboCajaDetailDialog reciboId={reciboDetailId} open={!!reciboDetailId} onClose={() => setReciboDetailId(null)} />
+      <ReservationDetailDialog
+        reservation={fullDetailRes}
+        open={!!fullDetailRes}
+        onClose={() => setFullDetailRes(null)}
+      />
     </div>
   );
 }

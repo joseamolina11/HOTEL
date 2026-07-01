@@ -3,7 +3,7 @@ import apiClient from './client';
 export interface CheckOutDto {
   reservationId: string;
   observaciones?: string;
-  payments?: { monto: number; metodoPago: string; comprobante?: string }[];
+  payments?: { monto: number; metodoPagoId: string; comprobante?: string }[];
 }
 
 export interface PendingCheckOuts {

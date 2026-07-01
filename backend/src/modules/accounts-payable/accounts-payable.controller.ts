@@ -41,11 +41,18 @@ export class AccountsPayableController {
     return this.service.findByCodigo(codigo);
   }
 
+  @Get('by-supplier/:supplierId')
+  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @ApiOperation({ summary: 'Cuentas por pagar pendientes de un proveedor' })
+  async findBySupplier(@Param('supplierId') supplierId: string) {
+    return this.service.findBySupplier(supplierId);
+  }
+
   @Get(':id')
   @Roles(ROLES.ADMIN, ROLES.RECEPTION)
   @ApiOperation({ summary: 'Obtener cuenta por ID' })
   async findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+    return this.service.findOneWithPayingExpenses(id);
   }
 
   @Post()

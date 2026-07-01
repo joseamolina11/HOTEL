@@ -6,6 +6,7 @@ import { Order } from 'src/modules/orders/entities/order.entity';
 import { Room } from 'src/modules/rooms/entities/room.entity';
 import { Reservation } from 'src/modules/reservations/entities/reservation.entity';
 import { User } from 'src/modules/auth/entities/user.entity';
+import { PaymentMethod } from 'src/modules/payment-methods/entities/payment-method.entity';
 
 @Entity('payments')
 export class Payment {
@@ -27,8 +28,12 @@ export class Payment {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   monto: number;
 
-  @Column({ name: 'metodo_pago', type: 'varchar' })
-  metodoPago: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+  @Column({ name: 'metodo_pago_id', nullable: true })
+  metodoPagoId: string;
+
+  @ManyToOne(() => PaymentMethod)
+  @JoinColumn({ name: 'metodo_pago_id' })
+  metodoPago: PaymentMethod;
 
   @Column({ name: 'comprobante', nullable: true })
   comprobante: string;

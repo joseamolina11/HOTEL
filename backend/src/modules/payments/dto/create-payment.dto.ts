@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsEnum, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreatePaymentDto {
@@ -21,9 +21,9 @@ export class CreatePaymentDto {
   @Min(0.01)
   monto: number;
 
-  @ApiProperty({ example: 'efectivo', enum: ['efectivo', 'transferencia', 'tarjeta', 'otros'] })
-  @IsEnum(['efectivo', 'transferencia', 'tarjeta', 'otros'])
-  metodoPago: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+  @ApiProperty({ example: 'uuid-payment-method' })
+  @IsUUID()
+  metodoPagoId: string;
 
   @ApiPropertyOptional({ example: 'Recibo #001' })
   @IsOptional()

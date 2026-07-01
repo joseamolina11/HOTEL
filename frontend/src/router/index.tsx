@@ -30,6 +30,10 @@ import { ExpensesListPage } from '@/pages/expenses/expenses-list.page';
 import { ServicesListPage } from '@/pages/services/services-list.page';
 import { TaxConfigListPage } from '@/pages/tax-config/tax-config-list.page';
 import { AccountsPayableListPage } from '@/pages/accounts-payable/accounts-payable-list.page';
+import { PaymentMethodsListPage } from '@/pages/payment-methods/payment-methods-list.page';
+import { FinancialAccountsListPage } from '@/pages/financial-accounts/financial-accounts-list.page';
+import { FinancialMovementsListPage } from '@/pages/financial-movements/financial-movements-list.page';
+import { ReciboCajaListPage } from '@/pages/recibo-caja/recibo-caja-list.page';
 
 export const router = createBrowserRouter([
   {
@@ -71,6 +75,10 @@ export const router = createBrowserRouter([
       { path: 'services', element: <ServicesListPage /> },
       { path: 'tax-config', element: <TaxConfigListPage /> },
       { path: 'accounts-payable', element: <AccountsPayableListPage /> },
+      { path: 'payment-methods', element: <PaymentMethodsListPage /> },
+      { path: 'financial-accounts', element: <FinancialAccountsListPage /> },
+      { path: 'financial-movements', element: <FinancialMovementsListPage /> },
+      { path: 'recibo-caja', element: <ReciboCajaListPage /> },
       { path: 'users', element: <RoleGuard roles={['admin']}><UsersListPage /></RoleGuard> },
       { path: 'housekeeping', element: <HousekeepingPage /> },
     ],

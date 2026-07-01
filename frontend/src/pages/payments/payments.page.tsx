@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { usePendingByRoom } from '@/hooks/useOrders';
 import { useCreatePayment, usePayments } from '@/hooks/usePayments';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +12,8 @@ import { DollarSign, CreditCard, Receipt, Loader2 } from 'lucide-react';
 import { toastSuccess } from '@/lib/notifications';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { paymentMethodsApi } from '@/api/payment-methods.api';
+
 
 export function PaymentsPage() {
   const { data: pendingGroups, isLoading } = usePendingByRoom();
@@ -86,25 +89,23 @@ export function PaymentsPage() {
   );
 }
 
-const METODOS_PAGO = [
-  { value: 'efectivo', label: 'Efectivo' },
-  { value: 'transferencia', label: 'Transferencia' },
-  { value: 'tarjeta', label: 'Tarjeta' },
-  { value: 'otros', label: 'Otros' },
-];
-
 function PaymentFormDialog({ open, onClose, room }: { open: boolean; onClose: () => void; room: any }) {
   const qc = useQueryClient();
   const [monto, setMonto] = useState('');
-  const [metodoPago, setMetodoPago] = useState('efectivo');
+  const [metodoPagoId, setMetodoPagoId] = useState('');
   const [comprobante, setComprobante] = useState('');
+
+  const { data: paymentMethods } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: () => paymentMethodsApi.findAllActive(),
+  });
 
   const createMut = useMutation({
     mutationFn: () => {
       const payload: any = {
         roomId: room?.room?.id,
         monto: Number(monto),
-        metodoPago,
+        metodoPagoId,
       };
       if (comprobante) payload.comprobante = comprobante;
       return import('@/api/payments.api').then((m) => m.paymentsApi.create(payload));
@@ -115,12 +116,17 @@ function PaymentFormDialog({ open, onClose, room }: { open: boolean; onClose: ()
       qc.invalidateQueries({ queryKey: ['payments'] });
       onClose();
       setMonto('');
-      setMetodoPago('efectivo');
+      setMetodoPagoId('');
       setComprobante('');
     },
   });
 
   if (!room) return null;
+
+  const pmOptions = (paymentMethods || []).map((pm: any) => ({
+    value: pm.id,
+    label: `${pm.nombre} ${pm.financialAccount ? `(${pm.financialAccount.nombre})` : ''}`,
+  }));
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -144,7 +150,12 @@ function PaymentFormDialog({ open, onClose, room }: { open: boolean; onClose: ()
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Método de pago</label>
-            <Select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} options={METODOS_PAGO} />
+            <select value={metodoPagoId} onChange={(e) => setMetodoPagoId(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+              <option value="">Seleccionar...</option>
+              {pmOptions.map((opt: any) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-2">
@@ -152,7 +163,7 @@ function PaymentFormDialog({ open, onClose, room }: { open: boolean; onClose: ()
             <Input value={comprobante} onChange={(e) => setComprobante(e.target.value)} placeholder="N° de recibo / referencia" />
           </div>
 
-          <Button className="w-full" disabled={!monto || Number(monto) <= 0 || createMut.isPending} onClick={() => createMut.mutate()}>
+          <Button className="w-full" disabled={!monto || !metodoPagoId || Number(monto) <= 0 || createMut.isPending} onClick={() => createMut.mutate()}>
             {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
             Registrar Pago - {formatCurrency(Number(monto) || 0)}
           </Button>
@@ -201,7 +212,7 @@ function PaymentHistoryDialog({ open, onClose, room }: { open: boolean; onClose:
                   <tr key={p.id} className="border-b">
                     <td className="px-3 py-2 text-muted-foreground">{formatDateTime(p.fecha)}</td>
                     <td className="px-3 py-2 text-right font-medium">{formatCurrency(p.monto)}</td>
-                    <td className="px-3 py-2 capitalize"><Badge variant="outline">{p.metodoPago}</Badge></td>
+                    <td className="px-3 py-2"><Badge variant="outline">{p.metodoPago?.nombre || '—'}</Badge></td>
                     <td className="px-3 py-2">{p.user?.nombres} {p.user?.apellidos}</td>
                   </tr>
                 ))

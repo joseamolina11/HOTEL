@@ -33,6 +33,11 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
 import { ServicesModule } from './modules/services/services.module';
 import { TaxConfigModule } from './modules/tax-config/tax-config.module';
 import { AccountsPayableModule } from './modules/accounts-payable/accounts-payable.module';
+import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
+import { FinancialAccountsModule } from './modules/financial-accounts/financial-accounts.module';
+import { FinancialMovementsModule } from './modules/financial-movements/financial-movements.module';
+import { ReciboCajaModule } from './modules/recibo-caja/recibo-caja.module';
+import { AuditTrailModule } from './modules/audit-trail/audit-trail.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -68,6 +73,11 @@ import { RolesGuard } from './common/guards/roles.guard';
     ServicesModule,
     TaxConfigModule,
     AccountsPayableModule,
+    PaymentMethodsModule,
+    FinancialAccountsModule,
+    FinancialMovementsModule,
+    ReciboCajaModule,
+    AuditTrailModule,
   ],
   controllers: [AppController],
   providers: [

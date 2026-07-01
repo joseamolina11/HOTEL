@@ -10,6 +10,9 @@ import { Payment } from '../payments/entities/payment.entity';
 import { CashRegister } from '../cash-register/entities/cash-register.entity';
 import { HotelConfig } from '../hotel-config/entities/hotel-config.entity';
 import { CheckOutDto } from './dto/check-out.dto';
+import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
+import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
+import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
 
 @Injectable()
 export class CheckOutService {
@@ -30,6 +33,9 @@ export class CheckOutService {
     private readonly cashRegisterRepository: Repository<CashRegister>,
     @InjectRepository(HotelConfig)
     private readonly hotelConfigRepository: Repository<HotelConfig>,
+    private readonly paymentMethodsService: PaymentMethodsService,
+    private readonly reciboCajaService: ReciboCajaService,
+    private readonly financialMovementsService: FinancialMovementsService,
   ) {}
 
   async findPendingCheckOuts() {
@@ -132,7 +138,7 @@ export class CheckOutService {
   async checkOut(checkOutDto: CheckOutDto, userId: string): Promise<CheckOut | null> {
     const reservation = await this.reservationRepository.findOne({
       where: { id: checkOutDto.reservationId },
-      relations: ['consumptions'],
+      relations: ['consumptions', 'consumptions.inventoryItem', 'guest', 'room', 'room.roomType'],
     });
 
     if (!reservation) {
@@ -175,25 +181,114 @@ export class CheckOutService {
       let transferencia = 0;
       let tarjeta = 0;
       let otros = 0;
+      const savedPayments: Payment[] = [];
 
       for (const split of checkOutDto.payments) {
+        const pm = await this.paymentMethodsService.findOne(split.metodoPagoId);
         totalPaymentAmount += split.monto;
-        if (split.metodoPago === 'efectivo') efectivo += split.monto;
-        else if (split.metodoPago === 'transferencia') transferencia += split.monto;
-        else if (split.metodoPago === 'tarjeta') tarjeta += split.monto;
-        else if (split.metodoPago === 'otros') otros += split.monto;
+        const tipo = pm.tipo || 'otros';
+        if (tipo === 'efectivo') efectivo += split.monto;
+        else if (tipo === 'transferencia') transferencia += split.monto;
+        else if (tipo === 'tarjeta') tarjeta += split.monto;
+        else otros += split.monto;
 
         const payment = this.paymentRepository.create({
           roomId: reservation.roomId,
           reservationId: reservation.id,
           userId,
           monto: split.monto,
-          metodoPago: split.metodoPago,
+          metodoPagoId: split.metodoPagoId,
           comprobante: split.comprobante,
-          observaciones: `Check-out ${reservation.codigo}`,
+          observaciones: `Check-out ${reservation.codigo} - ${pm.nombre}`,
           fecha: new Date(),
         });
-        await this.paymentRepository.save(payment);
+        savedPayments.push(await this.paymentRepository.save(payment));
+      }
+
+      // Load pending orders with items for the receipt
+      const pendingOrders = await this.orderRepository.find({
+        where: { reservationId: reservation.id, estado: 'pendiente' },
+        relations: ['items', 'items.inventoryItem'],
+      });
+
+      // Build items for the receipt (room charge + consumptions + orders)
+      const noches = Math.ceil(
+        (new Date(reservation.fechaSalida).getTime() - new Date(reservation.fechaEntrada).getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const precioNoche = Number(reservation.room?.roomType?.precioBase || 0);
+      const itemsData: any[] = [];
+      if (precioNoche > 0) {
+        itemsData.push({
+          concepto: `${reservation.room?.nombre || 'Habitación'} x ${noches} noche${noches > 1 ? 's' : ''}`,
+          cantidad: noches,
+          precioUnitario: precioNoche,
+          subtotal: noches * precioNoche,
+          tipo: 'habitacion',
+        });
+      }
+      for (const c of reservation.consumptions || []) {
+        itemsData.push({
+          concepto: c.inventoryItem?.nombre || 'Producto',
+          cantidad: c.cantidad,
+          precioUnitario: Number(c.precioUnitario),
+          subtotal: Number(c.subtotal),
+          tipo: 'consumo',
+        });
+      }
+      for (const order of pendingOrders) {
+        for (const item of order.items || []) {
+          itemsData.push({
+            concepto: `${item.inventoryItem?.nombre || 'Producto'} (Pedido ${order.codigo || ''})`,
+            cantidad: item.cantidad,
+            precioUnitario: Number(item.precioUnitario),
+            subtotal: Number(item.subtotal),
+            tipo: 'pedido',
+          });
+        }
+      }
+
+      // Create Recibo de Caja
+      const pagosData = await Promise.all(savedPayments.map(async (p, i) => {
+        const split = checkOutDto.payments![i];
+        const pmethod = await this.paymentMethodsService.findOne(p.metodoPagoId);
+        return {
+          concepto: split.concepto || `Check-out ${reservation.codigo}`,
+          monto: Number(p.monto),
+          metodoPagoId: p.metodoPagoId,
+          cuentaId: pmethod.financialAccountId || '',
+          referenciaTipo: 'payment',
+          referenciaId: p.id,
+        };
+      }));
+      const recibo = await this.reciboCajaService.create({
+        clienteNombre: reservation.guest?.nombres || 'Huésped',
+        reservationId: reservation.id,
+        fecha: new Date().toISOString().slice(0, 10),
+        subtotal: totalPaymentAmount,
+        descuento: 0,
+        total: totalPaymentAmount,
+        pagos: pagosData,
+        items: itemsData,
+      }, userId);
+
+      // Create INGRESO movements for each payment linked to the receipt
+      for (const pagoData of pagosData) {
+        if (pagoData.cuentaId) {
+          try {
+            await this.financialMovementsService.create({
+              accountId: pagoData.cuentaId,
+              tipo: 'INGRESO',
+              monto: pagoData.monto,
+              concepto: `Check-out ${reservation.codigo} - ${pagoData.concepto}`,
+              referenciaTipo: 'payment',
+              referenciaId: pagoData.referenciaId,
+              reciboId: recibo.id,
+            }, userId);
+          } catch (e: any) {
+            // skip
+          }
+        }
       }
 
       if (cashRegister) {
@@ -205,10 +300,6 @@ export class CheckOutService {
         cashRegister.cantidadTransacciones += checkOutDto.payments.length;
         await this.cashRegisterRepository.save(cashRegister);
       }
-
-      const pendingOrders = await this.orderRepository.find({
-        where: { reservationId: reservation.id, estado: 'pendiente' },
-      });
 
       let pendingTotal = pendingOrders.reduce((sum, o) => sum + Number(o.total), 0);
       let remainingPayment = totalPaymentAmount;

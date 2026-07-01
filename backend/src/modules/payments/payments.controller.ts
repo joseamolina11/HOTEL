@@ -19,11 +19,11 @@ export class PaymentsController {
   @ApiQuery({ name: 'limit', required: false, description: 'Resultados por página' })
   async findAll(
     @Query('roomId') roomId?: string,
-    @Query('metodoPago') metodoPago?: string,
+    @Query('metodoPagoId') metodoPagoId?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 10,
   ) {
-    return this.paymentsService.findAll({ roomId, metodoPago }, +page, +limit);
+    return this.paymentsService.findAll({ roomId, metodoPagoId }, +page, +limit);
   }
 
   @Get('room/:roomId')

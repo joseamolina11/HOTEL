@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { AccountsPayable } from './accounts-payable.entity';
+import { PaymentMethod } from 'src/modules/payment-methods/entities/payment-method.entity';
 
 @Entity('pagos_cuenta')
 export class PagoCuenta {
@@ -19,8 +20,12 @@ export class PagoCuenta {
   @Column({ name: 'fecha_pago', type: 'date' })
   fechaPago: string;
 
-  @Column({ name: 'metodo_pago' })
-  metodoPago: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+  @Column({ name: 'metodo_pago_id', nullable: true })
+  metodoPagoId: string;
+
+  @ManyToOne(() => PaymentMethod)
+  @JoinColumn({ name: 'metodo_pago_id' })
+  metodoPago: PaymentMethod;
 
   @Column({ nullable: true })
   referencia: string;

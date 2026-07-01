@@ -27,11 +27,14 @@ export class AccountsPayable {
   purchaseOrder: PurchaseOrder;
 
   @Column({ name: 'expense_id', nullable: true })
-  expenseId: string;
+  sourceExpenseId: string;
 
   @ManyToOne(() => Expense, { nullable: true })
   @JoinColumn({ name: 'expense_id' })
-  expense: Expense;
+  sourceExpense: Expense;
+
+  @OneToMany(() => Expense, (e) => e.accountsPayable)
+  payingExpenses: Expense[];
 
   @Column({ name: 'fecha_emision', type: 'date' })
   fechaEmision: string;
@@ -54,7 +57,7 @@ export class AccountsPayable {
   @Column({ name: 'created_by', nullable: true })
   createdBy: string;
 
-  @OneToMany(() => PagoCuenta, (pago) => pago.cuenta, { cascade: true })
+  @OneToMany(() => PagoCuenta, (pago) => pago.cuenta)
   pagos: PagoCuenta[];
 
   @CreateDateColumn({ name: 'created_at' })
