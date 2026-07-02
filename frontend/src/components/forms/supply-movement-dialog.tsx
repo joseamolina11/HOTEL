@@ -7,8 +7,9 @@ import { expensesApi } from '@/api/expenses.api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Search, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const movementSchema = z.object({
   tipo: z.enum(['entrada', 'salida', 'ajuste']),
@@ -26,9 +27,7 @@ interface Props {
 
 export function SupplyMovementDialog({ item, onClose }: Props) {
   const createMovement = useCreateSupplyMovement();
-  const [expenseCodigo, setExpenseCodigo] = useState('');
-  const [selectedExpense, setSelectedExpense] = useState<any>(null);
-  const [searching, setSearching] = useState(false);
+  const [expenseId, setExpenseId] = useState('');
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(movementSchema),
@@ -36,19 +35,6 @@ export function SupplyMovementDialog({ item, onClose }: Props) {
   });
 
   const tipo = watch('tipo');
-
-  const searchExpense = async () => {
-    if (!expenseCodigo.trim()) return;
-    setSearching(true);
-    try {
-      const result = await expensesApi.findByCodigo(expenseCodigo.trim());
-      setSelectedExpense(result);
-    } catch {
-      setSelectedExpense(null);
-    } finally {
-      setSearching(false);
-    }
-  };
 
   const onSubmit = async (data: FormData) => {
     if (!item) return;
@@ -58,7 +44,7 @@ export function SupplyMovementDialog({ item, onClose }: Props) {
       cantidad: data.cantidad,
       precioUnitario: data.precioUnitario || undefined,
       observaciones: data.observaciones || undefined,
-      expenseId: selectedExpense?.id || undefined,
+      expenseId: expenseId || undefined,
     });
     onClose();
   };
@@ -92,28 +78,13 @@ export function SupplyMovementDialog({ item, onClose }: Props) {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Egreso asociado</label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Buscar por código de egreso..."
-                    value={expenseCodigo}
-                    onChange={(e) => setExpenseCodigo(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchExpense(); } }}
-                  />
-                  <Button type="button" variant="outline" size="icon" onClick={searchExpense} disabled={searching}>
-                    {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  </Button>
-                </div>
-                {selectedExpense && (
-                  <div className="flex items-center justify-between rounded-lg border p-2 text-sm">
-                    <div>
-                      <span className="font-mono font-medium">{selectedExpense.codigo}</span>
-                      <span className="text-muted-foreground ml-2">- {selectedExpense.concepto}</span>
-                    </div>
-                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedExpense(null)}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
+                <SearchableSelect
+                  value={expenseId}
+                  onChange={(val) => setExpenseId(val)}
+                  searchFn={expensesApi.search}
+                  placeholder="Buscar egreso..."
+                  searchPlaceholder="Escribe código o concepto..."
+                />
               </div>
             </>
           )}

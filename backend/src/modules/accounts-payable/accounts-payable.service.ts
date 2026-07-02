@@ -32,6 +32,7 @@ export class AccountsPayableService {
       .leftJoinAndSelect('ap.supplier', 'supplier')
       .leftJoinAndSelect('ap.purchaseOrder', 'purchaseOrder')
       .leftJoinAndSelect('ap.sourceExpense', 'sourceExpense')
+      .leftJoinAndSelect('ap.createdBy', 'createdBy')
       .orderBy('ap.createdAt', 'DESC');
 
     if (filters?.search) {
@@ -53,7 +54,7 @@ export class AccountsPayableService {
   async findOne(id: string): Promise<AccountsPayable> {
     const ap = await this.repo.findOne({
       where: { id },
-      relations: ['supplier', 'purchaseOrder', 'sourceExpense'],
+      relations: ['supplier', 'purchaseOrder', 'sourceExpense', 'createdBy'],
     });
     if (!ap) throw new NotFoundException('Cuenta por pagar no encontrada');
     return ap;
@@ -62,7 +63,7 @@ export class AccountsPayableService {
   async findOneWithPayingExpenses(id: string): Promise<AccountsPayable> {
     const ap = await this.repo.findOne({
       where: { id },
-      relations: ['supplier', 'purchaseOrder', 'sourceExpense', 'payingExpenses', 'payingExpenses.metodoPago', 'pagos', 'pagos.metodoPago'],
+      relations: ['supplier', 'purchaseOrder', 'sourceExpense', 'payingExpenses', 'payingExpenses.metodoPago', 'pagos', 'pagos.metodoPago', 'createdBy'],
     });
     if (!ap) throw new NotFoundException('Cuenta por pagar no encontrada');
     return ap;
@@ -71,7 +72,7 @@ export class AccountsPayableService {
   async findByCodigo(codigo: string): Promise<AccountsPayable> {
     const ap = await this.repo.findOne({
       where: { codigo },
-      relations: ['supplier', 'purchaseOrder', 'sourceExpense'],
+      relations: ['supplier', 'purchaseOrder', 'sourceExpense', 'createdBy'],
     });
     if (!ap) throw new NotFoundException('Cuenta por pagar no encontrada');
     return ap;
@@ -94,7 +95,7 @@ export class AccountsPayableService {
       ...dto,
       codigo,
       saldoPendiente: dto.montoOriginal,
-      createdBy: userId,
+      createdById: userId,
     }));
   }
 

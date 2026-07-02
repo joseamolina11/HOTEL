@@ -18,6 +18,7 @@ async function runSeeders() {
     console.log('📦 Conexión a BD establecida\n');
 
     await seedUsers(dataSource);
+    return;
     await seedRoomTypes(dataSource);
     await seedAmenities(dataSource);
     await seedRooms(dataSource);

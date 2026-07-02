@@ -243,6 +243,12 @@ export function ReservationsListPage() {
                           <Button variant="ghost" size="icon" onClick={() => openDetail(res)} title="Editar">
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          <Button variant="ghost" size="icon" onClick={async () => {
+                            const { printReservation } = await import('@/lib/print-document');
+                            printReservation(res.id);
+                          }} title="Imprimir reserva">
+                            <Printer className="h-4 w-4" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -329,7 +335,7 @@ export function ReservationsListPage() {
                     </a>
                   </div>
                 )}
-                {detailRes.estado !== 'cancelada' && detailRes.estado !== 'checkout' && (
+                {detailRes.estado !== 'cancelada' && (
                   <Button type="button" variant="outline" size="sm" disabled={uploadingContract} className="relative">
                     {uploadingContract ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Upload className="mr-1 h-4 w-4" />}
                     {uploadingContract ? 'Subiendo...' : detailRes.contratoFile ? 'Reemplazar Contrato' : 'Subir Contrato'}
@@ -358,11 +364,23 @@ export function ReservationsListPage() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    onClick={async () => {
+                      const { printReservation } = await import('@/lib/print-document');
+                      printReservation(detailRes.id);
+                    }}
+                  >
+                    <Printer className="h-4 w-4 mr-1" />
+                    Imprimir
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={handlePrint}
                     disabled={loadingReceipt}
                   >
-                    {loadingReceipt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
-                    Imprimir
+                    {loadingReceipt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4 mr-1" />}
+                    Recibo
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => setDetailRes(null)}>Cerrar</Button>
                   {(detailRes.estado === 'pendiente' || detailRes.estado === 'confirmada') && (

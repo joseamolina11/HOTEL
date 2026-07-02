@@ -32,6 +32,11 @@ export class CreateFinancialMovementDto {
   @IsOptional()
   @IsString()
   reciboId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-cash-register' })
+  @IsOptional()
+  @IsString()
+  cashRegisterId?: string;
 }
 
 export class TransferDto {
@@ -50,4 +55,9 @@ export class TransferDto {
   @IsOptional()
   @IsString()
   concepto?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-cash-register' })
+  @IsOptional()
+  @IsString()
+  cashRegisterId?: string;
 }

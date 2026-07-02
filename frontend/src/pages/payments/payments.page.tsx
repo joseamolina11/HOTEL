@@ -40,7 +40,7 @@ export function PaymentsPage() {
                   <th className="px-4 py-3 text-left font-medium">Huésped</th>
                   <th className="px-4 py-3 text-right font-medium">Total Pendiente</th>
                   <th className="px-4 py-3 text-right font-medium">Pedidos</th>
-                  <th className="px-4 py-3 text-center font-medium">Acciones</th>
+                  {/* <th className="px-4 py-3 text-center font-medium">Acciones</th> */}
                 </tr>
               </thead>
               <tbody>
@@ -55,7 +55,7 @@ export function PaymentsPage() {
                       <td className="px-4 py-3">{group.guest ? `${group.guest.nombres} ${group.guest.apellidos}` : '—'}</td>
                       <td className="px-4 py-3 text-right font-medium">{formatCurrency(group.total)}</td>
                       <td className="px-4 py-3 text-right">{group.orders.length}</td>
-                      <td className="px-4 py-3 text-center">
+                      {/* <td className="px-4 py-3 text-center">
                         <div className="flex justify-center gap-2">
                           <Button size="sm" onClick={() => { setSelectedRoom(group); setShowPaymentForm(true); }}>
                             <DollarSign className="mr-1 h-3 w-3" /> Cobrar
@@ -64,7 +64,7 @@ export function PaymentsPage() {
                             <Receipt className="mr-1 h-3 w-3" /> Historial
                           </Button>
                         </div>
-                      </td>
+                      </td> */}
                     </tr>
                   ))
                 )}

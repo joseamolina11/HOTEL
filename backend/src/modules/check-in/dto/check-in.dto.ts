@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -46,4 +46,20 @@ export class CheckInDto {
   @ValidateNested({ each: true })
   @Type(() => CompanionRegisterDto)
   companions?: CompanionRegisterDto[];
+
+  @ApiPropertyOptional({ example: 150.00 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pagoMonto?: number;
+
+  @ApiPropertyOptional({ example: 'uuid-payment-method' })
+  @IsOptional()
+  @IsString()
+  pagoMetodoPagoId?: string;
+
+  @ApiPropertyOptional({ example: 'REF001' })
+  @IsOptional()
+  @IsString()
+  pagoReferencia?: string;
 }

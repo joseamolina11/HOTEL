@@ -3,6 +3,7 @@ import {
   CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn,
 } from 'typeorm';
 import { User } from 'src/modules/auth/entities/user.entity';
+import { FinancialAccount } from 'src/modules/financial-accounts/entities/financial-account.entity';
 
 @Entity('cash_registers')
 export class CashRegister {
@@ -11,6 +12,13 @@ export class CashRegister {
 
   @Column({ name: 'user_id' })
   userId: string;
+
+  @Column({ name: 'account_id', nullable: true })
+  accountId: string;
+
+  @ManyToOne(() => FinancialAccount)
+  @JoinColumn({ name: 'account_id' })
+  account: FinancialAccount;
 
   @Column({ name: 'fecha_apertura', type: 'timestamptz' })
   fechaApertura: Date;

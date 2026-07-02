@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { Supplier } from 'src/modules/suppliers/entities/supplier.entity';
 import { PurchaseOrderItem } from './purchase-order-item.entity';
+import { User } from 'src/modules/auth/entities/user.entity';
 
 @Entity('purchase_orders')
 export class PurchaseOrder {
@@ -41,8 +42,32 @@ export class PurchaseOrder {
   @Column({ name: 'tasa_impuesto', type: 'decimal', precision: 5, scale: 2, default: 19 })
   tasaImpuesto: number;
 
-  @Column({ name: 'created_by', nullable: true })
-  createdBy: string;
+  @Column({ name: 'created_by_id', nullable: true })
+  createdById: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy: User;
+
+  @Column({ name: 'approved_by_id', nullable: true })
+  approvedById: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'approved_by_id' })
+  approvedBy: User;
+
+  @Column({ name: 'approved_at', type: 'timestamptz', nullable: true })
+  approvedAt: Date;
+
+  @Column({ name: 'annulled_by_id', nullable: true })
+  annulledById: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'annulled_by_id' })
+  annulledBy: User;
+
+  @Column({ name: 'annulled_at', type: 'timestamptz', nullable: true })
+  annulledAt: Date;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

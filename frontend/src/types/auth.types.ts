@@ -4,6 +4,7 @@ export interface User {
   nombres: string;
   apellidos: string;
   role: 'admin' | 'reception' | 'limpieza' | 'mantenimiento';
+  permissions?: string[];
 }
 
 export interface LoginCredentials {

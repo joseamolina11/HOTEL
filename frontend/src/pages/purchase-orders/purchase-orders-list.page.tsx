@@ -12,9 +12,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { PaginationBar } from '@/components/shared/pagination-bar';
-import { Plus, Pencil, Trash2, Search, X, PlusCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, X, PlusCircle, User, Printer } from 'lucide-react';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
 import { useForm, useFieldArray } from 'react-hook-form';
+import { printPurchaseOrder } from '@/lib/print-document';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { formatCurrency } from '@/lib/utils';
@@ -258,14 +259,15 @@ export function PurchaseOrdersListPage() {
                   <th className="px-4 py-3 text-left font-medium">Fecha</th>
                   <th className="px-4 py-3 text-right font-medium">Total</th>
                   <th className="px-4 py-3 text-center font-medium">Estado</th>
+                  <th className="px-4 py-3 text-left font-medium"><User className="h-3 w-3 inline mr-1" />Creado por</th>
                   <th className="px-4 py-3 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
                 ) : orders.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Sin órdenes registradas</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Sin órdenes registradas</td></tr>
                 ) : (
                   orders.map((o: any) => (
                     <tr key={o.id} className="border-b hover:bg-muted/50">
@@ -282,8 +284,19 @@ export function PurchaseOrdersListPage() {
                       <td className="px-4 py-3 text-center">
                         <Badge variant={statusColors[o.estado] || 'secondary'} className="capitalize">{o.estado}</Badge>
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {o.createdBy ? (
+                          <span className="inline-flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {o.createdBy.nombre || o.createdBy.email || '—'}
+                          </span>
+                        ) : '—'}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => printPurchaseOrder(o.id)} title="Imprimir">
+                            <Printer className="h-4 w-4" />
+                          </Button>
                           {o.estado === 'borrador' && (
                             <>
                               <Button variant="ghost" size="sm" onClick={() => updateStatusMut.mutate({ id: o.id, estado: 'aprobada' })}>

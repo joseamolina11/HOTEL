@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersApi } from '@/api/users.api';
+import { permissionsApi, RoleItem } from '@/api/permissions.api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,17 +14,11 @@ import { Search, Plus, Pencil, UserX, UserCheck } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
 
-const ROLES_OPTS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'reception', label: 'Recepción' },
-  { value: 'limpieza', label: 'Limpieza' },
-  { value: 'mantenimiento', label: 'Mantenimiento' },
-];
-
-function UserEditDialog({ user, onSuccess, open, onOpenChange }: { user: any; onSuccess: () => void; open: boolean; onOpenChange: (v: boolean) => void }) {
+function UserEditDialog({ user, onSuccess, open, onOpenChange, roles }: { user: any; onSuccess: () => void; open: boolean; onOpenChange: (v: boolean) => void; roles: RoleItem[] }) {
   const [nombres, setNombres] = useState(user?.nombres || '');
   const [apellidos, setApellidos] = useState(user?.apellidos || '');
   const [role, setRole] = useState(user?.role || 'reception');
+  const roleOpts = (roles ?? []).map(r => ({ value: r.name, label: r.name }));
 
   const updateMut = useMutation({
     mutationFn: (dto: any) => usersApi.update(user.id, dto),
@@ -45,7 +40,7 @@ function UserEditDialog({ user, onSuccess, open, onOpenChange }: { user: any; on
           </div>
           <div>
             <label className="text-sm font-medium">Rol</label>
-            <Select options={ROLES_OPTS} value={role} onChange={(e) => setRole(e.target.value)} />
+            <Select options={roleOpts} value={role} onChange={(e) => setRole(e.target.value)} />
           </div>
           <Button onClick={() => updateMut.mutate({ nombres, apellidos, role })} disabled={updateMut.isPending}>
             Guardar
@@ -56,12 +51,13 @@ function UserEditDialog({ user, onSuccess, open, onOpenChange }: { user: any; on
   );
 }
 
-function CreateUserDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void }) {
+function CreateUserDialog({ open, onOpenChange, onSuccess, roles }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; roles: RoleItem[] }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [role, setRole] = useState('reception');
+  const roleOpts = (roles ?? []).map(r => ({ value: r.name, label: r.name }));
 
   const createMut = useMutation({
     mutationFn: (dto: any) => usersApi.create(dto),
@@ -91,7 +87,7 @@ function CreateUserDialog({ open, onOpenChange, onSuccess }: { open: boolean; on
           </div>
           <div>
             <label className="text-sm font-medium">Rol</label>
-            <Select options={ROLES_OPTS} value={role} onChange={(e) => setRole(e.target.value)} />
+            <Select options={roleOpts} value={role} onChange={(e) => setRole(e.target.value)} />
           </div>
           <Button
             onClick={() => createMut.mutate({ email, password, nombres, apellidos, role })}
@@ -112,6 +108,11 @@ export function UsersListPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const currentUser = useAuthStore((s) => s.user);
   const qc = useQueryClient();
+
+  const { data: roles } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => permissionsApi.getRoles(),
+  });
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['users', page],
@@ -215,11 +216,13 @@ export function UsersListPage() {
         open={openCreate}
         onOpenChange={setOpenCreate}
         onSuccess={() => qc.invalidateQueries({ queryKey: ['users'] })}
+        roles={roles ?? []}
       />
 
       {editingUser && (
         <UserEditDialog
           user={editingUser}
+          roles={roles ?? []}
           open={!!editingUser}
           onOpenChange={(v) => !v && setEditingUser(null)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ['users'] })}

@@ -4,6 +4,7 @@ export interface JwtPayload {
   role: 'admin' | 'reception' | 'limpieza' | 'mantenimiento';
   nombres: string;
   apellidos: string;
+  permissions: string[];
 }
 
 export interface AuthTokens {
@@ -18,6 +19,7 @@ export interface LoginResponse {
     nombres: string;
     apellidos: string;
     role: string;
+    permissions: string[];
   };
   tokens: AuthTokens;
 }

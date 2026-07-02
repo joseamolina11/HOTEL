@@ -21,6 +21,8 @@ export class PurchaseOrdersService {
     const query = this.repo.createQueryBuilder('po')
       .leftJoinAndSelect('po.supplier', 'supplier')
       .leftJoinAndSelect('po.items', 'items')
+      .leftJoinAndSelect('po.createdBy', 'createdBy')
+      .leftJoinAndSelect('po.approvedBy', 'approvedBy')
       .orderBy('po.createdAt', 'DESC');
 
     if (filters?.search) query.andWhere('po.codigo ILIKE :search', { search: `%${filters.search}%` });
@@ -40,7 +42,7 @@ export class PurchaseOrdersService {
   async findOne(id: string): Promise<PurchaseOrder> {
     const po = await this.repo.findOne({
       where: { id },
-      relations: ['supplier', 'items'],
+      relations: ['supplier', 'items', 'createdBy', 'approvedBy'],
     });
     if (!po) throw new NotFoundException('Orden de compra no encontrada');
     return po;
@@ -49,7 +51,7 @@ export class PurchaseOrdersService {
   async findByCode(codigo: string): Promise<PurchaseOrder> {
     const po = await this.repo.findOne({
       where: { codigo },
-      relations: ['supplier', 'items'],
+      relations: ['supplier', 'items', 'createdBy', 'approvedBy'],
     });
     if (!po) throw new NotFoundException('Orden de compra no encontrada');
     return po;
@@ -114,7 +116,7 @@ export class PurchaseOrdersService {
       total,
       tasaImpuesto,
       taxConfigId: dto.taxConfigId || undefined,
-      createdBy: userId,
+      createdById: userId,
       items,
     });
 
@@ -165,9 +167,17 @@ export class PurchaseOrdersService {
     return this.repo.save(po);
   }
 
-  async updateStatus(id: string, dto: UpdateOrderStatusDto): Promise<PurchaseOrder> {
+  async updateStatus(id: string, dto: UpdateOrderStatusDto, userId: string): Promise<PurchaseOrder> {
     const po = await this.findOne(id);
     po.estado = dto.estado;
+    if (dto.estado === 'aprobada') {
+      po.approvedById = userId;
+      po.approvedAt = new Date();
+    }
+    if (dto.estado === 'anulada') {
+      po.annulledById = userId;
+      po.annulledAt = new Date();
+    }
     return this.repo.save(po);
   }
 

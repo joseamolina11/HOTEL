@@ -16,7 +16,16 @@ const queryClient = new QueryClient({
   },
 });
 
-useUIStore.getState().setTheme('light');
+const stored = localStorage.getItem('ui-storage');
+if (stored) {
+  try {
+    const parsed = JSON.parse(stored);
+    const theme = parsed?.state?.theme || 'light';
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  } catch { /* ignore */ }
+} else {
+  document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

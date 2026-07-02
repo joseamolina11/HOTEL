@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
 import { formatCurrency } from '@/lib/utils';
-import { ExternalLink, Receipt, ShoppingCart, CreditCard, Package, BedDouble } from 'lucide-react';
+import { ExternalLink, Receipt, ShoppingCart, CreditCard, Package, BedDouble, Printer } from 'lucide-react';
 
 const STATUS_LABELS: Record<string, string> = {
   pendiente: 'Pendiente',
@@ -112,13 +112,19 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                     </button>
                   </div>
                 )}
-                {onNavigateReservations && (
-                  <div className="col-span-full flex justify-end">
+                <div className="col-span-full flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={async () => {
+                    const { printReservation } = await import('@/lib/print-document');
+                    printReservation(res.id);
+                  }}>
+                    <Printer className="h-3 w-3 mr-1" /> Imprimir
+                  </Button>
+                  {onNavigateReservations && (
                     <Button variant="outline" size="sm" onClick={onNavigateReservations}>
                       Ir a Reservas <ExternalLink className="h-3 w-3 ml-1" />
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {res.companions?.length > 0 && (

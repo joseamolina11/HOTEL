@@ -15,8 +15,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { PaginationBar } from '@/components/shared/pagination-bar';
-import { Plus, Pencil, Trash2, Search, FileText, ExternalLink, Upload, Loader2, Link2, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileText, ExternalLink, Upload, Loader2, Link2, Eye, User, Printer } from 'lucide-react';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
+import { printExpense } from '@/lib/print-document';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -323,14 +324,15 @@ export function ExpensesListPage() {
                   <th className="px-4 py-3 text-left font-medium">Método Pago</th>
                   <th className="px-4 py-3 text-right font-medium">Monto</th>
                   <th className="px-4 py-3 text-center font-medium">Comp.</th>
+                  <th className="px-4 py-3 text-left font-medium"><User className="h-3 w-3 inline mr-1" />Creado por</th>
                   <th className="px-4 py-3 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
+                  <tr><td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
                 ) : expenses.length === 0 ? (
-                  <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Sin egresos registrados</td></tr>
+                  <tr><td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">Sin egresos registrados</td></tr>
                 ) : (
                   expenses.map((e: any) => (
                     <tr key={e.id} className="border-b hover:bg-muted/50">
@@ -361,8 +363,19 @@ export function ExpensesListPage() {
                           </a>
                         ) : '—'}
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {e.createdBy ? (
+                          <span className="inline-flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {e.createdBy.nombre || e.createdBy.email || '—'}
+                          </span>
+                        ) : '—'}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => printExpense(e.id)} title="Imprimir">
+                            <Printer className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(e)}>
                             <Pencil className="h-4 w-4" />
                           </Button>

@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { User } from 'src/modules/auth/entities/user.entity';
 import { Supplier } from 'src/modules/suppliers/entities/supplier.entity';
 import { ExpenseCategory } from 'src/modules/expense-categories/entities/expense-category.entity';
 import { PurchaseOrder } from 'src/modules/purchase-orders/entities/purchase-order.entity';
@@ -71,8 +72,12 @@ export class Expense {
   @JoinColumn({ name: 'comprobante' })
   comprobanteFile: FileRecord;
 
-  @Column({ name: 'created_by', nullable: true })
-  createdBy: string;
+  @Column({ name: 'created_by_id', nullable: true })
+  createdById: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy: User;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

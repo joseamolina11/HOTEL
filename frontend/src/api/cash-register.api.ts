@@ -16,6 +16,11 @@ export const cashRegisterApi = {
     return data.data;
   },
 
+  findMovements: async (id: string, params?: Record<string, string>) => {
+    const { data } = await apiClient.get(`/cash-register/${id}/movements`, { params });
+    return data.data;
+  },
+
   open: async (dto: { montoInicial: number; observaciones?: string }) => {
     const { data } = await apiClient.post('/cash-register/open', dto);
     return data.data;

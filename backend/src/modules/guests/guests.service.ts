@@ -33,7 +33,14 @@ export class GuestsService {
   async findOne(id: string): Promise<Guest> {
     const guest = await this.guestRepository.findOne({
       where: { id },
-      relations: ['reservations', 'reservations.room', 'reservations.room.roomType'],
+      relations: {
+        reservations: {
+          room: { roomType: true },
+          consumptions: { inventoryItem: true },
+          orders: { items: { inventoryItem: true } },
+          recibosCaja: { items: true },
+        },
+      },
     });
     if (!guest) {
       throw new NotFoundException('Huésped no encontrado');

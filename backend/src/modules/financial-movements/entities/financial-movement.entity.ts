@@ -46,6 +46,9 @@ export class FinancialMovement {
   @JoinColumn({ name: 'recibo_id' })
   reciboCaja: ReciboCaja;
 
+  @Column({ name: 'cash_register_id', nullable: true })
+  cashRegisterId: string;
+
   @Column({ name: 'user_id', nullable: true })
   userId: string | null;
 

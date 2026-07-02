@@ -3,8 +3,7 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { InventoryCategoryService } from './inventory-category.service';
 import { CreateInventoryItemDto, UpdateInventoryItemDto, CreateMovementDto } from './dto/create-inventory-item.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/auth.interface';
 
@@ -17,7 +16,7 @@ export class InventoryController {
   ) {}
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('inventory:view')
   @ApiOperation({ summary: 'Listar productos de inventario' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'categoria', required: false })
@@ -35,14 +34,14 @@ export class InventoryController {
   }
 
   @Get('low-stock')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('inventory:view')
   @ApiOperation({ summary: 'Productos con stock bajo' })
   async findLowStock() {
     return this.inventoryService.findLowStock();
   }
 
   @Get('categories')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('inventory:categories-manage')
   @ApiOperation({ summary: 'Listar categorías de inventario' })
   @ApiQuery({ name: 'page', required: false, description: 'Número de página' })
   @ApiQuery({ name: 'limit', required: false, description: 'Resultados por página' })
@@ -54,7 +53,7 @@ export class InventoryController {
   }
 
   @Get('movements')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('inventory:movements-view')
   @ApiOperation({ summary: 'Listar todos los movimientos de inventario' })
   @ApiQuery({ name: 'page', required: false, description: 'Número de página' })
   @ApiQuery({ name: 'limit', required: false, description: 'Resultados por página' })
@@ -66,28 +65,28 @@ export class InventoryController {
   }
 
   @Post('categories')
-  @Roles(ROLES.ADMIN)
+  @Permissions('inventory:categories-manage')
   @ApiOperation({ summary: 'Crear categoría de inventario' })
   async createCategory(@Body('nombre') nombre: string, @Body('descripcion') descripcion?: string) {
     return this.categoryService.create(nombre, descripcion);
   }
 
   @Put('categories/:id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('inventory:categories-manage')
   @ApiOperation({ summary: 'Actualizar categoría de inventario' })
   async updateCategory(@Param('id') id: string, @Body() data: { nombre?: string; descripcion?: string }) {
     return this.categoryService.update(id, data);
   }
 
   @Delete('categories/:id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('inventory:categories-manage')
   @ApiOperation({ summary: 'Eliminar categoría de inventario' })
   async removeCategory(@Param('id') id: string) {
     return this.categoryService.remove(id);
   }
 
   @Post('movements')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('inventory:adjust')
   @ApiOperation({ summary: 'Registrar movimiento de inventario' })
   async createMovement(
     @Body() createMovementDto: CreateMovementDto,
@@ -97,35 +96,35 @@ export class InventoryController {
   }
 
   @Get(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('inventory:view')
   @ApiOperation({ summary: 'Obtener producto por ID' })
   async findOne(@Param('id') id: string) {
     return this.inventoryService.findOne(id);
   }
 
   @Get(':id/movements')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('inventory:view')
   @ApiOperation({ summary: 'Historial de movimientos de un producto' })
   async findMovements(@Param('id') id: string) {
     return this.inventoryService.findMovements(id);
   }
 
   @Post()
-  @Roles(ROLES.ADMIN)
+  @Permissions('inventory:create')
   @ApiOperation({ summary: 'Crear producto de inventario' })
   async create(@Body() createDto: CreateInventoryItemDto) {
     return this.inventoryService.create(createDto);
   }
 
   @Put(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('inventory:edit')
   @ApiOperation({ summary: 'Actualizar producto de inventario' })
   async update(@Param('id') id: string, @Body() updateDto: UpdateInventoryItemDto) {
     return this.inventoryService.update(id, updateDto);
   }
 
   @Delete(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('inventory:delete')
   @ApiOperation({ summary: 'Eliminar producto de inventario' })
   async remove(@Param('id') id: string) {
     return this.inventoryService.remove(id);

@@ -11,12 +11,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { PaginationBar } from '@/components/shared/pagination-bar';
-import { Plus, Pencil, Trash2, Search, DollarSign, History, FileText } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, DollarSign, History, FileText, User, Printer } from 'lucide-react';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { formatCurrency } from '@/lib/utils';
+import { printAccountsPayable } from '@/lib/print-document';
 import { SupplierDetailDialog } from '@/components/dialogs/supplier-detail-dialog';
 import { PurchaseOrderDetailDialog } from '@/components/dialogs/purchase-order-detail-dialog';
 import { ExpenseDetailDialog } from '@/components/dialogs/expense-detail-dialog';
@@ -194,14 +195,15 @@ export function AccountsPayableListPage() {
                   <th className="px-4 py-3 text-left font-medium">O. Compra</th>
                   <th className="px-4 py-3 text-left font-medium">Egreso</th>
                   <th className="px-4 py-3 text-center font-medium">Estado</th>
+                  <th className="px-4 py-3 text-left font-medium"><User className="h-3 w-3 inline mr-1" />Creado por</th>
                   <th className="px-4 py-3 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
+                  <tr><td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
                 ) : cuentas.length === 0 ? (
-                  <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Sin cuentas registradas</td></tr>
+                  <tr><td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">Sin cuentas registradas</td></tr>
                 ) : (
                   cuentas.map((c: any) => (
                     <tr key={c.id} className="border-b hover:bg-muted/50">
@@ -236,6 +238,14 @@ export function AccountsPayableListPage() {
                           {estadoLabels[c.estado] || c.estado}
                         </Badge>
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {c.createdBy ? (
+                          <span className="inline-flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {c.createdBy.nombre || c.createdBy.email || '—'}
+                          </span>
+                        ) : '—'}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
                           {/* {c.estado !== 'pagada' && c.estado !== 'anulada' && (
@@ -245,6 +255,9 @@ export function AccountsPayableListPage() {
                           )} */}
                           <Button variant="ghost" size="icon" onClick={() => openPagos(c)} title="Historial de pagos">
                             <History className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => printAccountsPayable(c.id)} title="Imprimir">
+                            <Printer className="h-4 w-4" />
                           </Button>
                           {c.estado !== 'pagada' && c.estado !== 'anulada' && (
                             <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>

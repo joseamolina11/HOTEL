@@ -7,6 +7,7 @@ import { FinancialMovementsService } from '../financial-movements/financial-move
 import { FinancialAccountsService } from '../financial-accounts/financial-accounts.service';
 import { AccountsPayableService } from '../accounts-payable/accounts-payable.service';
 import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
+import { CashRegister } from '../cash-register/entities/cash-register.entity';
 
 @Injectable()
 export class ExpensesService {
@@ -14,6 +15,8 @@ export class ExpensesService {
   constructor(
     @InjectRepository(Expense)
     private readonly repo: Repository<Expense>,
+    @InjectRepository(CashRegister)
+    private readonly cashRegisterRepo: Repository<CashRegister>,
     private readonly financialMovementsService: FinancialMovementsService,
     private readonly financialAccountsService: FinancialAccountsService,
     private readonly accountsPayableService: AccountsPayableService,
@@ -28,6 +31,7 @@ export class ExpensesService {
       .leftJoinAndSelect('e.comprobanteFile', 'comprobanteFile')
       .leftJoinAndSelect('e.accountsPayable', 'accountsPayable')
       .leftJoinAndSelect('e.metodoPago', 'metodoPago')
+      .leftJoinAndSelect('e.createdBy', 'createdBy')
       .orderBy('e.fecha', 'DESC')
       .addOrderBy('e.createdAt', 'DESC');
 
@@ -51,7 +55,7 @@ export class ExpensesService {
   async findOne(id: string): Promise<Expense> {
     const expense = await this.repo.findOne({
       where: { id },
-      relations: ['supplier', 'category', 'purchaseOrder', 'comprobanteFile', 'accountsPayable', 'metodoPago'],
+      relations: ['supplier', 'category', 'purchaseOrder', 'comprobanteFile', 'accountsPayable', 'metodoPago', 'createdBy'],
     });
     if (!expense) throw new NotFoundException('Egreso no encontrado');
     return expense;
@@ -60,7 +64,7 @@ export class ExpensesService {
   async findByCodigo(codigo: string): Promise<Expense> {
     const expense = await this.repo.findOne({
       where: { codigo },
-      relations: ['supplier', 'category', 'purchaseOrder', 'comprobanteFile', 'accountsPayable', 'metodoPago'],
+      relations: ['supplier', 'category', 'purchaseOrder', 'comprobanteFile', 'accountsPayable', 'metodoPago', 'createdBy'],
     });
     if (!expense) throw new NotFoundException('Egreso no encontrado');
     return expense;
@@ -79,7 +83,13 @@ export class ExpensesService {
 
   async create(dto: CreateExpenseDto, userId: string): Promise<Expense> {
     const codigo = await this.generateCodigo();
-    const expense = await this.repo.save(this.repo.create({ ...dto, codigo, createdBy: userId }));
+    const expense = await this.repo.save(this.repo.create({ ...dto, codigo, createdById: userId }));
+
+    let cashRegisterId: string | undefined;
+    try {
+      const openReg = await this.cashRegisterRepo.findOne({ where: { estado: 'abierta' } });
+      if (openReg) cashRegisterId = openReg.id;
+    } catch {}
 
     try {
       const paymentMethod = await this.paymentMethodsService.findOne(dto.metodoPagoId);
@@ -99,6 +109,7 @@ export class ExpensesService {
           concepto: conceptoMov,
           referenciaTipo: 'expense',
           referenciaId: expense.id,
+          cashRegisterId,
         }, userId);
       }
     } catch (e: any) {

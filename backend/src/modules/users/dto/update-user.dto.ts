@@ -21,7 +21,6 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({ enum: ['admin', 'reception', 'limpieza', 'mantenimiento'] })
   @IsOptional()
-  @IsEnum(['admin', 'reception', 'limpieza', 'mantenimiento'])
   role?: 'admin' | 'reception' | 'limpieza' | 'mantenimiento';
 }
 

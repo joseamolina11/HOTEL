@@ -1,8 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 
 @ApiTags('Dashboard')
 @Controller('dashboard')
@@ -10,14 +9,16 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('stats')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('dashboard:view')
   @ApiOperation({ summary: 'Estadísticas operativas en tiempo real' })
   async getStats() {
     return this.dashboardService.getOperationalStats();
   }
 
   @Get('occupancy')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('dashboard:view')
   @ApiOperation({ summary: 'Ocupación mensual' })
   @ApiQuery({ name: 'year', required: false, example: 2025 })
   @ApiQuery({ name: 'month', required: false, example: 6 })
@@ -26,7 +27,8 @@ export class DashboardController {
   }
 
   @Get('revenue')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('dashboard:view')
   @ApiOperation({ summary: 'Ingresos por mes' })
   @ApiQuery({ name: 'year', required: false, example: 2025 })
   async getRevenue(@Query('year') year?: number) {
@@ -34,7 +36,8 @@ export class DashboardController {
   }
 
   @Get('reservations-by-month')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('dashboard:view')
   @ApiOperation({ summary: 'Reservas por mes' })
   @ApiQuery({ name: 'year', required: false, example: 2025 })
   async getReservationsByMonth(@Query('year') year?: number) {

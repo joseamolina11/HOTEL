@@ -1,17 +1,22 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financialMovementsApi } from '@/api/financial-movements.api';
 import { financialAccountsApi } from '@/api/financial-accounts.api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { ExpenseDetailDialog } from '@/components/dialogs/expense-detail-dialog';
 import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
 import { ReservationDetailDialog } from '@/components/dialogs/reservation-detail-dialog';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
-import { ArrowUpRight, ArrowDownRight, ArrowLeftRight, Plus, Minus, Settings, Circle } from 'lucide-react';
+import { toastSuccess } from '@/lib/notifications';
+import { printFinancialMovements } from '@/lib/print-document';
+import { ArrowUpRight, ArrowDownRight, ArrowLeftRight, Plus, Minus, Settings, Circle, Loader2, User, Printer } from 'lucide-react';
 
 const TIPO_OPTIONS = [
   { value: '', label: 'Todos los tipos' },
@@ -53,6 +58,7 @@ export function FinancialMovementsListPage() {
   const [expenseDetailId, setExpenseDetailId] = useState<string | null>(null);
   const [reciboDetailId, setReciboDetailId] = useState<string | null>(null);
   const [reservationDetail, setReservationDetail] = useState<any>(null);
+  const [showTransfer, setShowTransfer] = useState(false);
 
   const { data: accounts } = useQuery({
     queryKey: ['financial-accounts-all'],
@@ -78,6 +84,19 @@ export function FinancialMovementsListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Movimientos Financieros</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => printFinancialMovements({
+            ...(accountId ? { accountId } : {}),
+            ...(tipo ? { tipo } : {}),
+            ...(desde ? { desde } : {}),
+            ...(hasta ? { hasta } : {}),
+          })}>
+            <Printer className="mr-2 h-4 w-4" /> Imprimir
+          </Button>
+          <Button onClick={() => setShowTransfer(true)}>
+            <ArrowLeftRight className="mr-2 h-4 w-4" /> Transferir
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -126,13 +145,14 @@ export function FinancialMovementsListPage() {
                   <th className="px-4 py-3 text-right font-medium">Saldo Anterior</th>
                   <th className="px-4 py-3 text-right font-medium">Saldo Posterior</th>
                   <th className="px-4 py-3 text-left font-medium">Ref.</th>
+                  <th className="px-4 py-3 text-left font-medium"><User className="h-3 w-3 inline mr-1" />Usuario</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
                 ) : movements.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Sin movimientos registrados</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Sin movimientos registrados</td></tr>
                 ) : movements.map((m: any) => {
                   const TipoIcon = TIPO_ICONS[m.tipo] || Circle;
                   const isIngreso = ['INGRESO', 'TRANSFERENCIA_ENTRADA', 'APERTURA_CAJA'].includes(m.tipo);
@@ -185,6 +205,14 @@ export function FinancialMovementsListPage() {
                           </div>
                         ) : m.referenciaTipo || '—'}
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {m.user ? (
+                          <span className="inline-flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {m.user.nombre || m.user.email || '—'}
+                          </span>
+                        ) : '—'}
+                      </td>
                     </tr>
                   );
                 })}
@@ -201,6 +229,76 @@ export function FinancialMovementsListPage() {
         open={!!reservationDetail}
         onClose={() => setReservationDetail(null)}
       />
+      <TransferDialog open={showTransfer} onClose={() => setShowTransfer(false)} accounts={accounts || []} />
     </div>
+  );
+}
+
+function TransferDialog({ open, onClose, accounts }: { open: boolean; onClose: () => void; accounts: any[] }) {
+  const [originAccountId, setOriginAccountId] = useState('');
+  const [destinationAccountId, setDestinationAccountId] = useState('');
+  const [monto, setMonto] = useState('');
+  const [concepto, setConcepto] = useState('');
+  const qc = useQueryClient();
+
+  const transferMut = useMutation({
+    mutationFn: (dto: { originAccountId: string; destinationAccountId: string; monto: number; concepto?: string }) =>
+      financialMovementsApi.transfer(dto),
+    onSuccess: () => {
+      toastSuccess('Transferencia realizada');
+      qc.invalidateQueries({ queryKey: ['financial-movements'] });
+      qc.invalidateQueries({ queryKey: ['financial-accounts-all'] });
+      setOriginAccountId('');
+      setDestinationAccountId('');
+      setMonto('');
+      setConcepto('');
+      onClose();
+    },
+  });
+
+  const handleSubmit = async () => {
+    await transferMut.mutateAsync({
+      originAccountId,
+      destinationAccountId,
+      monto: Number(monto),
+      concepto: concepto || undefined,
+    });
+  };
+
+  const accountOptions = [
+    { value: '', label: 'Seleccionar cuenta' },
+    ...accounts.map((a: any) => ({ value: a.id, label: `${a.nombre} (${formatCurrency(a.saldo)})` })),
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Transferencia entre Cuentas</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Cuenta Origen</label>
+            <Select value={originAccountId} onChange={(e) => setOriginAccountId(e.target.value)} options={accountOptions} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Cuenta Destino</label>
+            <Select value={destinationAccountId} onChange={(e) => setDestinationAccountId(e.target.value)} options={accountOptions} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Monto</label>
+            <Input type="number" step="0.01" min={0} value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="0.00" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Concepto</label>
+            <Textarea value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder="Opcional" />
+          </div>
+          <Button className="w-full" disabled={!originAccountId || !destinationAccountId || !monto || transferMut.isPending} onClick={handleSubmit}>
+            {transferMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+            Realizar Transferencia
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

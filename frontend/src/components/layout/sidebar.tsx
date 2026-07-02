@@ -25,6 +25,7 @@ import {
   DollarSign,
   Sparkles,
   UserCog,
+  Shield,
   Receipt,
   Truck,
   ShoppingBag,
@@ -89,8 +90,6 @@ export function Sidebar() {
   const theme = useUIStore((s) => s.theme);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
-  const isAdminOrReception = user?.role === 'admin' || user?.role === 'reception';
-  const showFullNav = user?.role && ['admin', 'reception'].includes(user.role);
 
   const [expandedGroups, setExpandedGroups] = useState<
     Record<string, boolean>
@@ -100,6 +99,9 @@ export function Sidebar() {
   });
 
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+
+  const userPermissions = user?.permissions ?? [];
+  const hasPerm = (perm: string) => isAdmin || userPermissions.includes(perm);
 
   const toggleGroup = (to: string) => {
     setExpandedGroups((prev) => ({
@@ -167,9 +169,6 @@ export function Sidebar() {
 
   return (
     <aside
-      style={!isAdminOrReception ? {
-        display: 'none' 
-      } : undefined}
       className={cn(
         "fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
         sidebarOpen ? "w-64" : "w-16",
@@ -246,41 +245,42 @@ export function Sidebar() {
           to="/dashboard"
           label="Dashboard"
           icon={LayoutDashboard}
-          show={showFullNav}
+          show={hasPerm('dashboard:view')}
         />
 
         <NavLinkItem
           to="/reservations"
           label="Reservas"
           icon={CalendarDays}
-          show={showFullNav}
+          show={hasPerm('reservations:view')}
         />
 
         <NavLinkItem
           to="/rooms"
           label="Habitaciones"
           icon={BedDouble}
-          show={showFullNav}
+          show={hasPerm('rooms:view')}
         />
 
         <NavLinkItem
           to="/calendar"
           label="Calendario"
           icon={CalendarRange}
-          show={showFullNav}
+          show={hasPerm('rooms:view')}
         />
 
         <NavLinkItem
           to="/guests"
-          label="Huéspedes"
+          label="Clientes"
           icon={Users}
-          show={showFullNav}
+          show={hasPerm('guests:view')}
         />
 
         <NavLinkItem
           to="/housekeeping"
           label="Housekeeping"
           icon={Sparkles}
+          show={hasPerm('housekeeping:view')}
         />
 
         <SectionTitle title="Hotel" />
@@ -289,35 +289,35 @@ export function Sidebar() {
           to="/room-types"
           label="Tipos Habitación"
           icon={Hotel}
-          show={showFullNav}
+          show={hasPerm('room-types:view')}
         />
 
         <NavLinkItem
           to="/amenities"
           label="Beneficios"
           icon={BetweenHorizonalEnd}
-          show={showFullNav}
+          show={hasPerm('amenities:view')}
         />
 
         <NavLinkItem
           to="/services"
           label="Servicios"
           icon={Wrench}
-          show={showFullNav}
+          show={hasPerm('services:view')}
         />
 
         <NavLinkItem
           to="/check-in"
           label="Check-In"
           icon={LogIn}
-          show={showFullNav}
+          show={hasPerm('check-in:view')}
         />
 
         <NavLinkItem
           to="/check-out"
           label="Check-Out"
           icon={LogOut}
-          show={showFullNav}
+          show={hasPerm('check-out:view')}
         />
 
         <SectionTitle title="Ventas" />
@@ -326,26 +326,32 @@ export function Sidebar() {
           to="/orders"
           label="Pedidos"
           icon={ShoppingCart}
-          show={showFullNav}
+          show={hasPerm('orders:view')}
         />
 
         <NavLinkItem
           to="/payments"
           label="Pagos"
           icon={CreditCard}
-          show={showFullNav}
+          show={hasPerm('payments:view')}
         />
 
         <NavLinkItem
           to="/cash-register"
           label="Caja"
           icon={DollarSign}
-          show={showFullNav}
+          show={hasPerm('cash-register:view')}
         />
 
         <SectionTitle title="Inventario" />
 
-        {showFullNav && groups.map((group) => (
+        {groups.map((group) => {
+          const groupVisible = group.to === '/inventory'
+            ? hasPerm('inventory:view')
+            : hasPerm('supplies:view');
+          if (!groupVisible && !sidebarOpen) return null;
+          if (!groupVisible) return null;
+          return (
           <div
             key={group.to}
             className="relative"
@@ -423,82 +429,89 @@ export function Sidebar() {
                 </div>
               )}
           </div>
-        ))}
+        );
+      })}
         <SectionTitle title="Contabilidad" />
 
         <NavLinkItem
           to="/expense-categories"
           label="Categorías Egreso"
           icon={Tags}
-          show={showFullNav}
+          show={hasPerm('expense-categories:view')}
         />
 
         <NavLinkItem
           to="/suppliers"
           label="Proveedores"
           icon={Truck}
-          show={showFullNav}
+          show={hasPerm('suppliers:view')}
         />
 
         <NavLinkItem
           to="/purchase-orders"
           label="Órdenes Compra"
           icon={ShoppingBag}
-          show={showFullNav}
+          show={hasPerm('purchase-orders:view')}
         />
 
         <NavLinkItem
           to="/expenses"
           label="Egresos"
           icon={Receipt}
-          show={showFullNav}
+          show={hasPerm('expenses:view')}
         />
 
         <NavLinkItem
           to="/accounts-payable"
           label="Ctas. por Pagar"
           icon={BookOpen}
-          show={showFullNav}
+          show={hasPerm('accounts-payable:view')}
         />
 
         <NavLinkItem
           to="/payment-methods"
           label="Métodos Pago"
           icon={CreditCard}
-          show={showFullNav}
+          show={hasPerm('payment-methods:view')}
         />
 
         <NavLinkItem
           to="/financial-accounts"
           label="Cuentas Financieras"
           icon={Landmark}
-          show={showFullNav}
+          show={hasPerm('financial-accounts:view')}
         />
 
         <NavLinkItem
           to="/financial-movements"
           label="Movimientos Financieros"
           icon={ArrowUpDown}
-          show={showFullNav}
+          show={hasPerm('financial-movements:view')}
         />
 
         <NavLinkItem
           to="/recibo-caja"
           label="Recibos de Caja"
           icon={FileText}
-          show={showFullNav}
+          show={hasPerm('recibo-caja:view')}
         />
 
         <NavLinkItem
           to="/tax-config"
           label="Impuestos"
           icon={Percent}
-          show={showFullNav}
+          show={hasPerm('tax-config:view')}
         />
       </nav>
 
       {/* FOOTER */}
       <div className="border-t border-sidebar-border py-2">
+        <NavLinkItem
+          to="/permissions"
+          label="Roles y Permisos"
+          icon={Shield}
+          show={isAdmin}
+        />
         <NavLinkItem
           to="/users"
           label="Usuarios"

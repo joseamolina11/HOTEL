@@ -2,8 +2,7 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { RoomTypesService } from './room-types.service';
 import { CreateRoomTypeDto, UpdateRoomTypeDto } from './dto/create-room-type.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 import { parseLocalDate } from 'src/common/utils/date';
 
 @ApiTags('Room Types')
@@ -12,7 +11,7 @@ export class RoomTypesController {
   constructor(private readonly roomTypesService: RoomTypesService) {}
 
   @Get('availability')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('room-types:view')
   @ApiOperation({ summary: 'Disponibilidad de tipos de habitación por fecha' })
   @ApiQuery({ name: 'fechaEntrada', required: true })
   @ApiQuery({ name: 'fechaSalida', required: true })
@@ -24,7 +23,7 @@ export class RoomTypesController {
   }
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('room-types:view')
   @ApiOperation({ summary: 'Listar todos los tipos de habitación' })
   @ApiQuery({ name: 'page', required: false, description: 'Número de página' })
   @ApiQuery({ name: 'limit', required: false, description: 'Resultados por página' })
@@ -36,28 +35,28 @@ export class RoomTypesController {
   }
 
   @Get(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('room-types:view')
   @ApiOperation({ summary: 'Obtener tipo de habitación por ID' })
   async findOne(@Param('id') id: string) {
     return this.roomTypesService.findOne(id);
   }
 
   @Post()
-  @Roles(ROLES.ADMIN)
+  @Permissions('room-types:create')
   @ApiOperation({ summary: 'Crear tipo de habitación' })
   async create(@Body() createDto: CreateRoomTypeDto) {
     return this.roomTypesService.create(createDto);
   }
 
   @Put(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('room-types:edit')
   @ApiOperation({ summary: 'Actualizar tipo de habitación' })
   async update(@Param('id') id: string, @Body() updateDto: UpdateRoomTypeDto) {
     return this.roomTypesService.update(id, updateDto);
   }
 
   @Delete(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('room-types:delete')
   @ApiOperation({ summary: 'Eliminar tipo de habitación' })
   async remove(@Param('id') id: string) {
     return this.roomTypesService.remove(id);

@@ -13,7 +13,7 @@ export class FinancialMovementsService {
     private readonly accountsService: FinancialAccountsService,
   ) {}
 
-  async findAll(filters?: { accountId?: string; tipo?: string; desde?: string; hasta?: string }, page = 1, limit = 10) {
+  async findAll(filters?: { accountId?: string; tipo?: string; desde?: string; hasta?: string; cashRegisterId?: string; userId?: string }, page = 1, limit = 10) {
     const query = this.repo.createQueryBuilder('m')
       .leftJoinAndSelect('m.account', 'account')
       .leftJoinAndSelect('m.user', 'user')
@@ -26,6 +26,8 @@ export class FinancialMovementsService {
     if (filters?.tipo) query.andWhere('m.tipo = :tipo', { tipo: filters.tipo });
     if (filters?.desde) query.andWhere('m.fechaMovimiento >= :desde', { desde: new Date(filters.desde) });
     if (filters?.hasta) query.andWhere('m.fechaMovimiento <= :hasta', { hasta: new Date(filters.hasta) });
+    if (filters?.cashRegisterId) query.andWhere('m.cashRegisterId = :cashRegisterId', { cashRegisterId: filters.cashRegisterId });
+    if (filters?.userId) query.andWhere('m.userId = :userId', { userId: filters.userId });
 
     const [data, total] = await query
       .skip((page - 1) * limit)
@@ -91,6 +93,7 @@ export class FinancialMovementsService {
       referenciaTipo: dto.referenciaTipo,
       referenciaId: dto.referenciaId,
       reciboId: dto.reciboId,
+      cashRegisterId: dto.cashRegisterId,
       userId: userId || null,
       fechaMovimiento: new Date(),
     });
@@ -110,6 +113,7 @@ export class FinancialMovementsService {
       monto,
       concepto: dto.concepto || 'Transferencia',
       referenciaTipo: 'transfer',
+      cashRegisterId: dto.cashRegisterId,
     }, userId);
 
     return this.create({
@@ -118,6 +122,7 @@ export class FinancialMovementsService {
       monto,
       concepto: dto.concepto || 'Transferencia',
       referenciaTipo: 'transfer',
+      cashRegisterId: dto.cashRegisterId,
     }, userId);
   }
 

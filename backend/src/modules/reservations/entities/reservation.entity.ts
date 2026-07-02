@@ -3,12 +3,15 @@ import {
   CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn,
   OneToMany, OneToOne,
 } from 'typeorm';
+import { User } from 'src/modules/auth/entities/user.entity';
 import { Room } from 'src/modules/rooms/entities/room.entity';
 import { Guest } from 'src/modules/guests/entities/guest.entity';
 import { ReservationGuest } from './reservation-guest.entity';
 import { CheckIn } from 'src/modules/check-in/entities/check-in.entity';
 import { CheckOut } from 'src/modules/check-out/entities/check-out.entity';
 import { Consumption } from 'src/modules/consumptions/entities/consumption.entity';
+import { Order } from 'src/modules/orders/entities/order.entity';
+import { ReciboCaja } from 'src/modules/recibo-caja/entities/recibo-caja.entity';
 import { FileRecord } from 'src/modules/files/entities/file.entity';
 
 @Entity('reservations')
@@ -58,6 +61,13 @@ export class Reservation {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
+  @Column({ name: 'created_by_id', nullable: true })
+  createdById: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy: User;
+
   @ManyToOne(() => Room, (room) => room.reservations)
   @JoinColumn({ name: 'room_id' })
   room: Room;
@@ -77,6 +87,12 @@ export class Reservation {
 
   @OneToMany(() => Consumption, (consumption) => consumption.reservation)
   consumptions: Consumption[];
+
+  @OneToMany(() => Order, (order) => order.reservation)
+  orders: Order[];
+
+  @OneToMany(() => ReciboCaja, (rc) => rc.reservation)
+  recibosCaja: ReciboCaja[];
 
   @ManyToOne(() => FileRecord)
   @JoinColumn({ name: 'contrato_file_id' })

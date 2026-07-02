@@ -2,8 +2,7 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { RoomsService } from './rooms.service';
 import { CreateRoomDto, UpdateRoomDto, ChangeRoomStatusDto } from './dto/create-room.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 import { parseLocalDate } from 'src/common/utils/date';
 
 @ApiTags('Rooms')
@@ -12,7 +11,7 @@ export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('rooms:view')
   @ApiOperation({ summary: 'Listar todas las habitaciones' })
   @ApiQuery({ name: 'estado', required: false })
   @ApiQuery({ name: 'roomTypeId', required: false })
@@ -24,7 +23,7 @@ export class RoomsController {
   }
 
   @Get('available')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('rooms:view')
   @ApiOperation({ summary: 'Consultar habitaciones disponibles' })
   @ApiQuery({ name: 'fechaEntrada', required: true })
   @ApiQuery({ name: 'fechaSalida', required: true })
@@ -36,7 +35,7 @@ export class RoomsController {
   }
 
   @Get('calendar')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('rooms:view')
   @ApiOperation({ summary: 'Calendario de ocupación por rango de fechas' })
   @ApiQuery({ name: 'fechaInicio', required: true })
   @ApiQuery({ name: 'fechaFin', required: true })
@@ -48,35 +47,35 @@ export class RoomsController {
   }
 
   @Get(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('rooms:view')
   @ApiOperation({ summary: 'Obtener habitación por ID' })
   async findOne(@Param('id') id: string) {
     return this.roomsService.findOne(id);
   }
 
   @Post()
-  @Roles(ROLES.ADMIN)
+  @Permissions('rooms:create')
   @ApiOperation({ summary: 'Crear habitación' })
   async create(@Body() createDto: CreateRoomDto) {
     return this.roomsService.create(createDto);
   }
 
   @Put(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('rooms:edit')
   @ApiOperation({ summary: 'Actualizar habitación' })
   async update(@Param('id') id: string, @Body() updateDto: UpdateRoomDto) {
     return this.roomsService.update(id, updateDto);
   }
 
   @Put(':id/status')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('rooms:change-status')
   @ApiOperation({ summary: 'Cambiar estado de habitación manualmente' })
   async changeStatus(@Param('id') id: string, @Body() changeStatusDto: ChangeRoomStatusDto) {
     return this.roomsService.changeStatus(id, changeStatusDto.estado);
   }
 
   @Delete(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('rooms:delete')
   @ApiOperation({ summary: 'Eliminar habitación' })
   async remove(@Param('id') id: string) {
     return this.roomsService.remove(id);

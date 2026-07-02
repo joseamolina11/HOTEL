@@ -8,6 +8,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtPayload, LoginResponse, AuthTokens } from './interfaces/auth.interface';
 import { jwtRefreshConfig } from 'src/config/jwt.config';
+import { PermissionsService } from 'src/modules/permissions/permissions.service';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +18,7 @@ export class AuthService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   async login(loginDto: LoginDto): Promise<LoginResponse> {
@@ -38,7 +40,8 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const tokens = await this.generateTokens(user);
+    const permissions = await this.permissionsService.getPermissionsForRole(user.role);
+    const tokens = await this.generateTokens(user, permissions);
 
     return {
       user: {
@@ -47,6 +50,7 @@ export class AuthService {
         nombres: user.nombres,
         apellidos: user.apellidos,
         role: user.role,
+        permissions,
       },
       tokens,
     };
@@ -73,7 +77,8 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
-    const tokens = await this.generateTokens(user);
+    const permissions = await this.permissionsService.getPermissionsForRole(user.role);
+    const tokens = await this.generateTokens(user, permissions);
 
     return {
       user: {
@@ -82,6 +87,7 @@ export class AuthService {
         nombres: user.nombres,
         apellidos: user.apellidos,
         role: user.role,
+        permissions,
       },
       tokens,
     };
@@ -122,13 +128,15 @@ export class AuthService {
     return { message: 'Sesión cerrada exitosamente' };
   }
 
-  private async generateTokens(user: User): Promise<AuthTokens> {
+  private async generateTokens(user: User, permissions?: string[]): Promise<AuthTokens> {
+    const perms = permissions || await this.permissionsService.getPermissionsForRole(user.role);
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
       nombres: user.nombres,
       apellidos: user.apellidos,
+      permissions: perms,
     };
 
     const accessToken = this.jwtService.sign(payload);

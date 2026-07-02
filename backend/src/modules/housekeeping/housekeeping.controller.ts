@@ -1,8 +1,7 @@
 import { Controller, Get, Put, Post, Delete, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiProperty } from '@nestjs/swagger';
 import { HousekeepingService } from './housekeeping.service';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/auth.interface';
 import { IsArray } from 'class-validator';
@@ -24,7 +23,8 @@ export class HousekeepingController {
   constructor(private readonly housekeepingService: HousekeepingService) {}
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION, ROLES.LIMPIEZA, ROLES.MANTENIMIENTO)
+
+  @Permissions('housekeeping:view')
   @ApiOperation({ summary: 'Listar habitaciones en limpieza/mantenimiento' })
   @ApiQuery({ name: 'tipo', required: false, enum: ['limpieza', 'mantenimiento', 'all'] })
   async findAll(@Query('tipo') tipo?: 'limpieza' | 'mantenimiento' | 'all') {
@@ -32,7 +32,8 @@ export class HousekeepingController {
   }
 
   @Put(':roomId/status')
-  @Roles(ROLES.ADMIN, ROLES.LIMPIEZA, ROLES.MANTENIMIENTO)
+
+  @Permissions('housekeeping:change-status')
   @ApiOperation({ summary: 'Cambiar estado de habitación desde limpieza/mantenimiento' })
   async changeStatus(
     @Param('roomId') roomId: string,
@@ -42,7 +43,8 @@ export class HousekeepingController {
   }
 
   @Post(':roomId/supplies')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('housekeeping:request-supplies')
   @ApiOperation({ summary: 'Asignar insumos necesarios para limpieza de habitación' })
   async assignSupplies(
     @Param('roomId') roomId: string,
@@ -52,14 +54,16 @@ export class HousekeepingController {
   }
 
   @Get(':roomId/supplies')
-  @Roles(ROLES.ADMIN, ROLES.LIMPIEZA, ROLES.RECEPTION)
+
+  @Permissions('housekeeping:view')
   @ApiOperation({ summary: 'Obtener insumos asignados a una habitación' })
   async getAssignedSupplies(@Param('roomId') roomId: string) {
     return this.housekeepingService.getAssignedSupplies(roomId);
   }
 
   @Post(':roomId/complete')
-  @Roles(ROLES.ADMIN, ROLES.LIMPIEZA)
+
+  @Permissions('housekeeping:complete')
   @ApiOperation({ summary: 'Completar limpieza: descuenta insumos y marca disponible' })
   async completeCleaning(
     @Param('roomId') roomId: string,

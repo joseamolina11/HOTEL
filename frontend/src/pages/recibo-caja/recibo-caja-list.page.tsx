@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
-import { Plus, Trash2, Search, FileText, Eye } from 'lucide-react';
+import { Plus, Trash2, Search, FileText, Eye, User } from 'lucide-react';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
 import { formatCurrency } from '@/lib/utils';
 
@@ -48,14 +48,15 @@ export function ReciboCajaListPage() {
                   <th className="px-4 py-3 text-right font-medium">Dto.</th>
                   <th className="px-4 py-3 text-right font-medium">Total</th>
                   <th className="px-4 py-3 text-left font-medium">Pagos</th>
+                  <th className="px-4 py-3 text-left font-medium"><User className="h-3 w-3 inline mr-1" />Creado por</th>
                   <th className="px-4 py-3 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
                 ) : recibos.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Sin recibos registrados</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Sin recibos registrados</td></tr>
                 ) : (
                   recibos.map((r: any) => (
                     <tr key={r.id} className="border-b hover:bg-muted/50">
@@ -66,6 +67,14 @@ export function ReciboCajaListPage() {
                       <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(r.descuento)}</td>
                       <td className="px-4 py-3 text-right font-bold">{formatCurrency(r.total)}</td>
                       <td className="px-4 py-3">{r.pagos?.length || 0} pago(s)</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {r.createdBy ? (
+                          <span className="inline-flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {r.createdBy.nombre || r.createdBy.email || '—'}
+                          </span>
+                        ) : '—'}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="icon" onClick={() => setDetailId(r.id)} title="Ver detalle">

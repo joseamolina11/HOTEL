@@ -74,6 +74,8 @@ export class ReservationsService {
         'checkIn', 'checkIn.user',
         'checkOut', 'checkOut.user',
         'consumptions', 'consumptions.inventoryItem',
+        'orders', 'orders.items', 'orders.items.inventoryItem',
+        'recibosCaja', 'recibosCaja.items',
         'contratoFile',
       ],
     });
@@ -85,8 +87,8 @@ export class ReservationsService {
 
   async updateContract(id: string, contratoFileId: string): Promise<Reservation> {
     const reservation = await this.findOne(id);
-    if (['cancelada', 'checkout'].includes(reservation.estado)) {
-      throw new BadRequestException('No se puede modificar una reserva en este estado');
+    if (reservation.estado === 'cancelada') {
+      throw new BadRequestException('No se puede modificar una reserva cancelada');
     }
     reservation.contratoFileId = contratoFileId;
     return this.reservationRepository.save(reservation);
@@ -127,7 +129,7 @@ export class ReservationsService {
     return { arrivals, departures };
   }
 
-  async create(createDto: CreateReservationDto): Promise<Reservation> {
+  async create(createDto: CreateReservationDto, userId: string): Promise<Reservation> {
     const room = await this.roomRepository.findOne({
       where: { id: createDto.roomId },
       relations: ['roomType'],
@@ -187,6 +189,7 @@ export class ReservationsService {
       observaciones: createDto.observaciones,
       estado: createDto.estado || 'pendiente',
       origen: 'directo',
+      createdById: userId,
     });
 
     if (createDto.companions?.length) {

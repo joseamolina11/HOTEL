@@ -3,8 +3,8 @@ import { ApiTags, ApiOperation, ApiQuery, ApiProperty } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
 import { ReservationsService } from './reservations.service';
 import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto } from './dto/create-reservation.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 
 class UpdateContractDto {
   @ApiProperty()
@@ -18,7 +18,7 @@ export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:view')
   @ApiOperation({ summary: 'Listar reservas' })
   @ApiQuery({ name: 'estado', required: false })
   @ApiQuery({ name: 'fechaEntrada', required: false })
@@ -29,56 +29,56 @@ export class ReservationsController {
   }
 
   @Get('today')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:view')
   @ApiOperation({ summary: 'Reservas del día (llegadas y salidas)' })
   async findToday() {
     return this.reservationsService.findToday();
   }
 
   @Get(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:view')
   @ApiOperation({ summary: 'Obtener reserva por ID con todos los detalles' })
   async findOne(@Param('id') id: string) {
     return this.reservationsService.findOne(id);
   }
 
   @Get('code/:codigo')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:view')
   @ApiOperation({ summary: 'Buscar reserva por código' })
   async findByCode(@Param('codigo') codigo: string) {
     return this.reservationsService.findByCode(codigo);
   }
 
   @Post()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:create')
   @ApiOperation({ summary: 'Crear reserva' })
-  async create(@Body() createDto: CreateReservationDto) {
-    return this.reservationsService.create(createDto);
+  async create(@Body() createDto: CreateReservationDto, @CurrentUser('sub') userId: string) {
+    return this.reservationsService.create(createDto, userId);
   }
 
   @Put(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:edit')
   @ApiOperation({ summary: 'Modificar reserva' })
   async update(@Param('id') id: string, @Body() updateDto: UpdateReservationDto) {
     return this.reservationsService.update(id, updateDto);
   }
 
   @Put(':id/cancel')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:annul')
   @ApiOperation({ summary: 'Cancelar reserva' })
   async cancel(@Param('id') id: string, @Body() cancelDto: CancelReservationDto) {
     return this.reservationsService.cancel(id, cancelDto);
   }
 
   @Put(':id/confirm')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:edit')
   @ApiOperation({ summary: 'Confirmar reserva' })
   async confirm(@Param('id') id: string) {
     return this.reservationsService.confirm(id);
   }
 
   @Put(':id/contract')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('reservations:edit')
   @ApiOperation({ summary: 'Asignar contrato a reserva' })
   async updateContract(@Param('id') id: string, @Body() dto: UpdateContractDto) {
     return this.reservationsService.updateContract(id, dto.contratoFileId);

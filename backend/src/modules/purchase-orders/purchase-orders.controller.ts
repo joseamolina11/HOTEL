@@ -2,8 +2,7 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto, UpdateOrderStatusDto } from './dto/create-purchase-order.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/auth.interface';
 
@@ -13,7 +12,7 @@ export class PurchaseOrdersController {
   constructor(private readonly service: PurchaseOrdersService) {}
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('purchase-orders:view')
   @ApiOperation({ summary: 'Listar órdenes de compra' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'estado', required: false })
@@ -35,42 +34,42 @@ export class PurchaseOrdersController {
   }
 
   @Get(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('purchase-orders:view')
   @ApiOperation({ summary: 'Obtener orden de compra por ID' })
   async findOne(@Param('id') id: string) {
     return this.service.findOne(id);
   }
 
   @Get('code/:codigo')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('purchase-orders:view')
   @ApiOperation({ summary: 'Buscar orden por código' })
   async findByCode(@Param('codigo') codigo: string) {
     return this.service.findByCode(codigo);
   }
 
   @Post()
-  @Roles(ROLES.ADMIN)
+  @Permissions('purchase-orders:create')
   @ApiOperation({ summary: 'Crear orden de compra' })
   async create(@Body() dto: CreatePurchaseOrderDto, @CurrentUser() user: JwtPayload) {
     return this.service.create(dto, user.sub);
   }
 
   @Put(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('purchase-orders:edit')
   @ApiOperation({ summary: 'Actualizar orden de compra' })
   async update(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto) {
     return this.service.update(id, dto);
   }
 
   @Put(':id/status')
-  @Roles(ROLES.ADMIN)
+  @Permissions('purchase-orders:approve')
   @ApiOperation({ summary: 'Cambiar estado de orden de compra' })
-  async updateStatus(@Param('id') id: string, @Body() dto: UpdateOrderStatusDto) {
-    return this.service.updateStatus(id, dto);
+  async updateStatus(@Param('id') id: string, @Body() dto: UpdateOrderStatusDto, @CurrentUser('sub') userId: string) {
+    return this.service.updateStatus(id, dto, userId);
   }
 
   @Delete(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('purchase-orders:delete')
   @ApiOperation({ summary: 'Eliminar orden de compra' })
   async remove(@Param('id') id: string) {
     return this.service.remove(id);

@@ -28,6 +28,11 @@ export interface Reservation {
   room?: Room;
   guest?: Guest;
   companions?: ReservationCompanion[];
+  consumptions?: any[];
+  orders?: any[];
+  recibosCaja?: any[];
+  checkIn?: any;
+  checkOut?: any;
 }
 
 export interface CreateReservationDto {

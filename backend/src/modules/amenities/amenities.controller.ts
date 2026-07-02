@@ -2,8 +2,7 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AmenitiesService } from './amenities.service';
 import { CreateAmenityDto, UpdateAmenityDto } from './dto/create-amenity.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 
 @ApiTags('Amenities')
 @Controller('amenities')
@@ -11,7 +10,7 @@ export class AmenitiesController {
   constructor(private readonly amenitiesService: AmenitiesService) {}
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('amenities:view')
   @ApiOperation({ summary: 'Listar todas las amenidades' })
   @ApiQuery({ name: 'page', required: false, description: 'Número de página' })
   @ApiQuery({ name: 'limit', required: false, description: 'Resultados por página' })
@@ -23,28 +22,28 @@ export class AmenitiesController {
   }
 
   @Get(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('amenities:view')
   @ApiOperation({ summary: 'Obtener amenidad por ID' })
   async findOne(@Param('id') id: string) {
     return this.amenitiesService.findOne(id);
   }
 
   @Post()
-  @Roles(ROLES.ADMIN)
+  @Permissions('amenities:create')
   @ApiOperation({ summary: 'Crear amenidad' })
   async create(@Body() createDto: CreateAmenityDto) {
     return this.amenitiesService.create(createDto);
   }
 
   @Put(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('amenities:edit')
   @ApiOperation({ summary: 'Actualizar amenidad' })
   async update(@Param('id') id: string, @Body() updateDto: UpdateAmenityDto) {
     return this.amenitiesService.update(id, updateDto);
   }
 
   @Delete(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('amenities:delete')
   @ApiOperation({ summary: 'Eliminar amenidad' })
   async remove(@Param('id') id: string) {
     return this.amenitiesService.remove(id);

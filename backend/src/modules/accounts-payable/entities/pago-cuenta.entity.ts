@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { AccountsPayable } from './accounts-payable.entity';
 import { PaymentMethod } from 'src/modules/payment-methods/entities/payment-method.entity';
+import { User } from 'src/modules/auth/entities/user.entity';
 
 @Entity('pagos_cuenta')
 export class PagoCuenta {
@@ -32,6 +33,10 @@ export class PagoCuenta {
 
   @Column({ name: 'user_id', nullable: true })
   userId: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

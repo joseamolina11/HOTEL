@@ -284,6 +284,7 @@ export class CheckOutService {
               referenciaTipo: 'payment',
               referenciaId: pagoData.referenciaId,
               reciboId: recibo.id,
+              cashRegisterId: cashRegister?.id,
             }, userId);
           } catch (e: any) {
             // skip

@@ -27,3 +27,22 @@ export function useCreateGuest() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['guests'] }),
   });
 }
+
+export function useUpdateGuest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: Partial<CreateGuestDto> }) => guestsApi.update(id, dto),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['guests'] });
+      qc.invalidateQueries({ queryKey: ['guest'] });
+    },
+  });
+}
+
+export function useDeleteGuest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => guestsApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['guests'] }),
+  });
+}

@@ -38,8 +38,10 @@ import { FinancialAccountsModule } from './modules/financial-accounts/financial-
 import { FinancialMovementsModule } from './modules/financial-movements/financial-movements.module';
 import { ReciboCajaModule } from './modules/recibo-caja/recibo-caja.module';
 import { AuditTrailModule } from './modules/audit-trail/audit-trail.module';
+import { PermissionsModule } from './modules/permissions/permissions.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
-import { RolesGuard } from './common/guards/roles.guard';
+
+import { PermissionsGuard } from './common/guards/permissions.guard';
 
 @Module({
   imports: [
@@ -78,11 +80,13 @@ import { RolesGuard } from './common/guards/roles.guard';
     FinancialMovementsModule,
     ReciboCajaModule,
     AuditTrailModule,
+    PermissionsModule,
   ],
   controllers: [AppController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}

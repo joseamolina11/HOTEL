@@ -5,12 +5,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { JwtPayload } from '../interfaces/auth.interface';
+import { PermissionsService } from 'src/modules/permissions/permissions.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly permissionsService: PermissionsService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -28,12 +30,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Usuario no encontrado o inactivo');
     }
 
+    const permissions = await this.permissionsService.getPermissionsForRole(user.role);
+
     return {
       sub: user.id,
       email: user.email,
       role: user.role,
       nombres: user.nombres,
       apellidos: user.apellidos,
+      permissions,
     };
   }
 }

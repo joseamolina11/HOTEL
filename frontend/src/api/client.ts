@@ -20,7 +20,7 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/login')) {
       originalRequest._retry = true;
 
       const refreshToken = useAuthStore.getState().refreshToken;
@@ -53,7 +53,7 @@ apiClient.interceptors.response.use(
       || error.message
       || 'Error inesperado';
 
-    if (error.response?.status !== 401) {
+    if (error.response?.status !== 401 && !originalRequest.url?.includes('/auth/login')) {
       toastError(message);
     }
 

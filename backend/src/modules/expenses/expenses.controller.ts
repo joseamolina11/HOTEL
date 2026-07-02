@@ -2,10 +2,8 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ExpensesService } from './expenses.service';
 import { CreateExpenseDto, UpdateExpenseDto } from './dto/create-expense.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import { JwtPayload } from '../auth/interfaces/auth.interface';
 
 @ApiTags('Expenses')
 @Controller('expenses')
@@ -13,7 +11,7 @@ export class ExpensesController {
   constructor(private readonly service: ExpensesService) {}
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('expenses:view')
   @ApiOperation({ summary: 'Listar egresos' })
   @ApiQuery({ name: 'categoryId', required: false })
   @ApiQuery({ name: 'supplierId', required: false })
@@ -37,14 +35,14 @@ export class ExpensesController {
   }
 
   @Get('by-codigo/:codigo')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('expenses:view')
   @ApiOperation({ summary: 'Buscar egreso por código' })
   async findByCodigo(@Param('codigo') codigo: string) {
     return this.service.findByCodigo(codigo);
   }
 
   @Get('report')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('expenses:report')
   @ApiOperation({ summary: 'Reporte de egresos por período y categoría' })
   @ApiQuery({ name: 'categoryId', required: false })
   @ApiQuery({ name: 'desde', required: false })
@@ -58,28 +56,28 @@ export class ExpensesController {
   }
 
   @Get(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+  @Permissions('expenses:view')
   @ApiOperation({ summary: 'Obtener egreso por ID' })
   async findOne(@Param('id') id: string) {
     return this.service.findOne(id);
   }
 
   @Post()
-  @Roles(ROLES.ADMIN)
+  @Permissions('expenses:create')
   @ApiOperation({ summary: 'Crear egreso' })
-  async create(@Body() dto: CreateExpenseDto, @CurrentUser() user: JwtPayload) {
-    return this.service.create(dto, user.sub);
+  async create(@Body() dto: CreateExpenseDto, @CurrentUser('sub') userId: string) {
+    return this.service.create(dto, userId);
   }
 
   @Put(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('expenses:edit')
   @ApiOperation({ summary: 'Actualizar egreso' })
   async update(@Param('id') id: string, @Body() dto: UpdateExpenseDto) {
     return this.service.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles(ROLES.ADMIN)
+  @Permissions('expenses:delete')
   @ApiOperation({ summary: 'Eliminar egreso' })
   async remove(@Param('id') id: string) {
     return this.service.remove(id);

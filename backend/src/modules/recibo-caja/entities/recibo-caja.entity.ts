@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { ReciboCajaPago } from './recibo-caja-pago.entity';
 import { ReciboCajaItem } from './recibo-caja-item.entity';
 import { Reservation } from 'src/modules/reservations/entities/reservation.entity';
+import { User } from 'src/modules/auth/entities/user.entity';
 
 @Entity('recibos_caja')
 export class ReciboCaja {
@@ -36,8 +37,12 @@ export class ReciboCaja {
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
-  @Column({ name: 'created_by', nullable: true })
-  createdBy: string;
+  @Column({ name: 'created_by_id', nullable: true })
+  createdById: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy: User;
 
   @OneToMany(() => ReciboCajaPago, (p) => p.recibo, { cascade: true })
   pagos: ReciboCajaPago[];

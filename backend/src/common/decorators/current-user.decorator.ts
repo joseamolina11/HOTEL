@@ -1,3 +1,4 @@
+import { jwtConfig } from '@/config/jwt.config';
 import { createParamDecorator, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from 'src/modules/auth/interfaces/auth.interface';
@@ -12,7 +13,7 @@ export const CurrentUser = createParamDecorator(
     }
 
     const jwtService = new JwtService({
-      secret: process.env.JWT_SECRET,
+      secret: jwtConfig.secret,
     });
 
     const payload = await jwtService.verifyAsync(token);

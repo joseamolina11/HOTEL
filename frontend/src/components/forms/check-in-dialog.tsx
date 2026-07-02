@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -6,12 +6,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { guestsApi } from '@/api/guests.api';
 import { reservationsApi } from '@/api/reservations.api';
 import { hotelConfigApi } from '@/api/hotel-config.api';
+import { paymentMethodsApi } from '@/api/payment-methods.api';
 import apiClient from '@/api/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Plus, X, UserPlus, LogIn, Loader2, Printer } from 'lucide-react';
+import { Search, Plus, X, UserPlus, LogIn, Loader2, Printer, DollarSign } from 'lucide-react';
+import { CreateGuestDialog } from '@/components/dialogs/create-guest-dialog';
 import { toastSuccess } from '@/lib/notifications';
+import { formatCurrency } from '@/lib/utils';
 import { renderContract, printContract } from '@/lib/print-contract';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -50,15 +53,29 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
   const [step, setStep] = useState<'guest' | 'checkin'>(room ? 'guest' : 'guest');
   const [guestSearch, setGuestSearch] = useState('');
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
-  const [showNewGuest, setShowNewGuest] = useState(false);
-  const [newGuest, setNewGuest] = useState({ nombres: '', apellidos: '', documento: '', nacionalidad: '', telefono: '' });
+  const [showCreateGuest, setShowCreateGuest] = useState(false);
 
-  const { register, handleSubmit, control, formState: { errors }, setValue, getValues } = useForm<FormData>({
+  const [pagoMonto, setPagoMonto] = useState(0);
+  const [pagoMetodoPagoId, setPagoMetodoPagoId] = useState('');
+  const [pagoReferencia, setPagoReferencia] = useState('');
+
+  const { register, handleSubmit, control, formState: { errors }, setValue, getValues, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { fechaEntrada: today(), fechaSalida: tomorrow(), companions: [] },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'companions' });
+
+  const watchedEntrada = watch('fechaEntrada');
+  const watchedSalida = watch('fechaSalida');
+
+  const estimatedTotal = useMemo(() => {
+    if (!room?.roomType?.precioBase || !watchedEntrada || !watchedSalida) return 0;
+    const noches = Math.ceil(
+      (new Date(watchedSalida).getTime() - new Date(watchedEntrada).getTime()) / (1000 * 60 * 60 * 24),
+    );
+    return noches * Number(room.roomType.precioBase);
+  }, [room, watchedEntrada, watchedSalida]);
 
   const { data: hotelConfig } = useQuery({
     queryKey: ['hotel-config'],
@@ -71,7 +88,11 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
     enabled: guestSearch.length > 0,
   });
 
-  const createGuestMut = useMutation({ mutationFn: (dto: any) => guestsApi.create(dto) });
+  const { data: paymentMethods } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: () => paymentMethodsApi.findAllActive(),
+  });
+
   const createReservationMut = useMutation({
     mutationFn: (dto: any) => reservationsApi.create(dto),
   });
@@ -80,17 +101,10 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       apiClient.post('/check-in', { reservationId, ...data }),
   });
 
-  const isProcessing = createGuestMut.isPending || createReservationMut.isPending || checkInMut.isPending;
+  const isProcessing = createReservationMut.isPending || checkInMut.isPending;
 
   const handleGuestSelect = (guest: any) => {
     setSelectedGuest(guest);
-    setStep('checkin');
-  };
-
-  const handleCreateAndSelect = async () => {
-    const guest = await createGuestMut.mutateAsync(newGuest);
-    setSelectedGuest(guest);
-    setShowNewGuest(false);
     setStep('checkin');
   };
 
@@ -148,12 +162,18 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       companions: companionsList.length > 0 ? companionsList : undefined,
     });
 
+    const paymentData: any = {
+      observaciones: data.observaciones,
+      companions: companionsList.length > 0 ? companionsList : undefined,
+    };
+    if (pagoMonto > 0 && pagoMetodoPagoId) {
+      paymentData.pagoMonto = pagoMonto;
+      paymentData.pagoMetodoPagoId = pagoMetodoPagoId;
+      if (pagoReferencia) paymentData.pagoReferencia = pagoReferencia;
+    }
     await checkInMut.mutateAsync({
       reservationId: reservation.id,
-      data: {
-        observaciones: data.observaciones,
-        companions: companionsList.length > 0 ? companionsList : undefined,
-      },
+      data: paymentData,
     });
 
     toastSuccess('Check-In realizado correctamente');
@@ -222,31 +242,12 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                 </div>
               )}
 
-              {guestSearch && filteredGuests.length === 0 && !showNewGuest && (
+              {guestSearch && filteredGuests.length === 0 && (
                 <div className="text-center py-4">
                   <p className="text-sm text-muted-foreground mb-2">No se encontraron huéspedes</p>
-                  <Button variant="outline" size="sm" onClick={() => setShowNewGuest(true)}>
-                    <UserPlus className="mr-1 h-3 w-3" /> Registrar nuevo
+                  <Button variant="outline" size="sm" onClick={() => setShowCreateGuest(true)}>
+                    <UserPlus className="mr-1 h-3 w-3" /> Crear nuevo cliente
                   </Button>
-                </div>
-              )}
-
-              {showNewGuest && (
-                <div className="space-y-3 rounded-lg border p-4">
-                  <p className="text-xs font-medium text-muted-foreground">Nuevo huésped</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input placeholder="Nombres" value={newGuest.nombres} onChange={(e) => setNewGuest({ ...newGuest, nombres: e.target.value })} />
-                    <Input placeholder="Apellidos" value={newGuest.apellidos} onChange={(e) => setNewGuest({ ...newGuest, apellidos: e.target.value })} />
-                    <Input placeholder="Documento" value={newGuest.documento} onChange={(e) => setNewGuest({ ...newGuest, documento: e.target.value })} />
-                    <Input placeholder="Nacionalidad" value={newGuest.nacionalidad} onChange={(e) => setNewGuest({ ...newGuest, nacionalidad: e.target.value })} />
-                    <Input placeholder="Teléfono" value={newGuest.telefono} onChange={(e) => setNewGuest({ ...newGuest, telefono: e.target.value })} />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setShowNewGuest(false)}>Cancelar</Button>
-                    <Button size="sm" onClick={handleCreateAndSelect} disabled={!newGuest.nombres || !newGuest.apellidos || !newGuest.documento}>
-                      Registrar y seleccionar
-                    </Button>
-                  </div>
                 </div>
               )}
 
@@ -307,6 +308,57 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                 <Input {...register('observaciones')} placeholder="Opcional" />
               </div>
 
+              <div className="rounded-lg border border-amber-200 p-3 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                  <DollarSign className="h-4 w-4" /> Pago en entrada
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Total estimado: {formatCurrency(estimatedTotal)} &mdash; Puedes cobrar el total, la mitad o un valor personalizado
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Monto a cobrar</label>
+                    <Input
+                      type="number" step="0.01" min={0}
+                      placeholder="0.00"
+                      value={pagoMonto || ''}
+                      onChange={(e) => setPagoMonto(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Método de pago</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                      value={pagoMetodoPagoId}
+                      onChange={(e) => setPagoMetodoPagoId(e.target.value)}
+                    >
+                      <option value="">Seleccionar...</option>
+                      {(paymentMethods || []).map((pm: any) => (
+                        <option key={pm.id} value={pm.id}>{pm.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Referencia</label>
+                    <Input
+                      placeholder="Opcional"
+                      value={pagoReferencia}
+                      onChange={(e) => setPagoReferencia(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {pagoMonto > 0 && (
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setPagoMonto(estimatedTotal); setPagoMetodoPagoId(pagoMetodoPagoId); }}>
+                      Total ({formatCurrency(estimatedTotal)})
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setPagoMonto(estimatedTotal / 2); setPagoMetodoPagoId(pagoMetodoPagoId); }}>
+                      Mitad ({formatCurrency(estimatedTotal / 2)})
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-3">
                 {hotelConfig?.contratoHtml && (
                   <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} className="flex-1">
@@ -324,12 +376,25 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
             </form>
           )}
 
-          {step === 'guest' && !showNewGuest && !selectedGuest && guestSearch.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
+          {step === 'guest' && !selectedGuest && guestSearch.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground space-y-3">
               <p className="text-sm">Busca un huésped existente o registra uno nuevo</p>
+              <Button variant="outline" size="sm" onClick={() => setShowCreateGuest(true)}>
+                <UserPlus className="mr-1 h-3 w-3" /> Crear nuevo cliente
+              </Button>
             </div>
           )}
         </div>
+
+        <CreateGuestDialog
+          open={showCreateGuest}
+          onClose={() => setShowCreateGuest(false)}
+          onSuccess={(guest) => {
+            setSelectedGuest(guest);
+            setShowCreateGuest(false);
+            setStep('checkin');
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

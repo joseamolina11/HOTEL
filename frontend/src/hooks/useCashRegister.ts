@@ -31,3 +31,11 @@ export function useCloseCashRegister() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cash-register'] }),
   });
 }
+
+export function useCashRegisterMovements(id: string | null, page?: number) {
+  return useQuery({
+    queryKey: ['cash-register', id, 'movements', page],
+    queryFn: () => cashRegisterApi.findMovements(id!, page ? { page: String(page), limit: '20' } : undefined),
+    enabled: !!id,
+  });
+}

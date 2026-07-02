@@ -9,8 +9,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { v4 as uuid } from 'uuid';
 import { ApiTags, ApiOperation, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { FilesService } from './files.service';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { ROLES } from 'src/common/constants';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 
 @ApiTags('Files')
 @Controller('files')
@@ -18,7 +17,8 @@ export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 
   @Post('upload')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('files:upload')
   @ApiOperation({ summary: 'Subir un archivo' })
   @ApiQuery({ name: 'subdirectory', required: false, description: 'Subcarpeta en public/ (ej: contratos, archivos)' })
   @ApiConsumes('multipart/form-data')
@@ -50,7 +50,8 @@ export class FilesController {
   }
 
   @Post('upload-multiple')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('files:upload')
   @ApiOperation({ summary: 'Subir múltiples archivos' })
   @ApiQuery({ name: 'subdirectory', required: false })
   @ApiConsumes('multipart/form-data')
@@ -86,7 +87,8 @@ export class FilesController {
   }
 
   @Get()
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('files:view')
   @ApiOperation({ summary: 'Listar archivos' })
   @ApiQuery({ name: 'subdirectory', required: false })
   @ApiQuery({ name: 'page', required: false })
@@ -100,14 +102,16 @@ export class FilesController {
   }
 
   @Get(':id')
-  @Roles(ROLES.ADMIN, ROLES.RECEPTION)
+
+  @Permissions('files:view')
   @ApiOperation({ summary: 'Obtener metadatos de un archivo' })
   async findOne(@Param('id') id: string) {
     return this.filesService.findOne(id);
   }
 
   @Delete(':id')
-  @Roles(ROLES.ADMIN)
+
+  @Permissions('files:delete')
   @ApiOperation({ summary: 'Eliminar archivo (DB + disco)' })
   async remove(@Param('id') id: string) {
     await this.filesService.remove(id);

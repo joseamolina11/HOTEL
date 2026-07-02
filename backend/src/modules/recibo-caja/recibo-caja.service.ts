@@ -23,7 +23,7 @@ export class ReciboCajaService {
 
   async findAll(page = 1, limit = 10) {
     const [data, total] = await this.repo.findAndCount({
-      relations: ['pagos', 'pagos.metodoPago', 'items', 'reservation', 'reservation.consumptions', 'reservation.consumptions.inventoryItem', 'reservation.room', 'reservation.room.roomType', 'reservation.guest'],
+      relations: ['pagos', 'pagos.metodoPago', 'items', 'reservation', 'reservation.consumptions', 'reservation.consumptions.inventoryItem', 'reservation.room', 'reservation.room.roomType', 'reservation.guest', 'createdBy'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -34,7 +34,7 @@ export class ReciboCajaService {
   async findOne(id: string) {
     const r = await this.repo.findOne({
       where: { id },
-      relations: ['pagos', 'pagos.metodoPago', 'items', 'reservation', 'reservation.consumptions', 'reservation.consumptions.inventoryItem', 'reservation.room', 'reservation.room.roomType', 'reservation.guest'],
+      relations: ['pagos', 'pagos.metodoPago', 'items', 'reservation', 'reservation.consumptions', 'reservation.consumptions.inventoryItem', 'reservation.room', 'reservation.room.roomType', 'reservation.guest', 'createdBy'],
     });
     if (!r) throw new NotFoundException('Recibo de caja no encontrado');
     const hotelConfig = await this.hotelConfigRepo.findOne({ where: {} });
@@ -63,7 +63,7 @@ export class ReciboCajaService {
       descuento: dto.descuento ?? 0,
       total: dto.total,
       observaciones: dto.observaciones,
-      createdBy: userId,
+      createdById: userId,
       pagos: dto.pagos.map((p) =>
         this.pagosRepo.create({
           concepto: p.concepto,

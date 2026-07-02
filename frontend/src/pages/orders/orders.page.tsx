@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { roomsApi } from '@/api/rooms.api';
@@ -6,12 +6,12 @@ import { inventoryApi } from '@/api/inventory.api';
 import { useRoomOrders, useCreateOrder, useCancelOrder } from '@/hooks/useOrders';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { PaginationBar } from '@/components/shared/pagination-bar';
-import { Plus, X, ShoppingCart, Trash2, Search, Loader2 } from 'lucide-react';
+import { Plus, X, ShoppingCart, Search, Loader2, Minus, Package } from 'lucide-react';
 import { toastSuccess } from '@/lib/notifications';
 import { formatDateTime, formatCurrency } from '@/lib/utils';
 
@@ -227,18 +227,36 @@ function CreateOrderDialog({ open, onClose, roomId, onSuccess }: {
   onSuccess: () => void;
 }) {
   const [items, setItems] = useState<{ inventoryItemId: string; nombre: string; cantidad: number; precioUnitario: number }[]>([]);
-  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState('');
   const createMut = useCreateOrder();
 
   const { data: productsResponse } = useQuery({
-    queryKey: ['inventory'],
-    queryFn: () => inventoryApi.findAll(),
+    queryKey: ['inventory', 'all'],
+    queryFn: () => inventoryApi.findAll({ limit: '200' }),
   });
 
-  const products = productsResponse?.data?.data || [];
-  const filtered = (products || []).filter((p: any) =>
-    p.nombre.toLowerCase().includes(search.toLowerCase())
-  );
+  const products: any[] = productsResponse?.data?.data || [];
+
+  const categoryMap = useMemo(() => {
+    const map = new Map<string, any[]>();
+    products.forEach((p: any) => {
+      if (!p.activo) return;
+      const cat = p.category?.nombre || p.categoria || 'Sin categoría';
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(p);
+    });
+    return map;
+  }, [products]);
+
+  const categories = useMemo(() => [...categoryMap.keys()], [categoryMap]);
+
+  useEffect(() => {
+    if (!activeCategory && categories.length > 0) {
+      setActiveCategory(categories[0]);
+    }
+  }, [categories, activeCategory]);
+
+  const currentProducts = categoryMap.get(activeCategory) || [];
 
   const addProduct = (product: any) => {
     const existing = items.find((i) => i.inventoryItemId === product.id);
@@ -254,7 +272,6 @@ function CreateOrderDialog({ open, onClose, roomId, onSuccess }: {
         precioUnitario: Number(product.precioVenta) || Number(product.costoUnitario) || 0,
       }]);
     }
-    setSearch('');
   };
 
   const removeItem = (id: string) => {
@@ -264,10 +281,6 @@ function CreateOrderDialog({ open, onClose, roomId, onSuccess }: {
   const updateCantidad = (id: string, cantidad: number) => {
     if (cantidad < 1) return;
     setItems(items.map((i) => i.inventoryItemId === id ? { ...i, cantidad } : i));
-  };
-
-  const updatePrecio = (id: string, precioUnitario: number) => {
-    setItems(items.map((i) => i.inventoryItemId === id ? { ...i, precioUnitario } : i));
   };
 
   const total = items.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
@@ -288,87 +301,149 @@ function CreateOrderDialog({ open, onClose, roomId, onSuccess }: {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setItems([]); } }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nuevo Pedido</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar producto..."
-              className="pl-10"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setItems([]); setActiveCategory(''); } }}>
+      <DialogContent className="max-w-6xl max-h-[95vh] p-0 gap-0 overflow-hidden">
+        <div className="flex flex-col h-[calc(95vh-2rem)]">
+          <div className="flex items-center justify-between border-b px-6 py-3">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Package className="h-5 w-5" /> Nuevo Pedido — POS
+            </DialogTitle>
+            <button type="button" onClick={() => { onClose(); setItems([]); setActiveCategory(''); }} className="text-muted-foreground hover:text-foreground">
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          {search && (
-            <div className="max-h-40 overflow-y-auto rounded-lg border">
-              {filtered.length === 0 ? (
-                <p className="p-3 text-sm text-muted-foreground">Sin resultados</p>
-              ) : (
-                filtered.map((p: any) => (
+          <div className="flex flex-1 overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex gap-1 overflow-x-auto px-4 pt-4 pb-2 border-b shrink-0">
+                {categories.map((cat) => (
                   <button
-                    key={p.id}
+                    key={cat}
                     type="button"
-                    className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-muted"
-                    onClick={() => addProduct(p)}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      activeCategory === cat
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    }`}
                   >
-                    <span>{p.nombre}</span>
-                    <span className="text-muted-foreground">
-                      Stock: {p.stockActual} | {formatCurrency(p.precioVenta || p.costoUnitario)}
-                    </span>
+                    {cat}
                   </button>
-                ))
-              )}
-            </div>
-          )}
+                ))}
+              </div>
 
-          {items.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium">Productos seleccionados</h4>
-              {items.map((item) => (
-                <div key={item.inventoryItemId} className="flex items-center gap-2 rounded-lg border p-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.nombre}</p>
+              <div className="flex-1 overflow-y-auto p-4">
+                {currentProducts.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                    Sin productos en esta categoría
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateCantidad(item.inventoryItemId, item.cantidad - 1)}>
-                      <span className="text-xs">−</span>
-                    </Button>
-                    <span className="w-6 text-center text-sm">{item.cantidad}</span>
-                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateCantidad(item.inventoryItemId, item.cantidad + 1)}>
-                      <span className="text-xs">+</span>
-                    </Button>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                    {currentProducts.map((product: any) => {
+                      const outOfStock = product.stockActual <= 0;
+                      return (
+                        <button
+                          key={product.id}
+                          type="button"
+                          disabled={outOfStock}
+                          onClick={() => addProduct(product)}
+                          className={`rounded-xl border p-3 text-left transition-all flex flex-col gap-1 ${
+                            outOfStock
+                              ? 'opacity-40 cursor-not-allowed bg-muted/30'
+                              : 'hover:border-primary hover:shadow-sm hover:bg-accent/50 active:scale-[0.97]'
+                          }`}
+                        >
+                          <span className="font-semibold text-sm leading-tight">{product.nombre}</span>
+                          <span className="text-base font-bold text-primary">
+                            {formatCurrency(product.precioVenta || product.costoUnitario)}
+                          </span>
+                          <span className={`text-xs ${outOfStock ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            {outOfStock ? 'Sin stock' : `Stock: ${product.stockActual}`}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    className="w-20 h-8 text-xs"
-                    value={item.precioUnitario}
-                    onChange={(e) => updatePrecio(item.inventoryItemId, Number(e.target.value))}
-                  />
-                  <span className="w-16 text-right text-sm font-medium">
-                    {formatCurrency(item.cantidad * item.precioUnitario)}
-                  </span>
-                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeItem(item.inventoryItemId)}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
-              <div className="flex justify-between pt-2 text-sm font-bold">
-                <span>Total</span>
-                <span>{formatCurrency(total)}</span>
+                )}
               </div>
             </div>
-          )}
 
-          <Button className="w-full" disabled={items.length === 0 || createMut.isPending} onClick={handleSubmit}>
-            {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Crear Pedido
-          </Button>
+            <div className="w-72 lg:w-80 border-l bg-muted/20 flex flex-col shrink-0">
+              <div className="px-4 py-3 border-b shrink-0">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4" /> Pedido actual
+                </h3>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
+                {items.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-center text-sm text-muted-foreground">
+                    <div>
+                      <Package className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                      <p>Selecciona productos</p>
+                      <p className="text-xs">desde la izquierda</p>
+                    </div>
+                  </div>
+                ) : (
+                  items.map((item) => (
+                    <div key={item.inventoryItemId} className="rounded-lg border bg-card p-2.5 space-y-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="text-sm font-medium leading-tight flex-1">{item.nombre}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.inventoryItemId)}
+                          className="text-muted-foreground hover:text-destructive shrink-0"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => updateCantidad(item.inventoryItemId, item.cantidad - 1)}
+                            className="h-7 w-7 rounded-md border flex items-center justify-center hover:bg-accent text-muted-foreground"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="w-7 text-center text-sm font-medium tabular-nums">{item.cantidad}</span>
+                          <button
+                            type="button"
+                            onClick={() => updateCantidad(item.inventoryItemId, item.cantidad + 1)}
+                            className="h-7 w-7 rounded-md border flex items-center justify-center hover:bg-accent text-muted-foreground"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <span className="text-sm font-bold tabular-nums">
+                          {formatCurrency(item.cantidad * item.precioUnitario)}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="border-t px-4 py-3 space-y-3 shrink-0 bg-background">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-muted-foreground text-sm">Subtotal</span>
+                  <span className="font-bold text-lg tabular-nums">{formatCurrency(total)}</span>
+                </div>
+                <Button
+                  className="w-full h-11 text-base font-semibold"
+                  disabled={items.length === 0 || createMut.isPending}
+                  onClick={handleSubmit}
+                >
+                  {createMut.isPending ? (
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                  ) : (
+                    <ShoppingCart className="h-5 w-5 mr-2" />
+                  )}
+                  {createMut.isPending ? 'Creando...' : `Cobrar ${formatCurrency(total)}`}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

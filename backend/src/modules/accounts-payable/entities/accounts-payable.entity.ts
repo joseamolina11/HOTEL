@@ -3,6 +3,7 @@ import { Supplier } from 'src/modules/suppliers/entities/supplier.entity';
 import { PurchaseOrder } from 'src/modules/purchase-orders/entities/purchase-order.entity';
 import { Expense } from 'src/modules/expenses/entities/expense.entity';
 import { PagoCuenta } from './pago-cuenta.entity';
+import { User } from 'src/modules/auth/entities/user.entity';
 
 @Entity('accounts_payable')
 export class AccountsPayable {
@@ -54,8 +55,12 @@ export class AccountsPayable {
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
-  @Column({ name: 'created_by', nullable: true })
-  createdBy: string;
+  @Column({ name: 'created_by_id', nullable: true })
+  createdById: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy: User;
 
   @OneToMany(() => PagoCuenta, (pago) => pago.cuenta)
   pagos: PagoCuenta[];

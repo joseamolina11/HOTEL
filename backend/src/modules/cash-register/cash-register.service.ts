@@ -17,7 +17,7 @@ export class CashRegisterService {
 
   async findAll(page = 1, limit = 10) {
     const [data, total] = await this.repo.findAndCount({
-      relations: ['user'],
+      relations: ['user', 'account'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -29,7 +29,7 @@ export class CashRegisterService {
   async findOpen() {
     return this.repo.findOne({
       where: { estado: 'abierta' },
-      relations: ['user'],
+      relations: ['user', 'account'],
     });
   }
 
@@ -53,18 +53,12 @@ export class CashRegisterService {
       observaciones: dto.observaciones,
     });
 
+    // Link to caja_menor account (informational, no balance-affecting movement)
     try {
-      const defaultAccount = await this.financialAccountsService.findAllActive();
-      if (defaultAccount.length > 0) {
-        const account = defaultAccount.find(a => a.tipo === 'caja_principal') || defaultAccount[0];
-        await this.financialMovementsService.create({
-          accountId: account.id,
-          tipo: 'APERTURA_CAJA',
-          monto: dto.montoInicial,
-          concepto: 'Apertura de caja' + (dto.observaciones ? ` - ${dto.observaciones}` : ''),
-          referenciaTipo: 'cash_register',
-          referenciaId: register.id,
-        }, userId);
+      const accounts = await this.financialAccountsService.findAllActive();
+      const cajaMenor = accounts.find(a => a.tipo === 'caja_menor') || accounts[0];
+      if (cajaMenor) {
+        register.accountId = cajaMenor.id;
       }
     } catch (e) {
       // silently skip
@@ -93,33 +87,24 @@ export class CashRegisterService {
       estado: 'cerrada' as const,
     });
 
-    try {
-      const defaultAccount = await this.financialAccountsService.findAllActive();
-      if (defaultAccount.length > 0) {
-        const account = defaultAccount.find(a => a.tipo === 'caja_principal') || defaultAccount[0];
-        const totalVentas = Number(register.totalVentas);
-        await this.financialMovementsService.create({
-          accountId: account.id,
-          tipo: 'CIERRE_CAJA',
-          monto: totalVentas,
-          concepto: 'Cierre de caja - Venta: ' + totalVentas,
-          referenciaTipo: 'cash_register',
-          referenciaId: id,
-        }, register.userId);
-      }
-    } catch (e) {
-      // silently skip
-    }
-
     return this.repo.save(register);
   }
 
   async findOne(id: string) {
     const register = await this.repo.findOne({
       where: { id },
-      relations: ['user'],
+      relations: ['user', 'account'],
     });
     if (!register) throw new NotFoundException('Caja no encontrada');
     return register;
+  }
+
+  async findMovements(id: string, page = 1, limit = 20, userId?: string) {
+    const register = await this.findOne(id);
+    const movements = await this.financialMovementsService.findAll({ cashRegisterId: id, userId }, page, limit);
+    return {
+      register,
+      movements,
+    };
   }
 }
