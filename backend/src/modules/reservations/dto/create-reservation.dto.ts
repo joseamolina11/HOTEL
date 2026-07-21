@@ -67,6 +67,22 @@ export class CreateReservationDto {
   @ValidateNested({ each: true })
   @Type(() => CompanionDto)
   companions?: CompanionDto[];
+
+  @ApiPropertyOptional({ example: 150000 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pagoMonto?: number;
+
+  @ApiPropertyOptional({ example: 'uuid-payment-method' })
+  @IsOptional()
+  @IsString()
+  pagoMetodoPagoId?: string;
+
+  @ApiPropertyOptional({ example: 'Anticipo reserva' })
+  @IsOptional()
+  @IsString()
+  pagoReferencia?: string;
 }
 
 export class UpdateReservationDto {

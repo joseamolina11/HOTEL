@@ -55,9 +55,9 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
   const [showCreateGuest, setShowCreateGuest] = useState(false);
 
-  const [pagoMonto, setPagoMonto] = useState(0);
-  const [pagoMetodoPagoId, setPagoMetodoPagoId] = useState('');
-  const [pagoReferencia, setPagoReferencia] = useState('');
+  const [pagos, setPagos] = useState<{ monto: number; metodoPagoId: string; comprobante: string }[]>([
+    { monto: 0, metodoPagoId: '', comprobante: '' },
+  ]);
 
   const { register, handleSubmit, control, formState: { errors }, setValue, getValues, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -76,6 +76,25 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
     );
     return noches * Number(room.roomType.precioBase);
   }, [room, watchedEntrada, watchedSalida]);
+
+  const pagoActualTotal = useMemo(() => {
+    return pagos.reduce((sum, p) => sum + (p.monto || 0), 0);
+  }, [pagos]);
+
+  const addPago = () => {
+    setPagos([...pagos, { monto: 0, metodoPagoId: '', comprobante: '' }]);
+  };
+
+  const updatePago = (index: number, field: string, value: any) => {
+    const updated = [...pagos];
+    (updated[index] as any)[field] = value;
+    setPagos(updated);
+  };
+
+  const removePago = (index: number) => {
+    if (pagos.length <= 1) return;
+    setPagos(pagos.filter((_, i) => i !== index));
+  };
 
   const { data: hotelConfig } = useQuery({
     queryKey: ['hotel-config'],
@@ -162,14 +181,17 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       companions: companionsList.length > 0 ? companionsList : undefined,
     });
 
+    const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);
     const paymentData: any = {
       observaciones: data.observaciones,
       companions: companionsList.length > 0 ? companionsList : undefined,
     };
-    if (pagoMonto > 0 && pagoMetodoPagoId) {
-      paymentData.pagoMonto = pagoMonto;
-      paymentData.pagoMetodoPagoId = pagoMetodoPagoId;
-      if (pagoReferencia) paymentData.pagoReferencia = pagoReferencia;
+    if (pagosValidos.length > 0) {
+      paymentData.pagos = pagosValidos.map((p) => ({
+        monto: p.monto,
+        metodoPagoId: p.metodoPagoId,
+        comprobante: p.comprobante || undefined,
+      }));
     }
     await checkInMut.mutateAsync({
       reservationId: reservation.id,
@@ -313,59 +335,64 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                   <DollarSign className="h-4 w-4" /> Pago en entrada
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Total estimado: {formatCurrency(estimatedTotal)} &mdash; Puedes cobrar el total, la mitad o un valor personalizado
+                  Total estimado: {formatCurrency(estimatedTotal)}
                 </p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs text-muted-foreground">Monto a cobrar</label>
-                    <Input
-                      type="number" step="0.01" min={0}
-                      placeholder="0.00"
-                      value={pagoMonto || ''}
-                      onChange={(e) => setPagoMonto(Number(e.target.value))}
-                    />
+
+                {pagos.map((pago, i) => (
+                  <div key={i} className="flex items-end gap-2 border-b pb-2">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Monto</label>
+                      <Input
+                        type="number" step="0.01" min={0}
+                        placeholder="0.00"
+                        value={pago.monto || ''}
+                        onChange={(e) => updatePago(i, 'monto', Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Método</label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={pago.metodoPagoId}
+                        onChange={(e) => updatePago(i, 'metodoPagoId', e.target.value)}
+                      >
+                        <option value="">Seleccionar...</option>
+                        {(paymentMethods || []).map((pm: any) => (
+                          <option key={pm.id} value={pm.id}>{pm.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Referencia</label>
+                      <Input
+                        placeholder="Opcional"
+                        value={pago.comprobante}
+                        onChange={(e) => updatePago(i, 'comprobante', e.target.value)}
+                      />
+                    </div>
+                    {pagos.length > 1 && (
+                      <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => removePago(i)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs text-muted-foreground">Método de pago</label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                      value={pagoMetodoPagoId}
-                      onChange={(e) => setPagoMetodoPagoId(e.target.value)}
-                    >
-                      <option value="">Seleccionar...</option>
-                      {(paymentMethods || []).map((pm: any) => (
-                        <option key={pm.id} value={pm.id}>{pm.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs text-muted-foreground">Referencia</label>
-                    <Input
-                      placeholder="Opcional"
-                      value={pagoReferencia}
-                      onChange={(e) => setPagoReferencia(e.target.value)}
-                    />
-                  </div>
+                ))}
+
+                <div className="flex items-center justify-between">
+                  <Button type="button" variant="outline" size="sm" onClick={addPago}>
+                    <Plus className="mr-1 h-3 w-3" /> Agregar pago
+                  </Button>
+                  <span className="text-sm font-semibold">
+                    Total: {formatCurrency(pagoActualTotal)}
+                  </span>
                 </div>
-                {pagoMonto > 0 && (
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => { setPagoMonto(estimatedTotal); setPagoMetodoPagoId(pagoMetodoPagoId); }}>
-                      Total ({formatCurrency(estimatedTotal)})
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => { setPagoMonto(estimatedTotal / 2); setPagoMetodoPagoId(pagoMetodoPagoId); }}>
-                      Mitad ({formatCurrency(estimatedTotal / 2)})
-                    </Button>
-                  </div>
-                )}
               </div>
 
               <div className="flex gap-3">
-                {hotelConfig?.contratoHtml && (
-                  <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} className="flex-1">
-                    <Printer className="mr-2 h-4 w-4" /> Imprimir Contrato
-                  </Button>
-                )}
-                <Button type="submit" className="flex-1" disabled={isProcessing}>
+                <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} disabled={!hotelConfig?.contratoHtml || !selectedGuest} className="flex-1">
+                  <Printer className="mr-2 h-4 w-4" /> Imprimir Contrato
+                </Button>
+                <Button type="submit" className="flex-1" disabled={isProcessing || pagoActualTotal <= 0}>
                   {isProcessing ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
                   ) : (

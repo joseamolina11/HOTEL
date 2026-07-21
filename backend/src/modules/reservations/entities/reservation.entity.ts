@@ -13,6 +13,7 @@ import { Consumption } from 'src/modules/consumptions/entities/consumption.entit
 import { Order } from 'src/modules/orders/entities/order.entity';
 import { ReciboCaja } from 'src/modules/recibo-caja/entities/recibo-caja.entity';
 import { FileRecord } from 'src/modules/files/entities/file.entity';
+import { Payment } from 'src/modules/payments/entities/payment.entity';
 
 @Entity('reservations')
 export class Reservation {
@@ -93,6 +94,9 @@ export class Reservation {
 
   @OneToMany(() => ReciboCaja, (rc) => rc.reservation)
   recibosCaja: ReciboCaja[];
+
+  @OneToMany(() => Payment, (p) => p.reservation)
+  payments: Payment[];
 
   @ManyToOne(() => FileRecord)
   @JoinColumn({ name: 'contrato_file_id' })

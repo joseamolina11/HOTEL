@@ -3,15 +3,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reservationsApi } from '@/api/reservations.api';
 import { guestsApi } from '@/api/guests.api';
 import { paymentMethodsApi } from '@/api/payment-methods.api';
+import { hotelConfigApi } from '@/api/hotel-config.api';
 import apiClient from '@/api/client';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { LogIn, Plus, X, Loader2, DollarSign } from 'lucide-react';
+import { LogIn, Plus, X, Loader2, DollarSign, Printer } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
+import { renderContract, printContract } from '@/lib/print-contract';
 
 export function CheckInListPage() {
   const qc = useQueryClient();
@@ -119,9 +121,9 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
     nacionalidad: string; telefono: string; email: string;
   }[]>([]);
   const [observaciones, setObservaciones] = useState('');
-  const [pagoMonto, setPagoMonto] = useState(0);
-  const [pagoMetodoPagoId, setPagoMetodoPagoId] = useState('');
-  const [pagoReferencia, setPagoReferencia] = useState('');
+  const [pagos, setPagos] = useState<{ monto: number; metodoPagoId: string; comprobante: string }[]>([
+    { monto: 0, metodoPagoId: '', comprobante: '' },
+  ]);
 
   const estimatedTotal = useMemo(() => {
     if (!reservation?.room?.roomType?.precioBase) return 0;
@@ -131,13 +133,64 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
     return noches * Number(reservation.room.roomType.precioBase);
   }, [reservation]);
 
+  const advanceTotal = useMemo(() => {
+    if (!reservation.payments) return 0;
+    return reservation.payments.reduce((sum: number, p: any) => sum + Number(p.monto), 0);
+  }, [reservation.payments]);
+
+  const remainingTotal = useMemo(() => {
+    const pend = estimatedTotal - advanceTotal;
+    return pend > 0 ? pend : 0;
+  }, [estimatedTotal, advanceTotal]);
+
+  const pagoActualTotal = useMemo(() => {
+    return pagos.reduce((sum, p) => sum + (p.monto || 0), 0);
+  }, [pagos]);
+
   const { data: paymentMethods } = useQuery({
     queryKey: ['payment-methods-active'],
     queryFn: () => paymentMethodsApi.findAllActive(),
   });
 
+  const { data: hotelConfig } = useQuery({
+    queryKey: ['hotel-config'],
+    queryFn: () => hotelConfigApi.getConfig(),
+  });
+
+  const handlePrintContract = () => {
+    if (!hotelConfig?.contratoHtml || !reservation.guest) return;
+    const html = renderContract(hotelConfig.contratoHtml, {
+      guest: {
+        nombres: reservation.guest.nombres,
+        apellidos: reservation.guest.apellidos,
+        documento: reservation.guest.documento,
+        nacionalidad: reservation.guest.nacionalidad,
+        telefono: reservation.guest.telefono,
+        email: reservation.guest.email,
+      },
+      room: {
+        numero: reservation.room?.numero || '',
+        nombre: reservation.room?.nombre || '',
+        tipoHabitacion: reservation.room?.roomType?.nombre || '',
+        precioBase: reservation.room?.roomType?.precioBase,
+      },
+      hotel: {
+        nombre: hotelConfig.nombre || '',
+        direccion: hotelConfig.direccion || '',
+        ciudad: hotelConfig.ciudad || '',
+        pais: hotelConfig.pais || '',
+        telefono: hotelConfig.telefono || '',
+        email: hotelConfig.email || '',
+      },
+      fechaEntrada: reservation.fechaEntrada,
+      fechaSalida: reservation.fechaSalida,
+      cantidadHuespedes: reservation.cantidadHuespedes || 1,
+    });
+    printContract(html);
+  };
+
   const checkInMut = useMutation({
-    mutationFn: (dto: { reservationId: string; observaciones?: string; companions?: any[]; pagoMonto?: number; pagoMetodoPagoId?: string; pagoReferencia?: string }) =>
+    mutationFn: (dto: { reservationId: string; observaciones?: string; companions?: any[]; pagos?: { monto: number; metodoPagoId: string; comprobante?: string }[] }) =>
       apiClient.post('/check-in', dto),
     onSuccess: () => {
       toastSuccess('Check-In realizado correctamente');
@@ -145,9 +198,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
       setOpen(false);
       setCompanions([]);
       setObservaciones('');
-      setPagoMonto(0);
-      setPagoMetodoPagoId('');
-      setPagoReferencia('');
+      setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]);
     },
   });
 
@@ -165,17 +216,35 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
     setCompanions(companions.filter((_, i) => i !== index));
   };
 
+  const addPago = () => {
+    setPagos([...pagos, { monto: 0, metodoPagoId: '', comprobante: '' }]);
+  };
+
+  const updatePago = (index: number, field: string, value: any) => {
+    const updated = [...pagos];
+    (updated[index] as any)[field] = value;
+    setPagos(updated);
+  };
+
+  const removePago = (index: number) => {
+    if (pagos.length <= 1) return;
+    setPagos(pagos.filter((_, i) => i !== index));
+  };
+
   const handleConfirm = () => {
     const companionsList = companions.filter((c) => c.documento);
+    const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);
     const dto: any = {
       reservationId: reservation.id,
       observaciones,
       companions: companionsList.length > 0 ? companionsList : undefined,
     };
-    if (pagoMonto > 0 && pagoMetodoPagoId) {
-      dto.pagoMonto = pagoMonto;
-      dto.pagoMetodoPagoId = pagoMetodoPagoId;
-      if (pagoReferencia) dto.pagoReferencia = pagoReferencia;
+    if (pagosValidos.length > 0) {
+      dto.pagos = pagosValidos.map((p) => ({
+        monto: p.monto,
+        metodoPagoId: p.metodoPagoId,
+        comprobante: p.comprobante || undefined,
+      }));
     }
     checkInMut.mutate(dto);
   };
@@ -198,7 +267,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         </td>
       </tr>
 
-      <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setOpen(false); setCompanions([]); setObservaciones(''); } }}>
+      <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setOpen(false); setCompanions([]); setObservaciones(''); setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -249,55 +318,77 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
               <Input placeholder="Opcional" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
             </div>
 
+            <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} disabled={!hotelConfig?.contratoHtml} className="w-full">
+              <Printer className="mr-2 h-4 w-4" /> Imprimir / Descargar Contrato
+            </Button>
+
             <div className="rounded-lg border border-amber-200 p-3 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
                 <DollarSign className="h-4 w-4" /> Pago en entrada
               </div>
-              <p className="text-xs text-muted-foreground">
-                Total estimado: {formatCurrency(estimatedTotal)} &mdash; Puedes cobrar el total, la mitad o un valor personalizado
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 space-y-1">
-                  <label className="text-xs text-muted-foreground">Monto a cobrar</label>
-                  <Input
-                    type="number" step="0.01" min={0}
-                    placeholder="0.00"
-                    value={pagoMonto || ''}
-                    onChange={(e) => setPagoMonto(Number(e.target.value))}
-                  />
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="rounded bg-muted p-2 text-center">
+                  <p className="text-xs text-muted-foreground">Total estancia</p>
+                  <p className="font-bold">{formatCurrency(estimatedTotal)}</p>
                 </div>
-                <div className="flex-1 space-y-1">
-                  <label className="text-xs text-muted-foreground">Método de pago</label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                    value={pagoMetodoPagoId}
-                    onChange={(e) => setPagoMetodoPagoId(e.target.value)}
-                  >
-                    <option value="">Seleccionar...</option>
-                    {(paymentMethods || []).map((pm: any) => (
-                      <option key={pm.id} value={pm.id}>{pm.nombre}</option>
-                    ))}
-                  </select>
+                <div className="rounded bg-green-50 p-2 text-center">
+                  <p className="text-xs text-green-700">Anticipo</p>
+                  <p className="font-bold text-green-700">{formatCurrency(advanceTotal)}</p>
                 </div>
-                <div className="flex-1 space-y-1">
-                  <label className="text-xs text-muted-foreground">Referencia</label>
-                  <Input
-                    placeholder="Opcional"
-                    value={pagoReferencia}
-                    onChange={(e) => setPagoReferencia(e.target.value)}
-                  />
+                <div className="rounded bg-amber-50 p-2 text-center">
+                  <p className="text-xs text-amber-700">Pendiente</p>
+                  <p className="font-bold text-amber-700">{formatCurrency(remainingTotal)}</p>
                 </div>
               </div>
-              {pagoMonto > 0 && (
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setPagoMonto(estimatedTotal)}>
-                    Total ({formatCurrency(estimatedTotal)})
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setPagoMonto(estimatedTotal / 2)}>
-                    Mitad ({formatCurrency(estimatedTotal / 2)})
-                  </Button>
+
+              {pagos.map((pago, i) => (
+                <div key={i} className="flex items-end gap-2 border-b pb-2">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Monto</label>
+                    <Input
+                      type="number" step="0.01" min={0}
+                      placeholder="0.00"
+                      value={pago.monto || ''}
+                      onChange={(e) => updatePago(i, 'monto', Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Método</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                      value={pago.metodoPagoId}
+                      onChange={(e) => updatePago(i, 'metodoPagoId', e.target.value)}
+                    >
+                      <option value="">Seleccionar...</option>
+                      {(paymentMethods || []).map((pm: any) => (
+                        <option key={pm.id} value={pm.id}>{pm.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Referencia</label>
+                    <Input
+                      placeholder="Opcional"
+                      value={pago.comprobante}
+                      onChange={(e) => updatePago(i, 'comprobante', e.target.value)}
+                    />
+                  </div>
+                  {pagos.length > 1 && (
+                    <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => removePago(i)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
-              )}
+              ))}
+
+              <div className="flex items-center justify-between">
+                <Button type="button" variant="outline" size="sm" onClick={addPago}>
+                  <Plus className="mr-1 h-3 w-3" /> Agregar pago
+                </Button>
+                <span className="text-sm font-semibold">
+                  Total a pagar ahora: {formatCurrency(pagoActualTotal)}
+                </span>
+              </div>
             </div>
 
             <div className="flex gap-3">
@@ -306,7 +397,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
               </DialogClose>
               <Button
                 className="flex-1"
-                disabled={isPending}
+                disabled={isPending || pagoActualTotal <= 0}
                 onClick={handleConfirm}
               >
                 {isPending ? (

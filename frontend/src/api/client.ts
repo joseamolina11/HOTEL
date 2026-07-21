@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { toastError, showSessionExpired } from '@/lib/notifications';
 
 const apiClient = axios.create({
-  baseURL: 'https://intranet.cytech.net.co:4000' + '/api/v1',
+  baseURL: 'http://localhost:4000' + '/api/v1',
   headers: { 'Content-Type': 'application/json' },
 });
 

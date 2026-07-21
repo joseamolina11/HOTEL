@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -30,6 +30,27 @@ class CompanionRegisterDto {
   email?: string;
 }
 
+class CheckInPaymentDto {
+  @ApiProperty({ example: 150.00 })
+  @IsNumber()
+  @Min(0.01)
+  monto: number;
+
+  @ApiProperty({ example: 'uuid-payment-method' })
+  @IsUUID()
+  metodoPagoId: string;
+
+  @ApiPropertyOptional({ example: 'Efectivo' })
+  @IsOptional()
+  @IsString()
+  concepto?: string;
+
+  @ApiPropertyOptional({ example: 'REF001' })
+  @IsOptional()
+  @IsString()
+  comprobante?: string;
+}
+
 export class CheckInDto {
   @ApiProperty({ example: 'uuid-reservation' })
   @IsString()
@@ -46,6 +67,13 @@ export class CheckInDto {
   @ValidateNested({ each: true })
   @Type(() => CompanionRegisterDto)
   companions?: CompanionRegisterDto[];
+
+  @ApiPropertyOptional({ type: [CheckInPaymentDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CheckInPaymentDto)
+  pagos?: CheckInPaymentDto[];
 
   @ApiPropertyOptional({ example: 150.00 })
   @IsOptional()

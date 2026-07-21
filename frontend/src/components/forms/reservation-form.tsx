@@ -4,12 +4,13 @@ import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { roomsApi } from '@/api/rooms.api';
 import { roomTypesApi } from '@/api/room-types.api';
+import { paymentMethodsApi } from '@/api/payment-methods.api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { useCreateReservation } from '@/hooks/useReservations';
-import { Plus, X, BedDouble } from 'lucide-react';
+import { Plus, X, BedDouble, DollarSign } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { GuestSearch } from '@/components/forms/guest-search';
 
@@ -30,6 +31,9 @@ const reservationSchema = z.object({
   cantidadHuespedes: z.coerce.number().min(1, 'Mínimo 1 huésped'),
   observaciones: z.string().optional(),
   companions: z.array(companionSchema).optional().default([]),
+  pagoMonto: z.coerce.number().min(0).optional(),
+  pagoMetodoPagoId: z.string().optional(),
+  pagoReferencia: z.string().optional(),
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -65,6 +69,11 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
     enabled: !!fechaEntrada && !!fechaSalida,
   });
 
+  const { data: paymentMethods } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: () => paymentMethodsApi.findAllActive(),
+  });
+
   const { data: rooms } = useQuery({
     queryKey: ['rooms'],
     queryFn: () => roomsApi.findAll(),
@@ -75,7 +84,13 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
     : null;
 
   const onSubmit = async (data: ReservationFormData) => {
-    await createReservation.mutateAsync({ ...data, estado: 'confirmada' });
+    const payload: any = { ...data, estado: 'confirmada' };
+    if (data.pagoMonto && data.pagoMonto > 0) {
+      payload.pagoMonto = data.pagoMonto;
+      payload.pagoMetodoPagoId = data.pagoMetodoPagoId || undefined;
+      payload.pagoReferencia = data.pagoReferencia || undefined;
+    }
+    await createReservation.mutateAsync(payload);
     onSuccess();
   };
 
@@ -189,6 +204,29 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
           </div>
         ))}
       </div>
+
+      <Card>
+        <CardContent className="p-3 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <DollarSign className="h-4 w-4" />
+            Anticipo (opcional)
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs">Monto</label>
+              <Input type="number" min={0} placeholder="0" {...register('pagoMonto')} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs">Método de pago</label>
+              <Select {...register('pagoMetodoPagoId')} placeholder="Seleccionar" options={(paymentMethods || []).map((pm: any) => ({ value: pm.id, label: pm.nombre }))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs">Referencia</label>
+              <Input placeholder="Opcional" {...register('pagoReferencia')} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Button type="submit" className="w-full" disabled={createReservation.isPending}>
         {createReservation.isPending ? 'Creando...' : 'Crear Reserva'}

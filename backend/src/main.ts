@@ -27,7 +27,7 @@ async function bootstrap() {
 
   setupSwagger(app);
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 4000;
   await app.listen(port);
 
   logger.log(`🚀 Hotel PMS API running on http://localhost:${port}/api/v1`);

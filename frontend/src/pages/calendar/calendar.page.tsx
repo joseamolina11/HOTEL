@@ -164,6 +164,35 @@ export function CalendarPage() {
           <Button variant="ghost" size="icon" onClick={next}>
             <ChevronRight className="h-5 w-5" />
           </Button>
+          <div className="ml-2 flex items-center gap-1">
+            <select
+              className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+              value={String(currentDate.getMonth())}
+              onChange={(e) => {
+                const m = parseInt(e.target.value, 10);
+                setCurrentDate(new Date(currentDate.getFullYear(), m, 1));
+              }}
+            >
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i} value={i}>
+                  {format(new Date(2024, i, 1), 'MMMM', { locale: es })}
+                </option>
+              ))}
+            </select>
+            <select
+              className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+              value={String(currentDate.getFullYear())}
+              onChange={(e) => {
+                const y = parseInt(e.target.value, 10);
+                setCurrentDate(new Date(y, currentDate.getMonth(), 1));
+              }}
+            >
+              {Array.from({ length: 11 }, (_, i) => {
+                const y = new Date().getFullYear() - 5 + i;
+                return <option key={y} value={y}>{y}</option>;
+              })}
+            </select>
+          </div>
           <div className="ml-4 flex rounded-lg border">
             <Button
               variant={viewMode === 'month' ? 'default' : 'ghost'}

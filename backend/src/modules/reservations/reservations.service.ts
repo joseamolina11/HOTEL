@@ -10,6 +10,11 @@ import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, Reser
 import { generateReservationCode } from 'src/common/utils/generate-code';
 import { parseLocalDate } from 'src/common/utils/date';
 import { isDateOverlap } from 'src/common/utils/date-utils';
+import { Payment } from '../payments/entities/payment.entity';
+import { CashRegister } from '../cash-register/entities/cash-register.entity';
+import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
+import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
+import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
 
 @Injectable()
 export class ReservationsService {
@@ -22,6 +27,13 @@ export class ReservationsService {
     private readonly roomRepository: Repository<Room>,
     @InjectRepository(Guest)
     private readonly guestRepository: Repository<Guest>,
+    @InjectRepository(Payment)
+    private readonly paymentRepository: Repository<Payment>,
+    @InjectRepository(CashRegister)
+    private readonly cashRegisterRepository: Repository<CashRegister>,
+    private readonly paymentMethodsService: PaymentMethodsService,
+    private readonly reciboCajaService: ReciboCajaService,
+    private readonly financialMovementsService: FinancialMovementsService,
   ) {}
 
   async findAll(filters: ReservationFilterDto) {
@@ -34,6 +46,7 @@ export class ReservationsService {
       .leftJoinAndSelect('reservation.guest', 'guest')
       .leftJoinAndSelect('reservation.contratoFile', 'contratoFile')
       .leftJoinAndSelect('room.roomType', 'roomType')
+      .leftJoinAndSelect('reservation.payments', 'payments')
       .skip(skip)
       .take(limit)
       .orderBy('reservation.fechaEntrada', 'DESC');
@@ -115,7 +128,7 @@ export class ReservationsService {
         fechaEntrada: Between(startOfDay, endOfDay),
         estado: 'confirmada',
       },
-      relations: ['room', 'guest'],
+      relations: ['room', 'room.roomType', 'guest', 'payments'],
     });
 
     const departures = await this.reservationRepository.find({
@@ -123,7 +136,7 @@ export class ReservationsService {
         fechaSalida: Between(startOfDay, endOfDay),
         estado: 'checkin',
       },
-      relations: ['room', 'guest'],
+      relations: ['room', 'room.roomType', 'guest', 'payments'],
     });
 
     return { arrivals, departures };
@@ -227,7 +240,82 @@ export class ReservationsService {
       await this.roomRepository.update(createDto.roomId, { estado: 'reservada' });
     }
 
+    if (createDto.pagoMonto && createDto.pagoMonto > 0 && createDto.pagoMetodoPagoId) {
+      await this.processAdvancePayment(saved, createDto, userId, `${guest.nombres} ${guest.apellidos}`);
+    }
+
     return this.findOne(saved.id);
+  }
+
+  private async processAdvancePayment(
+    reservation: Reservation,
+    dto: CreateReservationDto,
+    userId: string,
+    clienteNombre: string,
+  ) {
+    const cashRegister = await this.cashRegisterRepository.findOne({
+      where: { estado: 'abierta' },
+    });
+
+    const pm = await this.paymentMethodsService.findOne(dto.pagoMetodoPagoId!);
+
+    const payment = this.paymentRepository.create({
+      roomId: reservation.roomId,
+      reservationId: reservation.id,
+      userId,
+      monto: dto.pagoMonto!,
+      metodoPagoId: dto.pagoMetodoPagoId,
+      comprobante: dto.pagoReferencia || '',
+      observaciones: `Anticipo ${reservation.codigo} - ${pm.nombre}`,
+      fecha: new Date(),
+    });
+    const savedPayment = await this.paymentRepository.save(payment);
+
+    const tipo = pm.tipo || 'otros';
+    if (cashRegister) {
+      cashRegister.totalVentas = Number(cashRegister.totalVentas) + dto.pagoMonto!;
+      if (tipo === 'efectivo') cashRegister.totalEfectivo = Number(cashRegister.totalEfectivo) + dto.pagoMonto!;
+      else if (tipo === 'transferencia') cashRegister.totalTransferencia = Number(cashRegister.totalTransferencia) + dto.pagoMonto!;
+      else if (tipo === 'tarjeta') cashRegister.totalTarjeta = Number(cashRegister.totalTarjeta) + dto.pagoMonto!;
+      else cashRegister.totalOtros = Number(cashRegister.totalOtros) + dto.pagoMonto!;
+      cashRegister.cantidadTransacciones += 1;
+      await this.cashRegisterRepository.save(cashRegister);
+    }
+
+    const recibo = await this.reciboCajaService.create({
+      clienteNombre,
+      reservationId: reservation.id,
+      fecha: new Date().toISOString().slice(0, 10),
+      subtotal: dto.pagoMonto!,
+      descuento: 0,
+      total: dto.pagoMonto!,
+      pagos: [{
+        concepto: `Anticipo ${reservation.codigo}`,
+        monto: dto.pagoMonto!,
+        metodoPagoId: dto.pagoMetodoPagoId!,
+        cuentaId: pm.financialAccountId || '',
+        referenciaTipo: 'payment',
+        referenciaId: savedPayment.id,
+      }],
+      items: [],
+    }, userId);
+
+    if (pm.financialAccountId) {
+      try {
+        await this.financialMovementsService.create({
+          accountId: pm.financialAccountId,
+          tipo: 'INGRESO',
+          monto: dto.pagoMonto!,
+          concepto: `Anticipo ${reservation.codigo} - ${pm.nombre}`,
+          referenciaTipo: 'payment',
+          referenciaId: savedPayment.id,
+          reciboId: recibo.id,
+          cashRegisterId: cashRegister?.id,
+        }, userId);
+      } catch {
+        // skip
+      }
+    }
   }
 
   async update(id: string, updateDto: UpdateReservationDto): Promise<Reservation> {

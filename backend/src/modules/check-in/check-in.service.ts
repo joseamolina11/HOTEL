@@ -133,9 +133,15 @@ export class CheckInService {
     await this.reservationRepository.update(reservation.id, { estado: 'checkin' });
     await this.roomRepository.update(reservation.roomId, { estado: 'ocupada' });
 
-    // Process payment at check-in if provided
-    if (checkInDto.pagoMonto && checkInDto.pagoMonto > 0 && checkInDto.pagoMetodoPagoId) {
-      await this.processCheckInPayment(reservation, checkInDto, userId);
+    // Process payment at check-in if provided (split payments or single payment)
+    if (checkInDto.pagos && checkInDto.pagos.length > 0) {
+      await this.processCheckInPayments(reservation, checkInDto.pagos, userId);
+    } else if (checkInDto.pagoMonto && checkInDto.pagoMonto > 0 && checkInDto.pagoMetodoPagoId) {
+      await this.processCheckInPayments(reservation, [{
+        monto: checkInDto.pagoMonto,
+        metodoPagoId: checkInDto.pagoMetodoPagoId,
+        comprobante: checkInDto.pagoReferencia,
+      }], userId);
     }
 
     return this.checkInRepository.findOne({
@@ -144,41 +150,48 @@ export class CheckInService {
     });
   }
 
-  private async processCheckInPayment(
+  private async processCheckInPayments(
     reservation: Reservation,
-    dto: CheckInDto,
+    pagos: { monto: number; metodoPagoId: string; comprobante?: string }[],
     userId: string,
   ) {
     const cashRegister = await this.cashRegisterRepository.findOne({
       where: { estado: 'abierta' },
     });
 
-    const pm = await this.paymentMethodsService.findOne(dto.pagoMetodoPagoId!);
+    const totalPagado = pagos.reduce((sum, p) => sum + p.monto, 0);
 
-    const payment = this.paymentRepository.create({
-      roomId: reservation.roomId,
-      reservationId: reservation.id,
-      userId,
-      monto: dto.pagoMonto!,
-      metodoPagoId: dto.pagoMetodoPagoId,
-      comprobante: dto.pagoReferencia || '',
-      observaciones: `Check-in ${reservation.codigo} - ${pm.nombre}`,
-      fecha: new Date(),
-    });
-    const savedPayment = await this.paymentRepository.save(payment);
+    const savedPayments = [];
+    for (const pago of pagos) {
+      const pm = await this.paymentMethodsService.findOne(pago.metodoPagoId);
+      const payment = this.paymentRepository.create({
+        roomId: reservation.roomId,
+        reservationId: reservation.id,
+        userId,
+        monto: pago.monto,
+        metodoPagoId: pago.metodoPagoId,
+        comprobante: pago.comprobante || '',
+        observaciones: `Check-in ${reservation.codigo} - ${pm.nombre}`,
+        fecha: new Date(),
+      });
+      const savedPayment = await this.paymentRepository.save(payment);
+      savedPayments.push({ savedPayment, pm });
 
-    const tipo = pm.tipo || 'otros';
+      const tipo = pm.tipo || 'otros';
+      if (cashRegister) {
+        cashRegister.totalVentas = Number(cashRegister.totalVentas) + pago.monto;
+        if (tipo === 'efectivo') cashRegister.totalEfectivo = Number(cashRegister.totalEfectivo) + pago.monto;
+        else if (tipo === 'transferencia') cashRegister.totalTransferencia = Number(cashRegister.totalTransferencia) + pago.monto;
+        else if (tipo === 'tarjeta') cashRegister.totalTarjeta = Number(cashRegister.totalTarjeta) + pago.monto;
+        else cashRegister.totalOtros = Number(cashRegister.totalOtros) + pago.monto;
+        cashRegister.cantidadTransacciones += 1;
+      }
+    }
+
     if (cashRegister) {
-      cashRegister.totalVentas = Number(cashRegister.totalVentas) + dto.pagoMonto!;
-      if (tipo === 'efectivo') cashRegister.totalEfectivo = Number(cashRegister.totalEfectivo) + dto.pagoMonto!;
-      else if (tipo === 'transferencia') cashRegister.totalTransferencia = Number(cashRegister.totalTransferencia) + dto.pagoMonto!;
-      else if (tipo === 'tarjeta') cashRegister.totalTarjeta = Number(cashRegister.totalTarjeta) + dto.pagoMonto!;
-      else cashRegister.totalOtros = Number(cashRegister.totalOtros) + dto.pagoMonto!;
-      cashRegister.cantidadTransacciones += 1;
       await this.cashRegisterRepository.save(cashRegister);
     }
 
-    // Create Recibo de Caja for the check-in payment
     const noches = Math.ceil(
       (new Date(reservation.fechaSalida).getTime() - new Date(reservation.fechaEntrada).getTime()) /
         (1000 * 60 * 60 * 24),
@@ -199,35 +212,36 @@ export class CheckInService {
       clienteNombre: reservation.guest?.nombres || 'Huésped',
       reservationId: reservation.id,
       fecha: new Date().toISOString().slice(0, 10),
-      subtotal: dto.pagoMonto!,
+      subtotal: totalPagado,
       descuento: 0,
-      total: dto.pagoMonto!,
-      pagos: [{
-        concepto: `Check-in ${reservation.codigo} - Pago inicial`,
-        monto: dto.pagoMonto!,
-        metodoPagoId: dto.pagoMetodoPagoId!,
+      total: totalPagado,
+      pagos: savedPayments.map(({ savedPayment, pm }) => ({
+        concepto: `Check-in ${reservation.codigo} - ${pm.nombre}`,
+        monto: savedPayment.monto,
+        metodoPagoId: pm.id,
         cuentaId: pm.financialAccountId || '',
         referenciaTipo: 'payment',
         referenciaId: savedPayment.id,
-      }],
+      })),
       items: itemsData,
     }, userId);
 
-    // Create INGRESO movement
-    if (pm.financialAccountId) {
-      try {
-        await this.financialMovementsService.create({
-          accountId: pm.financialAccountId,
-          tipo: 'INGRESO',
-          monto: dto.pagoMonto!,
-          concepto: `Check-in ${reservation.codigo} - Pago inicial`,
-          referenciaTipo: 'payment',
-          referenciaId: savedPayment.id,
-          reciboId: recibo.id,
-          cashRegisterId: cashRegister?.id,
-        }, userId);
-      } catch {
-        // skip
+    for (const { savedPayment, pm } of savedPayments) {
+      if (pm.financialAccountId) {
+        try {
+          await this.financialMovementsService.create({
+            accountId: pm.financialAccountId,
+            tipo: 'INGRESO',
+            monto: savedPayment.monto,
+            concepto: `Check-in ${reservation.codigo} - ${pm.nombre}`,
+            referenciaTipo: 'payment',
+            referenciaId: savedPayment.id,
+            reciboId: recibo.id,
+            cashRegisterId: cashRegister?.id,
+          }, userId);
+        } catch {
+          // skip
+        }
       }
     }
   }
