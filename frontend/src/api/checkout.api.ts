@@ -30,6 +30,8 @@ export interface StaySummary {
     totalConsumos: number;
     pedidos: any[];
     totalPedidos: number;
+    surcharges: any[];
+    totalRecargos: number;
     payments: any[];
     totalPagado: number;
     totalEstancia: number;

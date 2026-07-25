@@ -35,7 +35,7 @@ export function ReciboCajaDetailDialog({ reciboId, open, onClose }: { reciboId: 
     : 0;
 
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', 'recibo', 'width=800,height=600,left=100,top=100');
     if (!printWindow || !recibo) return;
     const hc = hotelConfig;
 

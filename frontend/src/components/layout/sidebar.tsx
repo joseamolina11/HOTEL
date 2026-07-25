@@ -35,6 +35,7 @@ import {
   BookOpen,
   ArrowUpDown,
   FileText,
+  Zap,
 } from "lucide-react";
 
 interface GroupItem {
@@ -304,6 +305,13 @@ export function Sidebar() {
           label="Servicios"
           icon={Wrench}
           show={hasPerm('services:view')}
+        />
+
+        <NavLinkItem
+          to="/surcharge-types"
+          label="Recargos"
+          icon={Zap}
+          show={hasPerm('surcharges:view')}
         />
 
         <NavLinkItem

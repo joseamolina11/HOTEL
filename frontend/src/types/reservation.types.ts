@@ -30,6 +30,8 @@ export interface Reservation {
   companions?: ReservationCompanion[];
   consumptions?: any[];
   orders?: any[];
+  payments?: any[];
+  surcharges?: any[];
   recibosCaja?: any[];
   checkIn?: any;
   checkOut?: any;

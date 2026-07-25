@@ -39,6 +39,7 @@ import { FinancialMovementsModule } from './modules/financial-movements/financia
 import { ReciboCajaModule } from './modules/recibo-caja/recibo-caja.module';
 import { AuditTrailModule } from './modules/audit-trail/audit-trail.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
+import { SurchargesModule } from './modules/surcharges/surcharges.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 import { PermissionsGuard } from './common/guards/permissions.guard';
@@ -81,6 +82,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     ReciboCajaModule,
     AuditTrailModule,
     PermissionsModule,
+    SurchargesModule,
   ],
   controllers: [AppController],
   providers: [

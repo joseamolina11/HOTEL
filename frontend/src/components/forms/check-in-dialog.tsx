@@ -7,15 +7,18 @@ import { guestsApi } from '@/api/guests.api';
 import { reservationsApi } from '@/api/reservations.api';
 import { hotelConfigApi } from '@/api/hotel-config.api';
 import { paymentMethodsApi } from '@/api/payment-methods.api';
+import { surchargeTypesApi } from '@/api/surcharge-types.api';
+import { surchargesApi } from '@/api/surcharges.api';
 import apiClient from '@/api/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Plus, X, UserPlus, LogIn, Loader2, Printer, DollarSign } from 'lucide-react';
+import { Search, Plus, X, UserPlus, LogIn, Loader2, Printer, DollarSign, Zap } from 'lucide-react';
 import { CreateGuestDialog } from '@/components/dialogs/create-guest-dialog';
+import { RegistroHoteleroFields } from '@/components/forms/registro-hotelero-fields';
 import { toastSuccess } from '@/lib/notifications';
 import { formatCurrency } from '@/lib/utils';
-import { renderContract, printContract } from '@/lib/print-contract';
+import { renderContract, generateDefaultContract, printContract } from '@/lib/print-contract';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const tomorrow = () => {
@@ -58,6 +61,19 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
   const [pagos, setPagos] = useState<{ monto: number; metodoPagoId: string; comprobante: string }[]>([
     { monto: 0, metodoPagoId: '', comprobante: '' },
   ]);
+
+  const [registroData, setRegistroData] = useState<Record<string, string>>({});
+
+  const [recargos, setRecargos] = useState<{ surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
+
+  const { data: surchargeTypes } = useQuery({
+    queryKey: ['surcharge-types', 'active'],
+    queryFn: () => surchargeTypesApi.findActive(),
+  });
+
+  const updateRegistro = (field: string, value: string) => {
+    setRegistroData((prev) => ({ ...prev, [field]: value }));
+  };
 
   const { register, handleSubmit, control, formState: { errors }, setValue, getValues, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -128,9 +144,9 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
   };
 
   const handlePrintContract = () => {
-    if (!selectedGuest || !hotelConfig?.contratoHtml) return;
+    if (!selectedGuest) return;
     const formData = getValues();
-    const html = renderContract(hotelConfig.contratoHtml, {
+    const contractData = {
       guest: {
         nombres: selectedGuest.nombres,
         apellidos: selectedGuest.apellidos,
@@ -146,13 +162,13 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
         precioBase: room.roomType?.precioBase,
       },
       hotel: {
-        nombre: hotelConfig.nombre,
-        direccion: hotelConfig.direccion,
-        ciudad: hotelConfig.ciudad,
-        pais: hotelConfig.pais,
-        telefono: hotelConfig.telefono,
-        email: hotelConfig.email,
-        logo: hotelConfig.logo,
+        nombre: hotelConfig?.nombre || '',
+        direccion: hotelConfig?.direccion || '',
+        ciudad: hotelConfig?.ciudad || '',
+        pais: hotelConfig?.pais || '',
+        telefono: hotelConfig?.telefono || '',
+        email: hotelConfig?.email || '',
+        logo: hotelConfig?.logo,
       },
       fechaEntrada: formData.fechaEntrada,
       fechaSalida: formData.fechaSalida,
@@ -160,7 +176,11 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       huespedesLista: (formData.companions || [])
         .filter((c: any) => c.documento)
         .map((c: any) => `${c.nombres} ${c.apellidos} (${c.documento})`).join(', '),
-    });
+      registro: registroData,
+    };
+    const html = hotelConfig?.contratoHtml
+      ? renderContract(hotelConfig.contratoHtml, contractData)
+      : generateDefaultContract(contractData);
     printContract(html);
   };
 
@@ -185,6 +205,7 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
     const paymentData: any = {
       observaciones: data.observaciones,
       companions: companionsList.length > 0 ? companionsList : undefined,
+      ...registroData,
     };
     if (pagosValidos.length > 0) {
       paymentData.pagos = pagosValidos.map((p) => ({
@@ -197,6 +218,18 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       reservationId: reservation.id,
       data: paymentData,
     });
+
+    for (const r of recargos) {
+      if (r.monto > 0 && r.descripcion) {
+        await surchargesApi.create({
+          reservationId: reservation.id,
+          surchargeTypeId: r.surchargeTypeId || undefined,
+          descripcion: r.descripcion,
+          monto: r.monto,
+          cantidad: r.cantidad,
+        });
+      }
+    }
 
     toastSuccess('Check-In realizado correctamente');
     qc.invalidateQueries({ queryKey: ['rooms'] });
@@ -330,6 +363,8 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                 <Input {...register('observaciones')} placeholder="Opcional" />
               </div>
 
+              <RegistroHoteleroFields data={registroData} onChange={updateRegistro} />
+
               <div className="rounded-lg border border-amber-200 p-3 space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
                   <DollarSign className="h-4 w-4" /> Pago en entrada
@@ -388,8 +423,81 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                 </div>
               </div>
 
+              <div className="rounded-lg border border-violet-200 p-3 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-violet-700">
+                  <Zap className="h-4 w-4" /> Recargos
+                </div>
+                {(surchargeTypes || []).length === 0 && recargos.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No hay tipos de recargo configurados</p>
+                )}
+                {recargos.map((r, i) => (
+                  <div key={i} className="flex items-end gap-2 border-b pb-2">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Tipo</label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={r.surchargeTypeId}
+                        onChange={(e) => {
+                          const type = (surchargeTypes || []).find((t: any) => t.id === e.target.value);
+                          const updated = [...recargos];
+                          updated[i].surchargeTypeId = e.target.value;
+                          updated[i].descripcion = type?.nombre || '';
+                          updated[i].monto = type ? Number(type.montoDefault) : 0;
+                          setRecargos(updated);
+                        }}
+                      >
+                        <option value="">Seleccionar...</option>
+                        {(surchargeTypes || []).map((st: any) => (
+                          <option key={st.id} value={st.id}>{st.nombre} — {formatCurrency(Number(st.montoDefault))}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="w-20 space-y-1">
+                      <label className="text-xs text-muted-foreground">Cant.</label>
+                      <Input
+                        type="number" min={1}
+                        value={r.cantidad}
+                        onChange={(e) => {
+                          const updated = [...recargos];
+                          updated[i].cantidad = Number(e.target.value);
+                          setRecargos(updated);
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Monto</label>
+                      <Input
+                        type="number" step="0.01" min={0}
+                        value={r.monto}
+                        onChange={(e) => {
+                          const updated = [...recargos];
+                          updated[i].monto = Number(e.target.value);
+                          setRecargos(updated);
+                        }}
+                      />
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => setRecargos(recargos.filter((_, j) => j !== i))}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                {(surchargeTypes || []).length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const first = surchargeTypes[0];
+                      setRecargos([...recargos, { surchargeTypeId: first.id, descripcion: first.nombre, monto: Number(first.montoDefault), cantidad: 1 }]);
+                    }}
+                  >
+                    <Plus className="mr-1 h-3 w-3" /> Agregar recargo
+                  </Button>
+                )}
+              </div>
+
               <div className="flex gap-3">
-                <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} disabled={!hotelConfig?.contratoHtml || !selectedGuest} className="flex-1">
+                <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} disabled={!selectedGuest} className="flex-1">
                   <Printer className="mr-2 h-4 w-4" /> Imprimir Contrato
                 </Button>
                 <Button type="submit" className="flex-1" disabled={isProcessing || pagoActualTotal <= 0}>

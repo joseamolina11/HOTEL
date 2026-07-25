@@ -94,6 +94,12 @@ export const ALL_PERMISSIONS: PermissionSeed[] = [
   { module: 'amenities', action: 'edit', nombre: 'Editar amenities', moduloNombre: 'Amenidades' },
   { module: 'amenities', action: 'delete', nombre: 'Eliminar amenities', moduloNombre: 'Amenidades' },
 
+  // Surcharges
+  { module: 'surcharges', action: 'view', nombre: 'Ver recargos', moduloNombre: 'Recargos' },
+  { module: 'surcharges', action: 'create', nombre: 'Crear recargos', moduloNombre: 'Recargos' },
+  { module: 'surcharges', action: 'edit', nombre: 'Editar recargos', moduloNombre: 'Recargos' },
+  { module: 'surcharges', action: 'delete', nombre: 'Eliminar recargos', moduloNombre: 'Recargos' },
+
   // Services
   { module: 'services', action: 'view', nombre: 'Ver servicios', moduloNombre: 'Servicios' },
   { module: 'services', action: 'create', nombre: 'Crear servicios', moduloNombre: 'Servicios' },

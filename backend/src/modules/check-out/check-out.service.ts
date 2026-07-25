@@ -13,6 +13,7 @@ import { CheckOutDto } from './dto/check-out.dto';
 import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
 import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
+import { SurchargesService } from '../surcharges/surcharges.service';
 
 @Injectable()
 export class CheckOutService {
@@ -36,6 +37,7 @@ export class CheckOutService {
     private readonly paymentMethodsService: PaymentMethodsService,
     private readonly reciboCajaService: ReciboCajaService,
     private readonly financialMovementsService: FinancialMovementsService,
+    private readonly surchargesService: SurchargesService,
   ) {}
 
   async findPendingCheckOuts() {
@@ -111,7 +113,11 @@ export class CheckOutService {
 
     const precioNoche = Number(reservation.room.roomType.precioBase);
     const totalHabitacion = noches * precioNoche;
-    const totalEstancia = totalHabitacion + totalConsumos + totalPedidos;
+
+    const surcharges = await this.surchargesService.findByReservation(reservationId);
+    const totalRecargos = surcharges.reduce((sum, s) => sum + Number(s.subtotal), 0);
+
+    const totalEstancia = totalHabitacion + totalConsumos + totalPedidos + totalRecargos;
     const saldoPendiente = totalEstancia - totalPagado;
 
     const hotelConfig = await this.hotelConfigRepository.findOne({ where: {} });
@@ -127,6 +133,8 @@ export class CheckOutService {
         totalConsumos,
         pedidos: pendingOrders,
         totalPedidos,
+        surcharges,
+        totalRecargos,
         payments,
         totalPagado,
         totalEstancia,
@@ -246,6 +254,17 @@ export class CheckOutService {
             tipo: 'pedido',
           });
         }
+      }
+
+      const surcharges = await this.surchargesService.findByReservation(reservation.id);
+      for (const s of surcharges) {
+        itemsData.push({
+          concepto: s.descripcion,
+          cantidad: s.cantidad,
+          precioUnitario: Number(s.monto),
+          subtotal: Number(s.subtotal),
+          tipo: 'recargo',
+        });
       }
 
       // Create Recibo de Caja

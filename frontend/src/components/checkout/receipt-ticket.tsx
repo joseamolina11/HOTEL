@@ -25,6 +25,8 @@ interface ReceiptTicketProps {
     totalConsumos: number;
     pedidos: any[];
     totalPedidos: number;
+    surcharges: any[];
+    totalRecargos: number;
     payments: any[];
     totalPagado: number;
     totalEstancia: number;
@@ -39,7 +41,7 @@ export function printReceipt(data: ReceiptTicketProps) {
 
   const w = window.open(
     '',
-    '_blank',
+    'recibo-ticket',
     'width=800,height=600,left=100,top=100'
   );
   if (!w) return;
@@ -77,6 +79,16 @@ export function printReceipt(data: ReceiptTicketProps) {
                <td style="padding:1px 4px;text-align:right;font-size:10px">${formatCurrency(i.subtotal)}</td>
              </tr>`
           ).join('')}`
+       ).join('')}`
+    : '';
+
+  const recargosHtml = s.surcharges?.length
+    ? `<tr><td colspan="2" style="font-weight:bold;padding-top:8px;border-top:1px dashed #999">RECARGOS</td></tr>
+       ${s.surcharges.map((sc: any) =>
+         `<tr>
+            <td style="padding:2px 4px">${sc.descripcion} x${sc.cantidad}</td>
+            <td style="padding:2px 4px;text-align:right">${formatCurrency(sc.subtotal)}</td>
+          </tr>`
        ).join('')}`
     : '';
 
@@ -143,6 +155,7 @@ export function printReceipt(data: ReceiptTicketProps) {
     <tr><td>Alojamiento (${s.noches} noche${s.noches !== 1 ? 's' : ''} x ${formatCurrency(s.precioPorNoche)})</td><td style="text-align:right">${formatCurrency(s.totalHabitacion)}</td></tr>
     ${consumosHtml}
     ${pedidosHtml}
+    ${recargosHtml}
     <tr class="total-row"><td style="padding-top:8px;border-top:2px solid #222">TOTAL ESTANCIA</td><td style="text-align:right;padding-top:8px;border-top:2px solid #222" class="grand-total">${formatCurrency(s.totalEstancia)}</td></tr>
   </table>
 

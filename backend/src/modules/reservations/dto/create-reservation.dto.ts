@@ -116,6 +116,71 @@ export class UpdateReservationDto {
   @IsOptional()
   @IsString()
   contratoFileId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  direccion?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ciudad?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  pais?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  oficio?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  empresa?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  telefonoContacto?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  emailContacto?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  transporteLlegada?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  transporteSalida?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reservacionOrigen?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  procedencia?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  destino?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  motivoViaje?: string;
 }
 
 export class CancelReservationDto {

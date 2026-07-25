@@ -88,6 +88,8 @@ export class ReservationsService {
         'checkOut', 'checkOut.user',
         'consumptions', 'consumptions.inventoryItem',
         'orders', 'orders.items', 'orders.items.inventoryItem',
+        'payments', 'payments.metodoPago',
+        'surcharges', 'surcharges.surchargeType',
         'recibosCaja', 'recibosCaja.items',
         'contratoFile',
       ],

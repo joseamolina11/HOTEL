@@ -130,7 +130,23 @@ export class CheckInService {
     });
 
     await this.checkInRepository.save(checkIn);
-    await this.reservationRepository.update(reservation.id, { estado: 'checkin' });
+    await this.reservationRepository.update(reservation.id, {
+      estado: 'checkin',
+      direccion: checkInDto.direccion,
+      ciudad: checkInDto.ciudad,
+      pais: checkInDto.pais,
+      oficio: checkInDto.oficio,
+      empresa: checkInDto.empresa,
+      telefonoContacto: checkInDto.telefonoContacto,
+      emailContacto: checkInDto.emailContacto,
+      transporteLlegada: checkInDto.transporteLlegada,
+      transporteSalida: checkInDto.transporteSalida,
+      reservacionOrigen: checkInDto.reservacionOrigen,
+      procedencia: checkInDto.procedencia,
+      destino: checkInDto.destino,
+      motivoViaje: checkInDto.motivoViaje,
+      numeroPlaca: checkInDto.numeroPlaca,
+    });
     await this.roomRepository.update(reservation.roomId, { estado: 'ocupada' });
 
     // Process payment at check-in if provided (split payments or single payment)

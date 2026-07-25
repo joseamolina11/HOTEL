@@ -14,6 +14,7 @@ import { Order } from 'src/modules/orders/entities/order.entity';
 import { ReciboCaja } from 'src/modules/recibo-caja/entities/recibo-caja.entity';
 import { FileRecord } from 'src/modules/files/entities/file.entity';
 import { Payment } from 'src/modules/payments/entities/payment.entity';
+import { Surcharge } from 'src/modules/surcharges/entities/surcharge.entity';
 
 @Entity('reservations')
 export class Reservation {
@@ -49,6 +50,48 @@ export class Reservation {
 
   @Column({ type: 'varchar', default: 'directo' })
   origen: 'directo' | 'booking' | 'airbnb';
+
+  @Column({ type: 'text', nullable: true })
+  direccion?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  ciudad?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  pais?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  oficio?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  empresa?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  telefonoContacto?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  emailContacto?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  transporteLlegada?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  transporteSalida?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  reservacionOrigen?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  procedencia?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  destino?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  motivoViaje?: string;
+
+  @Column({ name: 'numero_placa', type: 'varchar', nullable: true })
+  numeroPlaca?: string;
 
   @Column({ name: 'ota_reservation_id', nullable: true })
   otaReservationId: string;
@@ -97,6 +140,9 @@ export class Reservation {
 
   @OneToMany(() => Payment, (p) => p.reservation)
   payments: Payment[];
+
+  @OneToMany(() => Surcharge, (s) => s.reservation)
+  surcharges: Surcharge[];
 
   @ManyToOne(() => FileRecord)
   @JoinColumn({ name: 'contrato_file_id' })

@@ -147,7 +147,7 @@ function getHeader(config: any) {
 }
 
 function openPrintWindow(title: string, bodyHtml: string) {
-  const w = window.open('', '_blank', 'width=900,height=650,left=100,top=100');
+  const w = window.open('', 'print', 'width=900,height=650,left=100,top=100');
   if (!w) return;
   w.document.write(`<!DOCTYPE html>
 <html>
@@ -610,7 +610,8 @@ export async function printReservation(id: string) {
   const totalHabitacion = noches * precioPorNoche;
   const totalConsumos = (r.consumptions || []).reduce((sum: number, c: any) => sum + Number(c.subtotal), 0);
   const totalPedidos = (r.orders || []).reduce((sum: number, o: any) => sum + Number(o.total), 0);
-  const totalEstancia = totalHabitacion + totalConsumos + totalPedidos;
+  const totalRecargos = (r.surcharges || []).reduce((sum: number, s: any) => sum + Number(s.subtotal), 0);
+  const totalEstancia = totalHabitacion + totalConsumos + totalPedidos + totalRecargos;
 
   const statusLabels: Record<string, string> = {
     pendiente: 'Pendiente', confirmada: 'Confirmada', checkin: 'Check-In', checkout: 'Check-Out', cancelada: 'Cancelada',
@@ -702,11 +703,27 @@ export async function printReservation(id: string) {
       <tbody>${pedidosHtml}</tbody>
     </table>` : ''}
 
+    ${(r.surcharges || []).length ? `
+    <div class="section-title">Recargos</div>
+    <table class="compact-table">
+      <thead><tr><th>Concepto</th><th class="text-center">Cant.</th><th class="text-right">Monto</th><th class="text-right">Subtotal</th></tr></thead>
+      <tbody>
+        ${(r.surcharges || []).map((s: any) => `
+        <tr>
+          <td>${s.surchargeType?.nombre || s.descripcion || '—'}</td>
+          <td class="text-center">${s.cantidad}</td>
+          <td class="text-right">${formatCurrency(s.monto)}</td>
+          <td class="text-right">${formatCurrency(s.subtotal)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : ''}
+
     <div class="totals-box">
       <table>
         <tr><td class="total-label">Habitaci\u00f3n</td><td class="total-value">${formatCurrency(totalHabitacion)}</td></tr>
         <tr><td class="total-label">Consumos</td><td class="total-value">${formatCurrency(totalConsumos)}</td></tr>
         <tr><td class="total-label">Pedidos</td><td class="total-value">${formatCurrency(totalPedidos)}</td></tr>
+        ${totalRecargos > 0 ? `<tr><td class="total-label">Recargos</td><td class="total-value">${formatCurrency(totalRecargos)}</td></tr>` : ''}
         <tr class="grand-total-row"><td>TOTAL ESTAD\u00cdA</td><td>${formatCurrency(totalEstancia)}</td></tr>
       </table>
     </div>

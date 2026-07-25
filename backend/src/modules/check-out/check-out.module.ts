@@ -14,9 +14,11 @@ import { PaymentMethodsModule } from '../payment-methods/payment-methods.module'
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 import { ReciboCajaModule } from '../recibo-caja/recibo-caja.module';
 import { FinancialMovementsModule } from '../financial-movements/financial-movements.module';
+import { Surcharge } from '../surcharges/entities/surcharge.entity';
+import { SurchargesModule } from '../surcharges/surcharges.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CheckOut, Reservation, Consumption, Room, Order, Payment, CashRegister, HotelConfig, PaymentMethod]),PaymentMethodsModule,ReciboCajaModule,FinancialMovementsModule],
+  imports: [TypeOrmModule.forFeature([CheckOut, Reservation, Consumption, Room, Order, Payment, CashRegister, HotelConfig, PaymentMethod, Surcharge]),PaymentMethodsModule,ReciboCajaModule,FinancialMovementsModule,SurchargesModule],
   controllers: [CheckOutController],
   providers: [CheckOutService],
   exports: [CheckOutService],

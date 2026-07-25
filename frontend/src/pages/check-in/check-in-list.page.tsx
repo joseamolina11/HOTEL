@@ -10,10 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { LogIn, Plus, X, Loader2, DollarSign, Printer } from 'lucide-react';
+import { LogIn, Plus, X, Loader2, DollarSign, Printer, Zap } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
-import { renderContract, printContract } from '@/lib/print-contract';
+import { renderContract, generateDefaultContract, printContract } from '@/lib/print-contract';
+import { RegistroHoteleroFields } from '@/components/forms/registro-hotelero-fields';
+import { surchargesApi } from '@/api/surcharges.api';
+import { surchargeTypesApi } from '@/api/surcharge-types.api';
 
 export function CheckInListPage() {
   const qc = useQueryClient();
@@ -125,6 +128,19 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
     { monto: 0, metodoPagoId: '', comprobante: '' },
   ]);
 
+  const [registroData, setRegistroData] = useState<Record<string, string>>({});
+
+  const [recargos, setRecargos] = useState<{ surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
+
+  const { data: surchargeTypes } = useQuery({
+    queryKey: ['surcharge-types', 'active'],
+    queryFn: () => surchargeTypesApi.findActive(),
+  });
+
+  const updateRegistro = (field: string, value: string) => {
+    setRegistroData((prev) => ({ ...prev, [field]: value }));
+  };
+
   const estimatedTotal = useMemo(() => {
     if (!reservation?.room?.roomType?.precioBase) return 0;
     const noches = Math.ceil(
@@ -158,8 +174,8 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   });
 
   const handlePrintContract = () => {
-    if (!hotelConfig?.contratoHtml || !reservation.guest) return;
-    const html = renderContract(hotelConfig.contratoHtml, {
+    if (!reservation.guest) return;
+    const contractData = {
       guest: {
         nombres: reservation.guest.nombres,
         apellidos: reservation.guest.apellidos,
@@ -175,17 +191,21 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         precioBase: reservation.room?.roomType?.precioBase,
       },
       hotel: {
-        nombre: hotelConfig.nombre || '',
-        direccion: hotelConfig.direccion || '',
-        ciudad: hotelConfig.ciudad || '',
-        pais: hotelConfig.pais || '',
-        telefono: hotelConfig.telefono || '',
-        email: hotelConfig.email || '',
+        nombre: hotelConfig?.nombre || '',
+        direccion: hotelConfig?.direccion || '',
+        ciudad: hotelConfig?.ciudad || '',
+        pais: hotelConfig?.pais || '',
+        telefono: hotelConfig?.telefono || '',
+        email: hotelConfig?.email || '',
       },
       fechaEntrada: reservation.fechaEntrada,
       fechaSalida: reservation.fechaSalida,
       cantidadHuespedes: reservation.cantidadHuespedes || 1,
-    });
+      registro: registroData,
+    };
+    const html = hotelConfig?.contratoHtml
+      ? renderContract(hotelConfig.contratoHtml, contractData)
+      : generateDefaultContract(contractData);
     printContract(html);
   };
 
@@ -199,6 +219,8 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
       setCompanions([]);
       setObservaciones('');
       setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]);
+      setRegistroData({});
+      setRecargos([]);
     },
   });
 
@@ -231,13 +253,14 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
     setPagos(pagos.filter((_, i) => i !== index));
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     const companionsList = companions.filter((c) => c.documento);
     const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);
     const dto: any = {
       reservationId: reservation.id,
       observaciones,
       companions: companionsList.length > 0 ? companionsList : undefined,
+      ...registroData,
     };
     if (pagosValidos.length > 0) {
       dto.pagos = pagosValidos.map((p) => ({
@@ -246,7 +269,19 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         comprobante: p.comprobante || undefined,
       }));
     }
-    checkInMut.mutate(dto);
+    await checkInMut.mutateAsync(dto);
+
+    for (const r of recargos) {
+      if (r.monto > 0 && r.descripcion) {
+        await surchargesApi.create({
+          reservationId: reservation.id,
+          surchargeTypeId: r.surchargeTypeId || undefined,
+          descripcion: r.descripcion,
+          monto: r.monto,
+          cantidad: r.cantidad,
+        });
+      }
+    }
   };
 
   const isPending = checkInMut.isPending;
@@ -267,7 +302,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         </td>
       </tr>
 
-      <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setOpen(false); setCompanions([]); setObservaciones(''); setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]); } }}>
+      <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setOpen(false); setCompanions([]); setObservaciones(''); setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]); setRecargos([]); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -318,9 +353,11 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
               <Input placeholder="Opcional" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
             </div>
 
-            <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} disabled={!hotelConfig?.contratoHtml} className="w-full">
+            <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} className="w-full">
               <Printer className="mr-2 h-4 w-4" /> Imprimir / Descargar Contrato
             </Button>
+
+            <RegistroHoteleroFields data={registroData} onChange={updateRegistro} />
 
             <div className="rounded-lg border border-amber-200 p-3 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
@@ -389,6 +426,79 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
                   Total a pagar ahora: {formatCurrency(pagoActualTotal)}
                 </span>
               </div>
+            </div>
+
+            <div className="rounded-lg border border-violet-200 p-3 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-violet-700">
+                <Zap className="h-4 w-4" /> Recargos
+              </div>
+              {(surchargeTypes || []).length === 0 && recargos.length === 0 && (
+                <p className="text-xs text-muted-foreground">No hay tipos de recargo configurados</p>
+              )}
+              {recargos.map((r, i) => (
+                <div key={i} className="flex items-end gap-2 border-b pb-2">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Tipo</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                      value={r.surchargeTypeId}
+                      onChange={(e) => {
+                        const type = (surchargeTypes || []).find((t: any) => t.id === e.target.value);
+                        const updated = [...recargos];
+                        updated[i].surchargeTypeId = e.target.value;
+                        updated[i].descripcion = type?.nombre || '';
+                        updated[i].monto = type ? Number(type.montoDefault) : 0;
+                        setRecargos(updated);
+                      }}
+                    >
+                      <option value="">Seleccionar...</option>
+                      {(surchargeTypes || []).map((st: any) => (
+                        <option key={st.id} value={st.id}>{st.nombre} — {formatCurrency(Number(st.montoDefault))}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="w-20 space-y-1">
+                    <label className="text-xs text-muted-foreground">Cant.</label>
+                    <Input
+                      type="number" min={1}
+                      value={r.cantidad}
+                      onChange={(e) => {
+                        const updated = [...recargos];
+                        updated[i].cantidad = Number(e.target.value);
+                        setRecargos(updated);
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Monto</label>
+                    <Input
+                      type="number" step="0.01" min={0}
+                      value={r.monto}
+                      onChange={(e) => {
+                        const updated = [...recargos];
+                        updated[i].monto = Number(e.target.value);
+                        setRecargos(updated);
+                      }}
+                    />
+                  </div>
+                  <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => setRecargos(recargos.filter((_, j) => j !== i))}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {(surchargeTypes || []).length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const first = surchargeTypes[0];
+                    setRecargos([...recargos, { surchargeTypeId: first.id, descripcion: first.nombre, monto: Number(first.montoDefault), cantidad: 1 }]);
+                  }}
+                >
+                  <Plus className="mr-1 h-3 w-3" /> Agregar recargo
+                </Button>
+              )}
             </div>
 
             <div className="flex gap-3">

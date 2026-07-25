@@ -139,6 +139,7 @@ export function ReservationsListPage() {
           noches: 0, precioPorNoche: 0, totalHabitacion: 0,
           consumos: [], totalConsumos: 0,
           pedidos: [], totalPedidos: 0,
+          surcharges: [], totalRecargos: 0,
           payments: [], totalPagado: 0,
           totalEstancia: 0, saldoPendiente: 0,
         },

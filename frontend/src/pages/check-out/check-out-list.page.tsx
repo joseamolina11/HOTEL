@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { LogOut, AlertTriangle, Loader2, X, Printer, FileText, ExternalLink } from 'lucide-react';
+import { LogOut, AlertTriangle, Loader2, X, Printer, FileText, ExternalLink, Zap } from 'lucide-react';
 import { toastSuccess } from '@/lib/notifications';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { useSearchParams } from 'react-router-dom';
@@ -339,6 +339,22 @@ function StaySummaryContent({
                     <span>{formatCurrency(item.subtotal)}</span>
                   </div>
                 ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {s.surcharges?.length > 0 && (
+          <div>
+            <div className="border-t border-b px-4 py-2 text-xs font-medium text-violet-700 bg-violet-50 flex items-center gap-1">
+              <Zap className="h-3 w-3" /> Recargos ({s.surcharges.length})
+            </div>
+            {s.surcharges.map((sc: any) => (
+              <div key={sc.id} className="flex justify-between px-4 py-2 text-sm">
+                <span className="text-muted-foreground">
+                  {sc.descripcion} x{sc.cantidad}
+                </span>
+                <span>{formatCurrency(sc.subtotal)}</span>
               </div>
             ))}
           </div>

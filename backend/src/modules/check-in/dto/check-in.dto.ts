@@ -75,6 +75,76 @@ export class CheckInDto {
   @Type(() => CheckInPaymentDto)
   pagos?: CheckInPaymentDto[];
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  direccion?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ciudad?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  pais?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  oficio?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  empresa?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  telefonoContacto?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  emailContacto?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  transporteLlegada?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  transporteSalida?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reservacionOrigen?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  procedencia?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  destino?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  motivoViaje?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  numeroPlaca?: string;
+
   @ApiPropertyOptional({ example: 150.00 })
   @IsOptional()
   @IsNumber()
