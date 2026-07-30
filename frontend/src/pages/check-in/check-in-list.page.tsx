@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reservationsApi } from '@/api/reservations.api';
 import { guestsApi } from '@/api/guests.api';
@@ -16,6 +16,7 @@ import { toastSuccess } from '@/lib/notifications';
 import { renderContract, generateDefaultContract, printContract } from '@/lib/print-contract';
 import { RegistroHoteleroFields } from '@/components/forms/registro-hotelero-fields';
 import { surchargeTypesApi } from '@/api/surcharge-types.api';
+import { surchargesApi } from '@/api/surcharges.api';
 
 export function CheckInListPage() {
   const qc = useQueryClient();
@@ -130,12 +131,32 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   const [registroData, setRegistroData] = useState<Record<string, string>>({});
 
   const [descuento, setDescuento] = useState(0);
-  const [recargos, setRecargos] = useState<{ surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
+  const [recargos, setRecargos] = useState<{ id?: string; surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
 
   const { data: surchargeTypes } = useQuery({
     queryKey: ['surcharge-types', 'active'],
     queryFn: () => surchargeTypesApi.findActive(),
   });
+
+  const { data: existingSurcharges } = useQuery({
+    queryKey: ['surcharges', 'reservation', reservation?.id],
+    queryFn: () => surchargesApi.findByReservation(reservation.id),
+    enabled: open && !!reservation?.id,
+  });
+
+  useEffect(() => {
+    if (open && existingSurcharges?.length) {
+      setRecargos(existingSurcharges.map((s: any) => ({
+        id: s.id,
+        surchargeTypeId: s.surchargeTypeId || '',
+        descripcion: s.descripcion,
+        monto: Number(s.monto),
+        cantidad: s.cantidad,
+      })));
+    } else if (open) {
+      setRecargos([]);
+    }
+  }, [open, existingSurcharges]);
 
   const updateRegistro = (field: string, value: string) => {
     setRegistroData((prev) => ({ ...prev, [field]: value }));
@@ -287,6 +308,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
     const recargosValidos = recargos.filter((r) => r.monto > 0 && r.descripcion);
     if (recargosValidos.length > 0) {
       dto.recargos = recargosValidos.map((r) => ({
+        ...(r.id ? { id: r.id } : {}),
         surchargeTypeId: r.surchargeTypeId || undefined,
         descripcion: r.descripcion,
         monto: r.monto,

@@ -98,6 +98,7 @@ export class CheckOutService {
 
     const payments = await this.paymentRepository.find({
       where: { reservationId },
+      relations: ['metodoPago'],
       order: { createdAt: 'DESC' },
     });
 
@@ -115,16 +116,13 @@ export class CheckOutService {
     const totalHabitacion = noches * precioNoche;
 
     const surcharges = await this.surchargesService.findByReservation(reservationId);
-    const totalRecargos = surcharges
-      .filter((s) => s.estado === 'pendiente')
-      .reduce((sum, s) => sum + Number(s.subtotal), 0);
-
-    const totalEstancia = totalHabitacion + totalConsumos + totalPedidos + totalRecargos;
-    const saldoPendiente = totalEstancia - totalPagado;
-
-    const hotelConfig = await this.hotelConfigRepository.findOne({ where: {} });
+    const totalRecargos = surcharges.reduce((sum, s) => sum + Number(s.subtotal), 0);
 
     const descuento = Number(reservation.descuento || 0);
+    const totalEstancia = totalHabitacion + totalConsumos + totalPedidos + totalRecargos;
+    const saldoPendiente = Math.max(0, totalEstancia - totalPagado - descuento);
+
+    const hotelConfig = await this.hotelConfigRepository.findOne({ where: {} });
 
     return {
       reservation,
@@ -139,9 +137,17 @@ export class CheckOutService {
         totalPedidos,
         surcharges,
         totalRecargos,
+        payments: payments.map((p) => ({
+          id: p.id,
+          monto: p.monto,
+          metodoPago: p.metodoPago ? { id: p.metodoPago.id, nombre: p.metodoPago.nombre } : null,
+          comprobante: p.comprobante,
+          createdAt: p.createdAt,
+        })),
+        totalPagado,
         descuento,
         totalEstancia,
-        saldoPendiente: saldoPendiente - descuento,
+        saldoPendiente,
       },
     };
   }
@@ -260,7 +266,7 @@ export class CheckOutService {
       }
 
       const surcharges = await this.surchargesService.findByReservation(reservation.id);
-      for (const s of surcharges.filter((x) => x.estado === 'pendiente')) {
+      for (const s of surcharges.filter((x) => !x.estado || x.estado === 'pendiente')) {
         itemsData.push({
           concepto: s.descripcion,
           cantidad: s.cantidad,

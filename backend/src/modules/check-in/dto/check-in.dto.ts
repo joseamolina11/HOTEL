@@ -31,6 +31,11 @@ class CompanionRegisterDto {
 }
 
 class CheckInSurchargeDto {
+  @ApiPropertyOptional({ example: 'uuid-existing-surcharge' })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @ApiPropertyOptional({ example: 'uuid-surcharge-type' })
   @IsOptional()
   @IsString()

@@ -32,8 +32,8 @@ export const reservationsApi = {
     return data.data;
   },
 
-  cancel: async (id: string, motivo?: string): Promise<Reservation> => {
-    const { data } = await apiClient.put(`/reservations/${id}/cancel`, { motivo });
+  cancel: async (id: string, dto?: { motivo?: string; reembolsoMonto?: number; reembolsoMetodoPagoId?: string }): Promise<Reservation> => {
+    const { data } = await apiClient.put(`/reservations/${id}/cancel`, dto || {});
     return data.data;
   },
 

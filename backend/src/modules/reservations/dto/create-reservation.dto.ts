@@ -188,6 +188,17 @@ export class CancelReservationDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+
+  @ApiPropertyOptional({ example: 50000 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  reembolsoMonto?: number;
+
+  @ApiPropertyOptional({ example: 'uuid-metodo-pago' })
+  @IsOptional()
+  @IsString()
+  reembolsoMetodoPagoId?: string;
 }
 
 export class ReservationFilterDto {

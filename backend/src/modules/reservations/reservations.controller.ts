@@ -66,8 +66,8 @@ export class ReservationsController {
   @Put(':id/cancel')
   @Permissions('reservations:annul')
   @ApiOperation({ summary: 'Cancelar reserva' })
-  async cancel(@Param('id') id: string, @Body() cancelDto: CancelReservationDto) {
-    return this.reservationsService.cancel(id, cancelDto);
+  async cancel(@Param('id') id: string, @Body() cancelDto: CancelReservationDto, @CurrentUser('sub') userId: string) {
+    return this.reservationsService.cancel(id, cancelDto, userId);
   }
 
   @Put(':id/confirm')

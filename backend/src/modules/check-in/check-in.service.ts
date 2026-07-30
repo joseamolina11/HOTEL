@@ -155,24 +155,31 @@ export class CheckInService {
     });
     await this.roomRepository.update(reservation.roomId, { estado: 'ocupada' });
 
-    // Create surcharges at check-in if provided
+    // Create / update surcharges at check-in if provided
     const checkInSurcharges: { descripcion: string; monto: number; cantidad: number }[] = [];
     if (checkInDto.recargos?.length) {
       for (const r of checkInDto.recargos) {
         const cantidad = r.cantidad || 1;
-        const surcharge = this.surchargeRepository.create({
-          reservationId: reservation.id,
-          surchargeTypeId: r.surchargeTypeId || undefined,
-          descripcion: r.descripcion,
-          monto: r.monto,
-          cantidad,
-          subtotal: r.monto * cantidad,
-          fecha: new Date(),
-          userId,
-          estado: 'facturado',
-        });
-        const saved = await this.surchargeRepository.save(surcharge);
-        checkInSurcharges.push({ descripcion: saved.descripcion, monto: saved.monto, cantidad: saved.cantidad });
+        if (r.id) {
+          // Existing surcharge from reservation: mark as facturado
+          await this.surchargeRepository.update(r.id, { estado: 'facturado' });
+          checkInSurcharges.push({ descripcion: r.descripcion, monto: r.monto, cantidad });
+        } else {
+          // New surcharge added at check-in: create with facturado
+          const surcharge = this.surchargeRepository.create({
+            reservationId: reservation.id,
+            surchargeTypeId: r.surchargeTypeId || undefined,
+            descripcion: r.descripcion,
+            monto: r.monto,
+            cantidad,
+            subtotal: r.monto * cantidad,
+            fecha: new Date(),
+            userId,
+            estado: 'facturado',
+          });
+          const saved = await this.surchargeRepository.save(surcharge);
+          checkInSurcharges.push({ descripcion: saved.descripcion, monto: saved.monto, cantidad: saved.cantidad });
+        }
       }
     }
 

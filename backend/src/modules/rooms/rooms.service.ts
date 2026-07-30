@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, Between } from 'typeorm';
+import { Repository, FindOptionsWhere, Between, In } from 'typeorm';
 import { Room } from './entities/room.entity';
 import { RoomType } from '../room-types/entities/room-type.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
@@ -17,7 +17,7 @@ export class RoomsService {
     private readonly reservationRepository: Repository<Reservation>,
   ) {}
 
-  async findAll(filters?: { estado?: string; roomTypeId?: string }): Promise<Room[]> {
+  async findAll(filters?: { estado?: string; roomTypeId?: string }) {
     const where: FindOptionsWhere<Room> = {};
     if (filters?.roomTypeId) where.roomTypeId = filters.roomTypeId;
 
@@ -30,22 +30,76 @@ export class RoomsService {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     const manana = new Date(hoy.getTime() + 24 * 60 * 60 * 1000);
+    const pasadoManana = new Date(hoy.getTime() + 48 * 60 * 60 * 1000);
 
-    const hoyReservations = await this.reservationRepository.find({
-      where: {
-        estado: 'confirmada',
-        fechaEntrada: Between(hoy, manana),
-      },
-      select: ['roomId'],
-    });
+    const [hoyReservations, mananaReservations] = await Promise.all([
+      this.reservationRepository.find({
+        where: { estado: 'confirmada', fechaEntrada: Between(hoy, manana) },
+        select: ['roomId'],
+      }),
+      this.reservationRepository.find({
+        where: { estado: 'confirmada', fechaEntrada: Between(manana, pasadoManana) },
+        select: ['roomId'],
+      }),
+    ]);
 
     const reservadasHoy = new Set(hoyReservations.map((r) => r.roomId));
+    const reservadasManana = new Set(mananaReservations.map((r) => r.roomId));
+
+    const reservasActivas = await this.reservationRepository.find({
+      where: {
+        roomId: In(rooms.map((r) => r.id)),
+        estado: 'checkin',
+      },
+      relations: [
+        'guest',
+        'payments',
+        'consumptions',
+        'orders',
+        'surcharges',
+        'room',
+        'room.roomType',
+      ],
+    });
+
+    const activeByRoom = new Map(reservasActivas.map((r) => [r.roomId, r]));
 
     const computed = rooms.map((room) => {
+      let computedEstado = room.estado;
       if (room.estado === 'disponible' && reservadasHoy.has(room.id)) {
-        return { ...room, estado: 'reservada' as const };
+        computedEstado = 'reservada';
       }
-      return room;
+
+      const result: any = { ...room, estado: computedEstado };
+
+      if (reservadasManana.has(room.id)) {
+        result.tieneReservaManana = true;
+      }
+
+      const active = activeByRoom.get(room.id);
+      if (active) {
+        const nombres = active.guest?.nombres || '';
+        const apellidos = active.guest?.apellidos || '';
+        result.huesped = `${nombres} ${apellidos}`.trim() || 'Sin huésped';
+
+        const totalPagado = active.payments?.reduce((sum, p) => sum + Number(p.monto), 0) || 0;
+        result.totalPagado = totalPagado;
+
+        const noches = Math.ceil(
+          (new Date(active.fechaSalida).getTime() - new Date(active.fechaEntrada).getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
+        const precioNoche = Number(active.room?.roomType?.precioBase || 0);
+        const totalHabitacion = noches * precioNoche;
+        const totalConsumos = active.consumptions?.reduce((sum, c) => sum + Number(c.subtotal), 0) || 0;
+        const totalPedidos = active.orders?.reduce((sum, o) => sum + Number(o.total), 0) || 0;
+        const totalRecargos = active.surcharges?.reduce((sum, s) => sum + Number(s.subtotal), 0) || 0;
+        const descuento = Number(active.descuento || 0);
+        const totalEstancia = totalHabitacion + totalConsumos + totalPedidos + totalRecargos;
+        result.saldoPendiente = Math.max(0, totalEstancia - totalPagado - descuento);
+      }
+
+      return result;
     });
 
     if (filters?.estado) {

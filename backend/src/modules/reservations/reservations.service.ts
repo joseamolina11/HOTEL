@@ -369,7 +369,7 @@ export class ReservationsService {
     return this.reservationRepository.save(reservation);
   }
 
-  async cancel(id: string, cancelDto?: CancelReservationDto): Promise<Reservation> {
+  async cancel(id: string, cancelDto?: CancelReservationDto, userId?: string): Promise<Reservation> {
     const reservation = await this.findOne(id);
 
     if (['checkin', 'checkout', 'cancelada'].includes(reservation.estado)) {
@@ -384,6 +384,36 @@ export class ReservationsService {
     const saved = await this.reservationRepository.save(reservation);
 
     await this.roomRepository.update(reservation.roomId, { estado: 'disponible' });
+
+    if (cancelDto?.reembolsoMonto && cancelDto?.reembolsoMonto > 0 && cancelDto?.reembolsoMetodoPagoId) {
+      try {
+        const pm = await this.paymentMethodsService.findOne(cancelDto.reembolsoMetodoPagoId);
+        const payment = this.paymentRepository.create({
+          reservationId: reservation.id,
+          userId: userId,
+          monto: cancelDto.reembolsoMonto,
+          metodoPagoId: cancelDto.reembolsoMetodoPagoId,
+          comprobante: '',
+          observaciones: `Reembolso por cancelación ${reservation.codigo} - ${pm.nombre}`,
+          fecha: new Date(),
+        } as any);
+        const savedPayment = await this.paymentRepository.save(payment as any);
+
+        if (pm.financialAccountId) {
+          await this.financialMovementsService.create({
+            accountId: pm.financialAccountId,
+            tipo: 'EGRESO',
+            monto: cancelDto.reembolsoMonto,
+            concepto: `Reembolso cancelación ${reservation.codigo} - ${pm.nombre}`,
+            referenciaTipo: 'payment',
+            referenciaId: savedPayment.id,
+            cashRegisterId: undefined,
+          }, userId);
+        }
+      } catch (e: any) {
+        // skip if refund fails, reservation is already cancelled
+      }
+    }
 
     return saved;
   }

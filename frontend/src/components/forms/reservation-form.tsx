@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -5,12 +6,14 @@ import { useQuery } from '@tanstack/react-query';
 import { roomsApi } from '@/api/rooms.api';
 import { roomTypesApi } from '@/api/room-types.api';
 import { paymentMethodsApi } from '@/api/payment-methods.api';
+import { surchargeTypesApi } from '@/api/surcharge-types.api';
+import { surchargesApi } from '@/api/surcharges.api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { useCreateReservation } from '@/hooks/useReservations';
-import { Plus, X, BedDouble, DollarSign } from 'lucide-react';
+import { Plus, X, BedDouble, DollarSign, Zap } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { GuestSearch } from '@/components/forms/guest-search';
 
@@ -46,6 +49,13 @@ interface ReservationFormProps {
 
 export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: ReservationFormProps) {
   const createReservation = useCreateReservation();
+
+  const [recargos, setRecargos] = useState<{ surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
+
+  const { data: surchargeTypes } = useQuery({
+    queryKey: ['surcharge-types', 'active'],
+    queryFn: () => surchargeTypesApi.findActive(),
+  });
 
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<ReservationFormData>({
     resolver: zodResolver(reservationSchema),
@@ -84,13 +94,30 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
     : null;
 
   const onSubmit = async (data: ReservationFormData) => {
+    if (data.pagoMonto && data.pagoMonto > 0 && !data.pagoMetodoPagoId) {
+      alert('Debe seleccionar un método de pago para el anticipo');
+      return;
+    }
     const payload: any = { ...data, estado: 'confirmada' };
     if (data.pagoMonto && data.pagoMonto > 0) {
       payload.pagoMonto = data.pagoMonto;
       payload.pagoMetodoPagoId = data.pagoMetodoPagoId || undefined;
       payload.pagoReferencia = data.pagoReferencia || undefined;
     }
-    await createReservation.mutateAsync(payload);
+    const newReservation = await createReservation.mutateAsync(payload);
+    const newReservationId = newReservation.id;
+
+    const recargosValidos = recargos.filter((r) => r.monto > 0 && r.descripcion);
+    for (const r of recargosValidos) {
+      await surchargesApi.create({
+        reservationId: newReservationId,
+        surchargeTypeId: r.surchargeTypeId || undefined,
+        descripcion: r.descripcion,
+        monto: r.monto,
+        cantidad: r.cantidad,
+      });
+    }
+
     onSuccess();
   };
 
@@ -203,6 +230,79 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="rounded-lg border border-violet-200 p-3 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-violet-700">
+          <Zap className="h-4 w-4" /> Recargos
+        </div>
+        {(surchargeTypes || []).length === 0 && recargos.length === 0 && (
+          <p className="text-xs text-muted-foreground">No hay tipos de recargo configurados</p>
+        )}
+        {recargos.map((r, i) => (
+          <div key={i} className="flex items-end gap-2 border-b pb-2">
+            <div className="flex-1 space-y-1">
+              <label className="text-xs text-muted-foreground">Tipo</label>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                value={r.surchargeTypeId}
+                onChange={(e) => {
+                  const type = (surchargeTypes || []).find((t: any) => t.id === e.target.value);
+                  const updated = [...recargos];
+                  updated[i].surchargeTypeId = e.target.value;
+                  updated[i].descripcion = type?.nombre || '';
+                  updated[i].monto = type ? Number(type.montoDefault) : 0;
+                  setRecargos(updated);
+                }}
+              >
+                <option value="">Seleccionar...</option>
+                {(surchargeTypes || []).map((st: any) => (
+                  <option key={st.id} value={st.id}>{st.nombre} — {formatCurrency(Number(st.montoDefault))}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-20 space-y-1">
+              <label className="text-xs text-muted-foreground">Cant.</label>
+              <Input
+                type="number" min={1}
+                value={r.cantidad}
+                onChange={(e) => {
+                  const updated = [...recargos];
+                  updated[i].cantidad = Number(e.target.value);
+                  setRecargos(updated);
+                }}
+              />
+            </div>
+            <div className="flex-1 space-y-1">
+              <label className="text-xs text-muted-foreground">Monto</label>
+              <Input
+                type="number" step="0.01" min={0}
+                value={r.monto}
+                onChange={(e) => {
+                  const updated = [...recargos];
+                  updated[i].monto = Number(e.target.value);
+                  setRecargos(updated);
+                }}
+              />
+            </div>
+            <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => setRecargos(recargos.filter((_, j) => j !== i))}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+        {(surchargeTypes || []).length > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const first = surchargeTypes[0];
+              setRecargos([...recargos, { surchargeTypeId: first.id, descripcion: first.nombre, monto: Number(first.montoDefault), cantidad: 1 }]);
+            }}
+          >
+            <Plus className="mr-1 h-3 w-3" /> Agregar recargo
+          </Button>
+        )}
       </div>
 
       <Card>

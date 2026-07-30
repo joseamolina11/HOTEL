@@ -4,16 +4,17 @@ import { reservationsApi } from '@/api/reservations.api';
 import { checkoutApi } from '@/api/checkout.api';
 import { filesApi } from '@/api/files.api';
 import { reciboCajaApi } from '@/api/recibo-caja.api';
+import { paymentMethodsApi } from '@/api/payment-methods.api';
 import apiClient from '@/api/client';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { ReservationForm } from '@/components/forms/reservation-form';
 import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
 import { ReservationDetailDialog } from '@/components/dialogs/reservation-detail-dialog';
-import { Search, Plus, Pencil, Eye, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload, Receipt } from 'lucide-react';
+import { Search, Plus, Pencil, Eye, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload, Receipt, DollarSign } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { useUpdateReservation, useCancelReservation, useConfirmReservation } from '@/hooks/useReservations';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
@@ -79,6 +80,13 @@ export function ReservationsListPage() {
   const cancelMut = useCancelReservation();
   const confirmMut = useConfirmReservation();
 
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; motivo: string; reembolsoMonto: number; reembolsoMetodoPagoId: string }>({ open: false, motivo: '', reembolsoMonto: 0, reembolsoMetodoPagoId: '' });
+
+  const { data: paymentMethods } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: () => paymentMethodsApi.findAllActive(),
+  });
+
   const { register, handleSubmit, reset } = useForm({
     defaultValues: { fechaEntrada: '', fechaSalida: '', observaciones: '' },
   });
@@ -106,13 +114,23 @@ export function ReservationsListPage() {
     setDetailRes(null);
   };
 
-  const handleCancel = async () => {
+  const handleCancel = () => {
+    if (!detailRes) return;
+    setCancelDialog({ open: true, motivo: '', reembolsoMonto: 0, reembolsoMetodoPagoId: '' });
+  };
+
+  const handleCancelConfirm = async () => {
     if (!detailRes) return;
     const id = detailRes.id;
     setDetailRes(null);
-    const result = await confirmAction('¿Cancelar reserva?', `Se cancelará la reserva ${detailRes.codigo}. Esta acción no se puede deshacer.`);
-    if (!result.isConfirmed) { setDetailRes(detailRes); return; }
-    await cancelMut.mutateAsync({ id });
+    setCancelDialog((prev) => ({ ...prev, open: false }));
+    const dto: any = {};
+    if (cancelDialog.motivo) dto.motivo = cancelDialog.motivo;
+    if (cancelDialog.reembolsoMonto > 0 && cancelDialog.reembolsoMetodoPagoId) {
+      dto.reembolsoMonto = cancelDialog.reembolsoMonto;
+      dto.reembolsoMetodoPagoId = cancelDialog.reembolsoMetodoPagoId;
+    }
+    await cancelMut.mutateAsync({ id, ...dto });
   };
 
   const handleConfirm = async () => {
@@ -399,6 +417,55 @@ export function ReservationsListPage() {
               </div>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={cancelDialog.open} onOpenChange={(v) => !v && setCancelDialog((p) => ({ ...p, open: false }))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <XCircle className="h-5 w-5" /> Cancelar Reserva {detailRes?.codigo}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer.</p>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Motivo (opcional)</label>
+              <Input placeholder="Ej. Cancelación por solicitud del huésped" value={cancelDialog.motivo} onChange={(e) => setCancelDialog((p) => ({ ...p, motivo: e.target.value }))} />
+            </div>
+            <div className="rounded-lg border border-amber-200 p-3 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                <DollarSign className="h-4 w-4" /> Reembolso (opcional)
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs">Monto a devolver</label>
+                  <Input type="number" min={0} step="0.01" placeholder="0" value={cancelDialog.reembolsoMonto || ''} onChange={(e) => setCancelDialog((p) => ({ ...p, reembolsoMonto: Number(e.target.value) }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs">Método de pago</label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    value={cancelDialog.reembolsoMetodoPagoId}
+                    onChange={(e) => setCancelDialog((p) => ({ ...p, reembolsoMetodoPagoId: e.target.value }))}
+                  >
+                    <option value="">Seleccionar...</option>
+                    {(paymentMethods || []).map((pm: any) => (
+                      <option key={pm.id} value={pm.id}>{pm.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <DialogClose asChild>
+                <Button variant="outline" className="flex-1">Volver</Button>
+              </DialogClose>
+              <Button variant="destructive" className="flex-1" onClick={handleCancelConfirm} disabled={cancelMut.isPending}>
+                {cancelMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                Confirmar Cancelación
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       <ReciboCajaDetailDialog reciboId={reciboDetailId} open={!!reciboDetailId} onClose={() => setReciboDetailId(null)} />

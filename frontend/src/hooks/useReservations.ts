@@ -48,8 +48,8 @@ export function useUpdateReservation() {
 export function useCancelReservation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, motivo }: { id: string; motivo?: string }) =>
-      reservationsApi.cancel(id, motivo),
+    mutationFn: (dto: { id: string; motivo?: string; reembolsoMonto?: number; reembolsoMetodoPagoId?: string }) =>
+      reservationsApi.cancel(dto.id, { motivo: dto.motivo, reembolsoMonto: dto.reembolsoMonto, reembolsoMetodoPagoId: dto.reembolsoMetodoPagoId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
       queryClient.invalidateQueries({ queryKey: ['rooms'] });

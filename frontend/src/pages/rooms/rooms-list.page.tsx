@@ -10,13 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { RoomForm } from '@/components/forms/room-form';
 import { ReservationForm } from '@/components/forms/reservation-form';
 import { CheckInDialog } from '@/components/forms/check-in-dialog';
-import { Search, Plus, LogIn, LogOut, CalendarCheck, Wrench, Sparkles, X, ShoppingCart } from 'lucide-react';
+import { Search, Plus, LogIn, LogOut, CalendarCheck, Wrench, Sparkles, X, ShoppingCart, CalendarClock, User } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
 const STATUS_ACTIONS: Record<string, { label: string; icon: any; status: string; roles: string[] }[]> = {
   disponible: [
     { label: 'Check-In', icon: LogIn, status: 'ocupada', roles: ['disponible'] },
-    { label: 'Reservar', icon: CalendarCheck, status: 'reservada', roles: ['disponible'] },
+    // { label: 'Reservar', icon: CalendarCheck, status: 'reservada', roles: ['disponible'] },
     { label: 'Mantenimiento', icon: Wrench, status: 'mantenimiento', roles: ['disponible', 'reservada', 'ocupada', 'limpieza'] },
     { label: 'Limpieza', icon: Sparkles, status: 'limpieza', roles: ['disponible', 'reservada', 'ocupada', 'mantenimiento'] },
   ],
@@ -139,21 +139,47 @@ export function RoomsListPage() {
                 className="group cursor-pointer transition-all hover:shadow-md"
                 onClick={() => setMenuRoom(menuRoom?.id === room.id ? null : room)}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-lg font-bold">{room.numero}</p>
-                      <p className="text-sm text-muted-foreground">{room.nombre}</p>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-lg font-bold">{room.numero}</p>
+                        <p className="text-sm text-muted-foreground">{room.nombre}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {room.tieneReservaManana && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+                            <CalendarClock className="h-3 w-3" />
+                            Mañana
+                          </span>
+                        )}
+                        <StatusBadge status={room.estado} />
+                      </div>
                     </div>
-                    <StatusBadge status={room.estado} />
-                  </div>
-                  <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>Piso {room.piso}</span>
-                    {room.roomType && (
-                      <><span>•</span><span>{room.roomType.nombre}</span><span>•</span><span>{formatCurrency(room.roomType.precioBase)}</span></>
+                    <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>Piso {room.piso}</span>
+                      {room.roomType && (
+                        <><span>•</span><span>{room.roomType.nombre}</span><span>•</span><span>{formatCurrency(room.roomType.precioBase)}</span></>
+                      )}
+                    </div>
+                    {room.huesped && (
+                      <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-xs dark:border-blue-900 dark:bg-blue-950/30">
+                        <div className="flex items-center gap-1.5 font-medium text-blue-700 dark:text-blue-300">
+                          <User className="h-3.5 w-3.5" />
+                          {room.huesped}
+                        </div>
+                        <div className="mt-2 flex justify-between text-muted-foreground">
+                          <span>Pagado:</span>
+                          <span className="font-medium text-foreground">{formatCurrency(room.totalPagado)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Debe:</span>
+                          <span className={`font-medium ${room.saldoPendiente > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                            {formatCurrency(room.saldoPendiente)}
+                          </span>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </CardContent>
+                  </CardContent>
               </Card>
 
               {menuRoom?.id === room.id && (

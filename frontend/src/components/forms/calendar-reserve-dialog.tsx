@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { reservationsApi } from '@/api/reservations.api';
 import { paymentMethodsApi } from '@/api/payment-methods.api';
+import { surchargeTypesApi } from '@/api/surcharge-types.api';
+import { surchargesApi } from '@/api/surcharges.api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { BedDouble, Loader2, CalendarDays, DollarSign } from 'lucide-react';
+import { BedDouble, Loader2, CalendarDays, DollarSign, Zap, Plus, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
 import { GuestSearch } from '@/components/forms/guest-search';
@@ -39,6 +41,26 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
   const [pagoMetodoPagoId, setPagoMetodoPagoId] = useState('');
   const [pagoReferencia, setPagoReferencia] = useState('');
   const hoy = new Date().toISOString().slice(0, 10);
+  const [recargos, setRecargos] = useState<{ surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
+
+  const estimatedTotal = useMemo(() => {
+    if (!room?.roomType?.precioBase || !fechaEntrada || !fechaSalida) return 0;
+    const noches = Math.ceil(
+      (new Date(fechaSalida).getTime() - new Date(fechaEntrada).getTime()) / (1000 * 60 * 60 * 24),
+    );
+    return noches * Number(room.roomType.precioBase);
+  }, [room, fechaEntrada, fechaSalida]);
+
+  const totalRecargos = useMemo(() => {
+    return recargos.reduce((sum, r) => sum + (r.monto || 0) * (r.cantidad || 1), 0);
+  }, [recargos]);
+
+  const totalToPay = useMemo(() => estimatedTotal + totalRecargos, [estimatedTotal, totalRecargos]);
+
+  const { data: surchargeTypes } = useQuery({
+    queryKey: ['surcharge-types', 'active'],
+    queryFn: () => surchargeTypesApi.findActive(),
+  });
 
   const { data: paymentMethods } = useQuery({
     queryKey: ['payment-methods-active'],
@@ -54,6 +76,7 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
       setPagoMonto(0);
       setPagoMetodoPagoId('');
       setPagoReferencia('');
+      setRecargos([]);
     }
   }, [open, date]);
 
@@ -70,6 +93,10 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
 
   const handleSubmit = async () => {
     if (!guestId || !fechaEntrada || !fechaSalida) return;
+    if (pagoMonto && pagoMonto > 0 && !pagoMetodoPagoId) {
+      alert('Debe seleccionar un método de pago para el anticipo');
+      return;
+    }
     const payload: any = {
       roomId: room.id,
       guestId,
@@ -83,14 +110,25 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
       payload.pagoMetodoPagoId = pagoMetodoPagoId || undefined;
       payload.pagoReferencia = pagoReferencia || undefined;
     }
-    await createReservation.mutateAsync(payload);
+    const newReservation = await createReservation.mutateAsync(payload);
+
+    const recargosValidos = recargos.filter((r) => r.monto > 0 && r.descripcion);
+    for (const r of recargosValidos) {
+      await surchargesApi.create({
+        reservationId: newReservation.id,
+        surchargeTypeId: r.surchargeTypeId || undefined,
+        descripcion: r.descripcion,
+        monto: r.monto,
+        cantidad: r.cantidad,
+      });
+    }
   };
 
   if (!room) return null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Reservar desde Calendario</DialogTitle>
         </DialogHeader>
@@ -135,28 +173,123 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
             <GuestSearch key={String(open)} onSelect={(id) => setGuestId(id)} />
           </div>
 
-          <Card>
-            <CardContent className="p-3 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <DollarSign className="h-4 w-4" />
-                Anticipo (opcional)
+          <div className="rounded-lg border border-violet-200 p-3 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-violet-700">
+              <Zap className="h-4 w-4" /> Recargos
+            </div>
+            {(surchargeTypes || []).length === 0 && recargos.length === 0 && (
+              <p className="text-xs text-muted-foreground">No hay tipos de recargo configurados</p>
+            )}
+            {recargos.map((r, i) => (
+              <div key={i} className="flex items-end gap-2 border-b pb-2">
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs text-muted-foreground">Tipo</label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    value={r.surchargeTypeId}
+                    onChange={(e) => {
+                      const type = (surchargeTypes || []).find((t: any) => t.id === e.target.value);
+                      const updated = [...recargos];
+                      updated[i].surchargeTypeId = e.target.value;
+                      updated[i].descripcion = type?.nombre || '';
+                      updated[i].monto = type ? Number(type.montoDefault) : 0;
+                      setRecargos(updated);
+                    }}
+                  >
+                    <option value="">Seleccionar...</option>
+                    {(surchargeTypes || []).map((st: any) => (
+                      <option key={st.id} value={st.id}>{st.nombre} — {formatCurrency(Number(st.montoDefault))}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-20 space-y-1">
+                  <label className="text-xs text-muted-foreground">Cant.</label>
+                  <Input
+                    type="number" min={1}
+                    value={r.cantidad}
+                    onChange={(e) => {
+                      const updated = [...recargos];
+                      updated[i].cantidad = Number(e.target.value);
+                      setRecargos(updated);
+                    }}
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs text-muted-foreground">Monto</label>
+                  <Input
+                    type="number" step="0.01" min={0}
+                    value={r.monto}
+                    onChange={(e) => {
+                      const updated = [...recargos];
+                      updated[i].monto = Number(e.target.value);
+                      setRecargos(updated);
+                    }}
+                  />
+                </div>
+                <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => setRecargos(recargos.filter((_, j) => j !== i))}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs">Monto</label>
+            ))}
+            {(surchargeTypes || []).length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const first = surchargeTypes[0];
+                  setRecargos([...recargos, { surchargeTypeId: first.id, descripcion: first.nombre, monto: Number(first.montoDefault), cantidad: 1 }]);
+                }}
+              >
+                <Plus className="mr-1 h-3 w-3" /> Agregar recargo
+              </Button>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-amber-200 p-3 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+              <DollarSign className="h-4 w-4" /> Pago
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded bg-muted p-2 text-center">
+                <p className="text-xs text-muted-foreground">Total alojamiento</p>
+                <p className="font-bold">{formatCurrency(estimatedTotal)}</p>
+              </div>
+              <div className="rounded bg-violet-50 p-2 text-center">
+                <p className="text-xs text-violet-700">Recargos</p>
+                <p className="font-bold text-violet-700">{formatCurrency(totalRecargos)}</p>
+              </div>
+              <div className="rounded bg-amber-50 p-2 text-center col-span-2">
+                <p className="text-xs text-amber-700">Total a pagar</p>
+                <p className="font-bold text-amber-700">{formatCurrency(totalToPay)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <label className="text-xs">Monto</label>
+                <div className="flex gap-1">
                   <Input type="number" min={0} placeholder="0" value={pagoMonto || ''} onChange={(e) => setPagoMonto(Number(e.target.value))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs">Método de pago</label>
-                  <Select value={pagoMetodoPagoId} placeholder="Seleccionar" options={(paymentMethods || []).map((pm: any) => ({ value: pm.id, label: pm.nombre }))} onChange={(e) => setPagoMetodoPagoId(e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs">Referencia</label>
-                  <Input placeholder="Opcional" value={pagoReferencia} onChange={(e) => setPagoReferencia(e.target.value)} />
+                  <Button type="button" variant="outline" size="sm" className="shrink-0 text-xs" onClick={() => setPagoMonto(totalToPay)}>
+                    Todo
+                  </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              <div className="space-y-1">
+                <label className="text-xs">Método de pago</label>
+                <Select value={pagoMetodoPagoId} placeholder="Seleccionar" options={(paymentMethods || []).map((pm: any) => ({ value: pm.id, label: pm.nombre }))} onChange={(e) => setPagoMetodoPagoId(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs">Referencia</label>
+                <Input placeholder="Opcional" value={pagoReferencia} onChange={(e) => setPagoReferencia(e.target.value)} />
+              </div>
+            </div>
+            {pagoMonto > 0 && pagoMonto < totalToPay && (
+              <p className="text-xs text-amber-600">Abono parcial — quedan {formatCurrency(totalToPay - pagoMonto)} pendientes</p>
+            )}
+            {pagoMonto >= totalToPay && totalToPay > 0 && (
+              <p className="text-xs text-green-600">Pago completo</p>
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
