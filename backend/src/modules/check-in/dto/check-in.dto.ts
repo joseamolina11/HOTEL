@@ -30,6 +30,28 @@ class CompanionRegisterDto {
   email?: string;
 }
 
+class CheckInSurchargeDto {
+  @ApiPropertyOptional({ example: 'uuid-surcharge-type' })
+  @IsOptional()
+  @IsString()
+  surchargeTypeId?: string;
+
+  @ApiProperty({ example: 'Persona extra' })
+  @IsString()
+  descripcion: string;
+
+  @ApiProperty({ example: 25000 })
+  @IsNumber()
+  @Min(0)
+  monto: number;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  cantidad?: number;
+}
+
 class CheckInPaymentDto {
   @ApiProperty({ example: 150.00 })
   @IsNumber()
@@ -67,6 +89,13 @@ export class CheckInDto {
   @ValidateNested({ each: true })
   @Type(() => CompanionRegisterDto)
   companions?: CompanionRegisterDto[];
+
+  @ApiPropertyOptional({ type: [CheckInSurchargeDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CheckInSurchargeDto)
+  recargos?: CheckInSurchargeDto[];
 
   @ApiPropertyOptional({ type: [CheckInPaymentDto] })
   @IsOptional()

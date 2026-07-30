@@ -36,6 +36,7 @@ import { FinancialMovementsListPage } from '@/pages/financial-movements/financia
 import { ReciboCajaListPage } from '@/pages/recibo-caja/recibo-caja-list.page';
 import { PermissionsPage } from '@/pages/permissions/permissions.page';
 import { SurchargeTypesPage } from '@/pages/surcharges/surcharge-types.page';
+import { BitacorasListPage } from '@/pages/bitacoras/bitacoras-list.page';
 
 export const router = createBrowserRouter([
   {
@@ -82,6 +83,7 @@ export const router = createBrowserRouter([
       { path: 'financial-movements', element: <FinancialMovementsListPage /> },
       { path: 'recibo-caja', element: <ReciboCajaListPage /> },
       { path: 'surcharge-types', element: <SurchargeTypesPage /> },
+      { path: 'bitacoras', element: <BitacorasListPage /> },
       { path: 'permissions', element: <RoleGuard roles={['admin']}><PermissionsPage /></RoleGuard> },
       { path: 'users', element: <RoleGuard roles={['admin']}><UsersListPage /></RoleGuard> },
       { path: 'housekeeping', element: <HousekeepingPage /> },

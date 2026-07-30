@@ -115,7 +115,9 @@ export class CheckOutService {
     const totalHabitacion = noches * precioNoche;
 
     const surcharges = await this.surchargesService.findByReservation(reservationId);
-    const totalRecargos = surcharges.reduce((sum, s) => sum + Number(s.subtotal), 0);
+    const totalRecargos = surcharges
+      .filter((s) => s.estado === 'pendiente')
+      .reduce((sum, s) => sum + Number(s.subtotal), 0);
 
     const totalEstancia = totalHabitacion + totalConsumos + totalPedidos + totalRecargos;
     const saldoPendiente = totalEstancia - totalPagado;
@@ -258,7 +260,7 @@ export class CheckOutService {
       }
 
       const surcharges = await this.surchargesService.findByReservation(reservation.id);
-      for (const s of surcharges) {
+      for (const s of surcharges.filter((x) => x.estado === 'pendiente')) {
         itemsData.push({
           concepto: s.descripcion,
           cantidad: s.cantidad,

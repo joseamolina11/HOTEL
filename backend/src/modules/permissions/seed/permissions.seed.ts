@@ -94,6 +94,10 @@ export const ALL_PERMISSIONS: PermissionSeed[] = [
   { module: 'amenities', action: 'edit', nombre: 'Editar amenities', moduloNombre: 'Amenidades' },
   { module: 'amenities', action: 'delete', nombre: 'Eliminar amenities', moduloNombre: 'Amenidades' },
 
+  // Bitacoras
+  { module: 'bitacoras', action: 'view', nombre: 'Ver bitácoras', moduloNombre: 'Bitácoras' },
+  { module: 'bitacoras', action: 'create', nombre: 'Crear bitácoras', moduloNombre: 'Bitácoras' },
+
   // Surcharges
   { module: 'surcharges', action: 'view', nombre: 'Ver recargos', moduloNombre: 'Recargos' },
   { module: 'surcharges', action: 'create', nombre: 'Crear recargos', moduloNombre: 'Recargos' },
@@ -205,6 +209,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
 
   reception: [
     'dashboard:view',
+    'bitacoras:view', 'bitacoras:create',
     'reservations:view', 'reservations:create', 'reservations:edit', 'reservations:annul',
     'rooms:view', 'rooms:change-status',
     'room-types:view',

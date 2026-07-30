@@ -9,6 +9,7 @@ import { Room } from '../rooms/entities/room.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { CashRegister } from '../cash-register/entities/cash-register.entity';
 import { HotelConfig } from '../hotel-config/entities/hotel-config.entity';
+import { Surcharge } from '../surcharges/entities/surcharge.entity';
 import { CheckInDto } from './dto/check-in.dto';
 import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
@@ -33,6 +34,8 @@ export class CheckInService {
     private readonly cashRegisterRepository: Repository<CashRegister>,
     @InjectRepository(HotelConfig)
     private readonly hotelConfigRepository: Repository<HotelConfig>,
+    @InjectRepository(Surcharge)
+    private readonly surchargeRepository: Repository<Surcharge>,
     private readonly paymentMethodsService: PaymentMethodsService,
     private readonly reciboCajaService: ReciboCajaService,
     private readonly financialMovementsService: FinancialMovementsService,
@@ -152,15 +155,36 @@ export class CheckInService {
     });
     await this.roomRepository.update(reservation.roomId, { estado: 'ocupada' });
 
+    // Create surcharges at check-in if provided
+    const checkInSurcharges: { descripcion: string; monto: number; cantidad: number }[] = [];
+    if (checkInDto.recargos?.length) {
+      for (const r of checkInDto.recargos) {
+        const cantidad = r.cantidad || 1;
+        const surcharge = this.surchargeRepository.create({
+          reservationId: reservation.id,
+          surchargeTypeId: r.surchargeTypeId || undefined,
+          descripcion: r.descripcion,
+          monto: r.monto,
+          cantidad,
+          subtotal: r.monto * cantidad,
+          fecha: new Date(),
+          userId,
+          estado: 'facturado',
+        });
+        const saved = await this.surchargeRepository.save(surcharge);
+        checkInSurcharges.push({ descripcion: saved.descripcion, monto: saved.monto, cantidad: saved.cantidad });
+      }
+    }
+
     // Process payment at check-in if provided (split payments or single payment)
     if (checkInDto.pagos && checkInDto.pagos.length > 0) {
-      await this.processCheckInPayments(reservation, checkInDto.pagos, userId, descuento);
+      await this.processCheckInPayments(reservation, checkInDto.pagos, userId, descuento, checkInSurcharges);
     } else if (checkInDto.pagoMonto && checkInDto.pagoMonto > 0 && checkInDto.pagoMetodoPagoId) {
       await this.processCheckInPayments(reservation, [{
         monto: checkInDto.pagoMonto,
         metodoPagoId: checkInDto.pagoMetodoPagoId,
         comprobante: checkInDto.pagoReferencia,
-      }], userId, descuento);
+      }], userId, descuento, checkInSurcharges);
     }
 
     return this.checkInRepository.findOne({
@@ -174,6 +198,7 @@ export class CheckInService {
     pagos: { monto: number; metodoPagoId: string; comprobante?: string }[],
     userId: string,
     descuento: number = 0,
+    surcharges: { descripcion: string; monto: number; cantidad: number }[] = [],
   ) {
     const cashRegister = await this.cashRegisterRepository.findOne({
       where: { estado: 'abierta' },
@@ -226,6 +251,19 @@ export class CheckInService {
         subtotal: noches * precioNoche,
         tipo: 'habitacion',
       });
+    }
+
+    if (surcharges.length) {
+      for (const s of surcharges) {
+        const subtotal = s.monto * s.cantidad;
+        itemsData.push({
+          concepto: s.descripcion,
+          cantidad: s.cantidad,
+          precioUnitario: s.monto,
+          subtotal,
+          tipo: 'recargo',
+        });
+      }
     }
 
     const recibo = await this.reciboCajaService.create({

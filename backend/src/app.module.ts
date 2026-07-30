@@ -40,6 +40,7 @@ import { ReciboCajaModule } from './modules/recibo-caja/recibo-caja.module';
 import { AuditTrailModule } from './modules/audit-trail/audit-trail.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { SurchargesModule } from './modules/surcharges/surcharges.module';
+import { BitacorasModule } from './modules/bitacoras/bitacoras.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 import { PermissionsGuard } from './common/guards/permissions.guard';
@@ -83,6 +84,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     AuditTrailModule,
     PermissionsModule,
     SurchargesModule,
+    BitacorasModule,
   ],
   controllers: [AppController],
   providers: [

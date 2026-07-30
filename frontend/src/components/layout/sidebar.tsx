@@ -36,6 +36,7 @@ import {
   ArrowUpDown,
   FileText,
   Zap,
+  ClipboardList,
 } from "lucide-react";
 
 interface GroupItem {
@@ -312,6 +313,13 @@ export function Sidebar() {
           label="Recargos"
           icon={Zap}
           show={hasPerm('surcharges:view')}
+        />
+
+        <NavLinkItem
+          to="/bitacoras"
+          label="Bitácoras"
+          icon={ClipboardList}
+          show={hasPerm('bitacoras:view')}
         />
 
         <NavLinkItem

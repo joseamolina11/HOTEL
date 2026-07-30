@@ -369,16 +369,16 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                     <span>Total estadía</span>
                     <span>{formatCurrency(s?.totalEstancia || 0)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
+                  {/* <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Pagado</span>
                     <span className="text-green-600">{formatCurrency(s?.totalPagado || 0)}</span>
-                  </div>
-                  {Number(s?.saldoPendiente) > 0 && (
+                  </div> */}
+                  {/* {Number(s?.saldoPendiente) > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Saldo pendiente</span>
                       <span className="text-red-600 font-medium">{formatCurrency(s?.saldoPendiente || 0)}</span>
                     </div>
-                  )}
+                  )} */}
                 </div>
               </div>
 

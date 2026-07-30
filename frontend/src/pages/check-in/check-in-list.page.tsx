@@ -15,7 +15,6 @@ import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
 import { renderContract, generateDefaultContract, printContract } from '@/lib/print-contract';
 import { RegistroHoteleroFields } from '@/components/forms/registro-hotelero-fields';
-import { surchargesApi } from '@/api/surcharges.api';
 import { surchargeTypesApi } from '@/api/surcharge-types.api';
 
 export function CheckInListPage() {
@@ -130,6 +129,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
 
   const [registroData, setRegistroData] = useState<Record<string, string>>({});
 
+  const [descuento, setDescuento] = useState(0);
   const [recargos, setRecargos] = useState<{ surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
 
   const { data: surchargeTypes } = useQuery({
@@ -154,10 +154,14 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
     return reservation.payments.reduce((sum: number, p: any) => sum + Number(p.monto), 0);
   }, [reservation.payments]);
 
+  const totalRecargos = useMemo(() => {
+    return recargos.reduce((sum, r) => sum + (r.monto || 0) * (r.cantidad || 1), 0);
+  }, [recargos]);
+
   const remainingTotal = useMemo(() => {
-    const pend = estimatedTotal - advanceTotal;
+    const pend = estimatedTotal + totalRecargos - advanceTotal - descuento;
     return pend > 0 ? pend : 0;
-  }, [estimatedTotal, advanceTotal]);
+  }, [estimatedTotal, totalRecargos, advanceTotal, descuento]);
 
   const pagoActualTotal = useMemo(() => {
     return pagos.reduce((sum, p) => sum + (p.monto || 0), 0);
@@ -201,6 +205,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
       fechaEntrada: reservation.fechaEntrada,
       fechaSalida: reservation.fechaSalida,
       cantidadHuespedes: reservation.cantidadHuespedes || 1,
+      descuento,
       registro: registroData,
     };
     const html = hotelConfig?.contratoHtml
@@ -210,7 +215,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   };
 
   const checkInMut = useMutation({
-    mutationFn: (dto: { reservationId: string; observaciones?: string; companions?: any[]; pagos?: { monto: number; metodoPagoId: string; comprobante?: string }[] }) =>
+    mutationFn: (dto: any) =>
       apiClient.post('/check-in', dto),
     onSuccess: () => {
       toastSuccess('Check-In realizado correctamente');
@@ -220,6 +225,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
       setObservaciones('');
       setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]);
       setRegistroData({});
+      setDescuento(0);
       setRecargos([]);
     },
   });
@@ -255,6 +261,12 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
 
   const handleConfirm = async () => {
     const companionsList = companions.filter((c) => c.documento);
+
+    const pagoSinMetodo = pagos.find((p) => p.monto > 0 && !p.metodoPagoId);
+    if (pagoSinMetodo) {
+      alert('Debe seleccionar un método de pago para cada pago con monto mayor a 0');
+      return;
+    }
     const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);
     const dto: any = {
       reservationId: reservation.id,
@@ -262,6 +274,9 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
       companions: companionsList.length > 0 ? companionsList : undefined,
       ...registroData,
     };
+    if (descuento > 0) {
+      dto.descuento = descuento;
+    }
     if (pagosValidos.length > 0) {
       dto.pagos = pagosValidos.map((p) => ({
         monto: p.monto,
@@ -269,19 +284,16 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         comprobante: p.comprobante || undefined,
       }));
     }
-    await checkInMut.mutateAsync(dto);
-
-    for (const r of recargos) {
-      if (r.monto > 0 && r.descripcion) {
-        await surchargesApi.create({
-          reservationId: reservation.id,
-          surchargeTypeId: r.surchargeTypeId || undefined,
-          descripcion: r.descripcion,
-          monto: r.monto,
-          cantidad: r.cantidad,
-        });
-      }
+    const recargosValidos = recargos.filter((r) => r.monto > 0 && r.descripcion);
+    if (recargosValidos.length > 0) {
+      dto.recargos = recargosValidos.map((r) => ({
+        surchargeTypeId: r.surchargeTypeId || undefined,
+        descripcion: r.descripcion,
+        monto: r.monto,
+        cantidad: r.cantidad,
+      }));
     }
+    await checkInMut.mutateAsync(dto);
   };
 
   const isPending = checkInMut.isPending;
@@ -302,7 +314,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         </td>
       </tr>
 
-      <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setOpen(false); setCompanions([]); setObservaciones(''); setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]); setRecargos([]); } }}>
+      <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setOpen(false); setCompanions([]); setObservaciones(''); setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]); setDescuento(0); setRecargos([]); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -358,75 +370,6 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
             </Button>
 
             <RegistroHoteleroFields data={registroData} onChange={updateRegistro} />
-
-            <div className="rounded-lg border border-amber-200 p-3 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
-                <DollarSign className="h-4 w-4" /> Pago en entrada
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-sm">
-                <div className="rounded bg-muted p-2 text-center">
-                  <p className="text-xs text-muted-foreground">Total estancia</p>
-                  <p className="font-bold">{formatCurrency(estimatedTotal)}</p>
-                </div>
-                <div className="rounded bg-green-50 p-2 text-center">
-                  <p className="text-xs text-green-700">Anticipo</p>
-                  <p className="font-bold text-green-700">{formatCurrency(advanceTotal)}</p>
-                </div>
-                <div className="rounded bg-amber-50 p-2 text-center">
-                  <p className="text-xs text-amber-700">Pendiente</p>
-                  <p className="font-bold text-amber-700">{formatCurrency(remainingTotal)}</p>
-                </div>
-              </div>
-
-              {pagos.map((pago, i) => (
-                <div key={i} className="flex items-end gap-2 border-b pb-2">
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs text-muted-foreground">Monto</label>
-                    <Input
-                      type="number" step="0.01" min={0}
-                      placeholder="0.00"
-                      value={pago.monto || ''}
-                      onChange={(e) => updatePago(i, 'monto', Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs text-muted-foreground">Método</label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                      value={pago.metodoPagoId}
-                      onChange={(e) => updatePago(i, 'metodoPagoId', e.target.value)}
-                    >
-                      <option value="">Seleccionar...</option>
-                      {(paymentMethods || []).map((pm: any) => (
-                        <option key={pm.id} value={pm.id}>{pm.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs text-muted-foreground">Referencia</label>
-                    <Input
-                      placeholder="Opcional"
-                      value={pago.comprobante}
-                      onChange={(e) => updatePago(i, 'comprobante', e.target.value)}
-                    />
-                  </div>
-                  {pagos.length > 1 && (
-                    <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => removePago(i)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-
-              <div className="flex items-center justify-between">
-                <Button type="button" variant="outline" size="sm" onClick={addPago}>
-                  <Plus className="mr-1 h-3 w-3" /> Agregar pago
-                </Button>
-                <span className="text-sm font-semibold">
-                  Total a pagar ahora: {formatCurrency(pagoActualTotal)}
-                </span>
-              </div>
-            </div>
 
             <div className="rounded-lg border border-violet-200 p-3 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-violet-700">
@@ -501,13 +444,111 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
               )}
             </div>
 
+            <div className="rounded-lg border border-amber-200 p-3 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                <DollarSign className="h-4 w-4" /> Pago en entrada
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded bg-muted p-2 text-center">
+                  <p className="text-xs text-muted-foreground">Total alojamiento</p>
+                  <p className="font-bold">{formatCurrency(estimatedTotal)}</p>
+                </div>
+                <div className="rounded bg-violet-50 p-2 text-center">
+                  <p className="text-xs text-violet-700">Recargos</p>
+                  <p className="font-bold text-violet-700">{formatCurrency(totalRecargos)}</p>
+                </div>
+                <div className="rounded bg-green-50 p-2 text-center">
+                  <p className="text-xs text-green-700">Anticipo</p>
+                  <p className="font-bold text-green-700">{formatCurrency(advanceTotal)}</p>
+                </div>
+                <div className="rounded bg-amber-50 p-2 text-center">
+                  <p className="text-xs text-amber-700">Total a pagar</p>
+                  <p className="font-bold text-amber-700">{formatCurrency(estimatedTotal + totalRecargos)}</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-36 space-y-1">
+                  <label className="text-xs text-muted-foreground">Descuento</label>
+                  <Input
+                    type="number" step="0.01" min={0}
+                    placeholder="0.00"
+                    value={descuento || ''}
+                    onChange={(e) => setDescuento(Number(e.target.value))}
+                  />
+                </div>
+                <div className="flex-1 space-y-1 pt-5">
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Subtotal: </span>
+                    <span>{formatCurrency(estimatedTotal + totalRecargos - advanceTotal)}</span>
+                    {descuento > 0 && (
+                      <span className="ml-2 text-amber-600">- Desc: {formatCurrency(descuento)}</span>
+                    )}
+                  </div>
+                  <div className="text-sm font-semibold">
+                    <span className="text-muted-foreground">Saldo pendiente: </span>
+                    <span className={remainingTotal > 0 ? 'text-red-600' : 'text-green-600'}>{formatCurrency(remainingTotal)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {pagos.map((pago, i) => (
+                <div key={i} className="flex items-end gap-2 border-b pb-2">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Monto</label>
+                    <Input
+                      type="number" step="0.01" min={0}
+                      placeholder="0.00"
+                      value={pago.monto || ''}
+                      onChange={(e) => updatePago(i, 'monto', Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Método</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                      value={pago.metodoPagoId}
+                      onChange={(e) => updatePago(i, 'metodoPagoId', e.target.value)}
+                    >
+                      <option value="">Seleccionar...</option>
+                      {(paymentMethods || []).map((pm: any) => (
+                        <option key={pm.id} value={pm.id}>{pm.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-muted-foreground">Referencia</label>
+                    <Input
+                      placeholder="Opcional"
+                      value={pago.comprobante}
+                      onChange={(e) => updatePago(i, 'comprobante', e.target.value)}
+                    />
+                  </div>
+                  {pagos.length > 1 && (
+                    <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => removePago(i)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+
+              <div className="flex items-center justify-between">
+                <Button type="button" variant="outline" size="sm" onClick={addPago}>
+                  <Plus className="mr-1 h-3 w-3" /> Agregar pago
+                </Button>
+                <span className="text-sm font-semibold">
+                  Total a pagar ahora: {formatCurrency(pagoActualTotal)}
+                </span>
+              </div>
+            </div>
+
             <div className="flex gap-3">
               <DialogClose asChild>
                 <Button variant="outline" className="flex-1" disabled={isPending}>Cancelar</Button>
               </DialogClose>
               <Button
                 className="flex-1"
-                disabled={isPending || pagoActualTotal <= 0}
+                disabled={isPending}
                 onClick={handleConfirm}
               >
                 {isPending ? (

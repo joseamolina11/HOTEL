@@ -8,7 +8,6 @@ import { reservationsApi } from '@/api/reservations.api';
 import { hotelConfigApi } from '@/api/hotel-config.api';
 import { paymentMethodsApi } from '@/api/payment-methods.api';
 import { surchargeTypesApi } from '@/api/surcharge-types.api';
-import { surchargesApi } from '@/api/surcharges.api';
 import apiClient from '@/api/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -208,6 +207,11 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       companions: companionsList.length > 0 ? companionsList : undefined,
     });
 
+    const pagoSinMetodo = pagos.find((p) => p.monto > 0 && !p.metodoPagoId);
+    if (pagoSinMetodo) {
+      alert('Debe seleccionar un método de pago para cada pago con monto mayor a 0');
+      return;
+    }
     const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);
     const paymentData: any = {
       observaciones: data.observaciones,
@@ -224,22 +228,19 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
         comprobante: p.comprobante || undefined,
       }));
     }
+    const recargosValidos = recargos.filter((r) => r.monto > 0 && r.descripcion);
+    if (recargosValidos.length > 0) {
+      paymentData.recargos = recargosValidos.map((r) => ({
+        surchargeTypeId: r.surchargeTypeId || undefined,
+        descripcion: r.descripcion,
+        monto: r.monto,
+        cantidad: r.cantidad,
+      }));
+    }
     await checkInMut.mutateAsync({
       reservationId: reservation.id,
       data: paymentData,
     });
-
-    for (const r of recargos) {
-      if (r.monto > 0 && r.descripcion) {
-        await surchargesApi.create({
-          reservationId: reservation.id,
-          surchargeTypeId: r.surchargeTypeId || undefined,
-          descripcion: r.descripcion,
-          monto: r.monto,
-          cantidad: r.cantidad,
-        });
-      }
-    }
 
     toastSuccess('Check-In realizado correctamente');
     qc.invalidateQueries({ queryKey: ['rooms'] });
@@ -376,98 +377,6 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
 
               <RegistroHoteleroFields data={registroData} onChange={updateRegistro} />
 
-              <div className="rounded-lg border border-amber-200 p-3 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
-                  <DollarSign className="h-4 w-4" /> Pago en entrada
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Alojamiento ({Math.ceil(
-                      (new Date(watchedSalida).getTime() - new Date(watchedEntrada).getTime()) / (1000 * 60 * 60 * 24)
-                    ) || 0} noches)</span>
-                    <span>{formatCurrency(estimatedTotal)}</span>
-                  </div>
-                  {recargos.map((r, i) => (
-                    <div key={i} className="flex justify-between text-xs text-violet-600">
-                      <span>Recargo: {r.descripcion} x{r.cantidad}</span>
-                      <span>{formatCurrency((r.monto || 0) * (r.cantidad || 1))}</span>
-                    </div>
-                  ))}
-                  {totalRecargos > 0 && (
-                    <div className="flex justify-between text-xs font-semibold text-violet-700 border-b pb-1">
-                      <span>Total recargos</span>
-                      <span>{formatCurrency(totalRecargos)}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3 border-b pb-2">
-                  <div className="w-36 space-y-1">
-                    <label className="text-xs text-muted-foreground">Descuento</label>
-                    <Input
-                      type="number" step="0.01" min={0}
-                      placeholder="0.00"
-                      value={descuento || ''}
-                      onChange={(e) => setDescuento(Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="text-xs text-muted-foreground pt-5">
-                    <span className="font-semibold text-amber-600">
-                      Total a pagar: {formatCurrency(Math.max(0, estimatedTotal + totalRecargos - descuento))}
-                    </span>
-                  </div>
-                </div>
-
-                {pagos.map((pago, i) => (
-                  <div key={i} className="flex items-end gap-2 border-b pb-2">
-                    <div className="flex-1 space-y-1">
-                      <label className="text-xs text-muted-foreground">Monto</label>
-                      <Input
-                        type="number" step="0.01" min={0}
-                        placeholder="0.00"
-                        value={pago.monto || ''}
-                        onChange={(e) => updatePago(i, 'monto', Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <label className="text-xs text-muted-foreground">Método</label>
-                      <select
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                        value={pago.metodoPagoId}
-                        onChange={(e) => updatePago(i, 'metodoPagoId', e.target.value)}
-                      >
-                        <option value="">Seleccionar...</option>
-                        {(paymentMethods || []).map((pm: any) => (
-                          <option key={pm.id} value={pm.id}>{pm.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <label className="text-xs text-muted-foreground">Referencia</label>
-                      <Input
-                        placeholder="Opcional"
-                        value={pago.comprobante}
-                        onChange={(e) => updatePago(i, 'comprobante', e.target.value)}
-                      />
-                    </div>
-                    {pagos.length > 1 && (
-                      <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => removePago(i)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-
-                <div className="flex items-center justify-between">
-                  <Button type="button" variant="outline" size="sm" onClick={addPago}>
-                    <Plus className="mr-1 h-3 w-3" /> Agregar pago
-                  </Button>
-                  <span className="text-sm font-semibold">
-                    Total: {formatCurrency(pagoActualTotal)}
-                  </span>
-                </div>
-              </div>
-
               <div className="rounded-lg border border-violet-200 p-3 space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-violet-700">
                   <Zap className="h-4 w-4" /> Recargos
@@ -541,11 +450,99 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                 )}
               </div>
 
+              <div className="rounded-lg border border-amber-200 p-3 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                  <DollarSign className="h-4 w-4" /> Pago en entrada
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="rounded bg-muted p-2 text-center">
+                    <p className="text-xs text-muted-foreground">Total alojamiento</p>
+                    <p className="font-bold">{formatCurrency(estimatedTotal)}</p>
+                  </div>
+                  <div className="rounded bg-violet-50 p-2 text-center">
+                    <p className="text-xs text-violet-700">Recargos</p>
+                    <p className="font-bold text-violet-700">{formatCurrency(totalRecargos)}</p>
+                  </div>
+                  <div className="rounded bg-amber-50 p-2 text-center">
+                    <p className="text-xs text-amber-700">Total a pagar</p>
+                    <p className="font-bold text-amber-700">{formatCurrency(estimatedTotal + totalRecargos)}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-36 space-y-1">
+                    <label className="text-xs text-muted-foreground">Descuento</label>
+                    <Input
+                      type="number" step="0.01" min={0}
+                      placeholder="0.00"
+                      value={descuento || ''}
+                      onChange={(e) => setDescuento(Number(e.target.value))}
+                    />
+                  </div>
+                  {descuento > 0 && (
+                    <div className="text-xs pt-5">
+                      <span className="font-semibold text-amber-600">
+                        A pagar con descuento: {formatCurrency(Math.max(0, estimatedTotal + totalRecargos - descuento))}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {pagos.map((pago, i) => (
+                  <div key={i} className="flex items-end gap-2 border-b pb-2">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Monto</label>
+                      <Input
+                        type="number" step="0.01" min={0}
+                        placeholder="0.00"
+                        value={pago.monto || ''}
+                        onChange={(e) => updatePago(i, 'monto', Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Método</label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={pago.metodoPagoId}
+                        onChange={(e) => updatePago(i, 'metodoPagoId', e.target.value)}
+                      >
+                        <option value="">Seleccionar...</option>
+                        {(paymentMethods || []).map((pm: any) => (
+                          <option key={pm.id} value={pm.id}>{pm.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Referencia</label>
+                      <Input
+                        placeholder="Opcional"
+                        value={pago.comprobante}
+                        onChange={(e) => updatePago(i, 'comprobante', e.target.value)}
+                      />
+                    </div>
+                    {pagos.length > 1 && (
+                      <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => removePago(i)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+
+                <div className="flex items-center justify-between">
+                  <Button type="button" variant="outline" size="sm" onClick={addPago}>
+                    <Plus className="mr-1 h-3 w-3" /> Agregar pago
+                  </Button>
+                  <span className="text-sm font-semibold">
+                    Total: {formatCurrency(pagoActualTotal)}
+                  </span>
+                </div>
+              </div>
+
               <div className="flex gap-3">
                 <Button type="button" variant="outline" size="sm" onClick={handlePrintContract} disabled={!selectedGuest} className="flex-1">
                   <Printer className="mr-2 h-4 w-4" /> Imprimir Contrato
                 </Button>
-                <Button type="submit" className="flex-1" disabled={isProcessing || pagoActualTotal <= 0}>
+                <Button type="submit" className="flex-1" disabled={isProcessing}>
                   {isProcessing ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
                   ) : (
