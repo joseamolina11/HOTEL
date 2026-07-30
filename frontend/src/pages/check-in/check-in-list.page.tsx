@@ -147,16 +147,19 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   });
 
   useEffect(() => {
-    if (open && existingSurcharges?.length) {
-      setRecargos(existingSurcharges.map((s: any) => ({
-        id: s.id,
-        surchargeTypeId: s.surchargeTypeId || '',
-        descripcion: s.descripcion,
-        monto: Number(s.monto),
-        cantidad: s.cantidad,
-      })));
-    } else if (open) {
-      setRecargos([]);
+    if (open) {
+      setDescuento(Number(reservation.descuento) || 0);
+      if (existingSurcharges?.length) {
+        setRecargos(existingSurcharges.map((s: any) => ({
+          id: s.id,
+          surchargeTypeId: s.surchargeTypeId || '',
+          descripcion: s.descripcion,
+          monto: Number(s.monto),
+          cantidad: s.cantidad,
+        })));
+      } else {
+        setRecargos([]);
+      }
     }
   }, [open, existingSurcharges]);
 

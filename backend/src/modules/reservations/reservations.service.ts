@@ -206,6 +206,7 @@ export class ReservationsService {
       origen: 'directo',
       createdById: userId,
       precioBase: room.roomType?.precioBase ? Number(room.roomType.precioBase) : undefined,
+      descuento: createDto.descuento || 0,
     });
 
     if (createDto.companions?.length) {
@@ -244,7 +245,7 @@ export class ReservationsService {
     }
 
     if (createDto.pagoMonto && createDto.pagoMonto > 0 && createDto.pagoMetodoPagoId) {
-      await this.processAdvancePayment(saved, createDto, userId, `${guest.nombres} ${guest.apellidos}`);
+      await this.processAdvancePayment(saved, createDto, userId, `${guest.nombres} ${guest.apellidos}`, createDto.descuento || 0);
     }
 
     return this.findOne(saved.id);
@@ -255,6 +256,7 @@ export class ReservationsService {
     dto: CreateReservationDto,
     userId: string,
     clienteNombre: string,
+    descuento: number = 0,
   ) {
     const cashRegister = await this.cashRegisterRepository.findOne({
       where: { estado: 'abierta' },

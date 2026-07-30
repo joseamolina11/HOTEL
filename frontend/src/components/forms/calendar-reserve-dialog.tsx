@@ -40,6 +40,7 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
   const [pagoMonto, setPagoMonto] = useState(0);
   const [pagoMetodoPagoId, setPagoMetodoPagoId] = useState('');
   const [pagoReferencia, setPagoReferencia] = useState('');
+  const [descuento, setDescuento] = useState(0);
   const hoy = new Date().toISOString().slice(0, 10);
   const [recargos, setRecargos] = useState<{ surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
 
@@ -55,7 +56,7 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
     return recargos.reduce((sum, r) => sum + (r.monto || 0) * (r.cantidad || 1), 0);
   }, [recargos]);
 
-  const totalToPay = useMemo(() => estimatedTotal + totalRecargos, [estimatedTotal, totalRecargos]);
+  const totalToPay = useMemo(() => Math.max(0, estimatedTotal + totalRecargos - descuento), [estimatedTotal, totalRecargos, descuento]);
 
   const { data: surchargeTypes } = useQuery({
     queryKey: ['surcharge-types', 'active'],
@@ -76,6 +77,7 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
       setPagoMonto(0);
       setPagoMetodoPagoId('');
       setPagoReferencia('');
+      setDescuento(0);
       setRecargos([]);
     }
   }, [open, date]);
@@ -105,6 +107,9 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
       cantidadHuespedes: 1,
       estado: 'confirmada',
     };
+    if (descuento > 0) {
+      payload.descuento = descuento;
+    }
     if (pagoMonto && pagoMonto > 0) {
       payload.pagoMonto = pagoMonto;
       payload.pagoMetodoPagoId = pagoMetodoPagoId || undefined;
@@ -258,6 +263,10 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
               <div className="rounded bg-violet-50 p-2 text-center">
                 <p className="text-xs text-violet-700">Recargos</p>
                 <p className="font-bold text-violet-700">{formatCurrency(totalRecargos)}</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs">Descuento</label>
+                <Input type="number" min={0} placeholder="0" value={descuento || ''} onChange={(e) => setDescuento(Number(e.target.value))} />
               </div>
               <div className="rounded bg-amber-50 p-2 text-center col-span-2">
                 <p className="text-xs text-amber-700">Total a pagar</p>

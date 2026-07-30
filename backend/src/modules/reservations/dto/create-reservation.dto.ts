@@ -83,6 +83,12 @@ export class CreateReservationDto {
   @IsOptional()
   @IsString()
   pagoReferencia?: string;
+
+  @ApiPropertyOptional({ example: 25000, description: 'Descuento sobre el total' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  descuento?: number;
 }
 
 export class UpdateReservationDto {
