@@ -141,14 +141,14 @@ export function OrdersPage() {
                         <td className="px-4 py-3 text-muted-foreground">{formatDateTime(order.fecha)}</td>
                         <td className="px-4 py-3 text-right font-medium">{formatCurrency(order.total)}</td>
                         <td className="px-4 py-3 text-center">
-                          <Badge variant={order.estado === 'pendiente' ? 'warning' : order.estado === 'pagado' ? 'success' : 'destructive'}>
-                            {order.estado === 'pendiente' ? 'Pendiente' : order.estado === 'pagado' ? 'Pagado' : 'Anulado'}
+                          <Badge variant={order.estado === 'pagado' ? 'success' : order.estado === 'cancelado' ? 'destructive' : 'warning'}>
+                            {order.estado === 'pagado' ? 'Pagado' : order.estado === 'cancelado' ? 'Anulado' : 'Pendiente'}
                           </Badge>
                         </td>
                         <td className="px-4 py-3">{order.user?.nombres} {order.user?.apellidos}</td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex justify-center gap-1">
-                            {order.estado === 'pendiente' && (
+                            {(order.estado === 'borrador' || order.estado === 'pendiente') && (
                               <Button variant="ghost" size="sm" onClick={() => { setEditOrder(order); setShowCreate(true); }}>
                                 <Pencil className="h-3 w-3" />
                               </Button>
@@ -217,8 +217,8 @@ function OrderDetailDialog({ order, onClose, onEdit }: { order: any; onClose: ()
             </div>
             <div>
               <span className="text-muted-foreground">Estado: </span>
-              <Badge variant={order.estado === 'pendiente' ? 'warning' : order.estado === 'pagado' ? 'success' : 'destructive'}>
-                {order.estado === 'pendiente' ? 'Pendiente' : order.estado === 'pagado' ? 'Pagado' : 'Anulado'}
+              <Badge variant={order.estado === 'pagado' ? 'success' : order.estado === 'cancelado' ? 'destructive' : 'warning'}>
+                {order.estado === 'pagado' ? 'Pagado' : order.estado === 'cancelado' ? 'Anulado' : 'Pendiente'}
               </Badge>
             </div>
             <div>
@@ -284,12 +284,12 @@ function OrderDetailDialog({ order, onClose, onEdit }: { order: any; onClose: ()
           )}
 
           <div className="flex justify-end gap-2">
-            {order.estado === 'pendiente' && onEdit && (
+            {(order.estado === 'borrador' || order.estado === 'pendiente') && onEdit && (
               <Button variant="outline" onClick={() => onEdit(order)}>
                 <Pencil className="h-4 w-4 mr-1" /> Editar
               </Button>
             )}
-            {(order.estado === 'pendiente' || order.estado === 'pagado') && (
+            {(order.estado === 'borrador' || order.estado === 'pendiente' || order.estado === 'pagado') && (
               <Button variant="destructive" onClick={handleCancel} disabled={cancelMut.isPending}>
                 {cancelMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Ban className="h-4 w-4 mr-1" />}
                 {order.estado === 'pagado' ? 'Anular Pedido' : 'Cancelar Pedido'}
@@ -315,8 +315,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
 }) {
   const [items, setItems] = useState<{ inventoryItemId: string; nombre: string; cantidad: number; precioUnitario: number }[]>([]);
   const [activeCategory, setActiveCategory] = useState('');
-  const [pagoMetodoPagoId, setPagoMetodoPagoId] = useState('');
-  const [pagoMonto, setPagoMonto] = useState(0);
+  const [pagos, setPagos] = useState<{ metodoPagoId: string; monto: number }[]>([]);
   const [editRoomId, setEditRoomId] = useState('');
   const createMut = useCreateOrder();
   const updateMut = useUpdateOrder();
@@ -376,8 +375,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
       setItems([]);
       setEditRoomId('');
     }
-    setPagoMetodoPagoId('');
-    setPagoMonto(0);
+    setPagos([]);
   }, [open, editOrder]);
 
   const currentProducts = categoryMap.get(activeCategory) || [];
@@ -408,15 +406,34 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
   };
 
   const total = items.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
+  const totalPagos = pagos.reduce((sum, p) => sum + (p.monto || 0), 0);
+
+  const addPago = () => {
+    const remaining = total - totalPagos;
+    setPagos([...pagos, { monto: remaining > 0 ? remaining : 0, metodoPagoId: '' }]);
+  };
+
+  const updatePago = (index: number, field: string, value: any) => {
+    const updated = [...pagos];
+    (updated[index] as any)[field] = field === 'monto' ? Number(value) || 0 : value;
+    setPagos(updated);
+  };
+
+  const removePago = (index: number) => {
+    setPagos(pagos.filter((_, i) => i !== index));
+  };
 
   useEffect(() => {
     if (!isDirectSale) return;
-    if (total > 0 && pagoMonto === 0) setPagoMonto(total);
+    if (total > 0 && pagos.length === 0) {
+      setPagos([{ monto: total, metodoPagoId: '' }]);
+    }
   }, [total, isDirectSale]);
 
   const handleSubmit = async () => {
     if (items.length === 0) return;
     const itemsDto = items.map((i) => ({ inventoryItemId: i.inventoryItemId, cantidad: i.cantidad, precioUnitario: i.precioUnitario }));
+    const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);
 
     if (isEditMode && editOrder) {
       await updateMut.mutateAsync({
@@ -431,7 +448,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
       await createMut.mutateAsync({
         ventaDirecta: true,
         items: itemsDto,
-        ...(pagoMetodoPagoId ? { pagoMetodoPagoId, pagoMonto: pagoMonto > 0 ? pagoMonto : total } : {}),
+        ...(pagosValidos.length > 0 ? { pagos: pagosValidos } : {}),
       });
       toastSuccess('Venta directa creada');
     } else {
@@ -445,8 +462,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
 
     setItems([]);
     setActiveCategory('');
-    setPagoMetodoPagoId('');
-    setPagoMonto(0);
+    setPagos([]);
     setEditRoomId('');
     onSuccess();
   };
@@ -454,7 +470,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
   const isLoading = createMut.isPending || updateMut.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setItems([]); setActiveCategory(''); setPagoMetodoPagoId(''); setPagoMonto(0); setEditRoomId(''); } }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setItems([]); setActiveCategory(''); setPagos([]); setEditRoomId(''); } }}>
       <DialogContent className="max-w-6xl max-h-[95vh] p-0 gap-0 overflow-hidden">
         <div className="flex flex-col h-[calc(95vh-2rem)]">
           <div className="flex items-center justify-between border-b px-6 py-3">
@@ -462,7 +478,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
               <Package className="h-5 w-5" />
               {isEditMode ? `Editar Pedido ${editOrder?.codigo}` : isDirectSale ? 'Venta Directa — POS' : 'Nuevo Pedido — POS'}
             </DialogTitle>
-            <button type="button" onClick={() => { onClose(); setItems([]); setActiveCategory(''); setPagoMetodoPagoId(''); setPagoMonto(0); setEditRoomId(''); }} className="text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={() => { onClose(); setItems([]); setActiveCategory(''); setPagos([]); setEditRoomId(''); }} className="text-muted-foreground hover:text-foreground">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -470,32 +486,57 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
           <div className="flex flex-1 overflow-hidden">
             <div className="flex-1 flex flex-col overflow-hidden">
               {isDirectSale && (
-                <div className="flex gap-2 p-3 border-b bg-muted/10 shrink-0 items-end">
-                  <div className="w-48">
-                    <label className="text-xs font-medium mb-1 block">Método de pago</label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                      value={pagoMetodoPagoId}
-                      onChange={(e) => setPagoMetodoPagoId(e.target.value)}
-                    >
-                      <option value="">Sin pago (pendiente)</option>
-                      {paymentMethods.map((pm: any) => (
-                        <option key={pm.id} value={pm.id}>{pm.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {pagoMetodoPagoId && (
-                    <div className="w-36">
-                      <label className="text-xs font-medium mb-1 block">Monto</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={pagoMonto}
-                        onChange={(e) => setPagoMonto(Number(e.target.value))}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                      />
+                <div className="p-3 border-b bg-muted/10 shrink-0 space-y-2">
+                  <label className="text-xs font-medium block">Pagos</label>
+                  {pagos.map((pago, i) => (
+                    <div key={i} className="flex items-end gap-2">
+                      <div className="w-36">
+                        <label className="text-xs text-muted-foreground">Monto</label>
+                        <input
+                          type="number" step="0.01" min={0}
+                          placeholder="0.00"
+                          value={pago.monto || ''}
+                          onChange={(e) => updatePago(i, 'monto', Number(e.target.value))}
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs text-muted-foreground">Método</label>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                          value={pago.metodoPagoId}
+                          onChange={(e) => updatePago(i, 'metodoPagoId', e.target.value)}
+                        >
+                          <option value="">Seleccionar...</option>
+                          {paymentMethods.map((pm: any) => (
+                            <option key={pm.id} value={pm.id}>{pm.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {pagos.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removePago(i)}
+                          className="text-destructive hover:text-destructive/80 mb-0.5"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
-                  )}
+                  ))}
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={addPago}
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" /> Agregar pago
+                    </button>
+                    <span className="text-xs text-muted-foreground">
+                      Total: {formatCurrency(total)} | Pagado: {formatCurrency(totalPagos)}
+                      {totalPagos >= total && <span className="text-green-600 ml-1">(Completo)</span>}
+                    </span>
+                  </div>
                 </div>
               )}
               {isEditMode && (

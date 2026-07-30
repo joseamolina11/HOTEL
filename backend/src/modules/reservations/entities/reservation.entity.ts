@@ -96,6 +96,9 @@ export class Reservation {
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   descuento: number;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true, name: 'precio_base' })
+  precioBase: number;
+
   @Column({ name: 'ota_reservation_id', nullable: true })
   otaReservationId: string;
 

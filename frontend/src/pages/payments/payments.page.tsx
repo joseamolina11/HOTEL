@@ -50,8 +50,8 @@ export function PaymentsPage() {
                   <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Sin consumos pendientes</td></tr>
                 ) : (
                   pendingGroups?.map((group: any) => (
-                    <tr key={group.room.id} className="border-b hover:bg-muted/50">
-                      <td className="px-4 py-3 font-medium">{group.room.numero} - {group.room.nombre}</td>
+                    <tr key={group.room?.id || '__no_room__'} className="border-b hover:bg-muted/50">
+                      <td className="px-4 py-3 font-medium">{group.room ? `${group.room.numero} - ${group.room.nombre}` : 'Sin habitación'}</td>
                       <td className="px-4 py-3">{group.guest ? `${group.guest.nombres} ${group.guest.apellidos}` : '—'}</td>
                       <td className="px-4 py-3 text-right font-medium">{formatCurrency(group.total)}</td>
                       <td className="px-4 py-3 text-right">{group.orders.length}</td>
@@ -136,7 +136,7 @@ function PaymentFormDialog({ open, onClose, room }: { open: boolean; onClose: ()
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-lg bg-muted p-3 text-sm">
-            <p><span className="text-muted-foreground">Habitación: </span>{room.room.numero} - {room.room.nombre}</p>
+            <p><span className="text-muted-foreground">Habitación: </span>{room.room ? `${room.room.numero} - ${room.room.nombre}` : 'Sin habitación'}</p>
             <p><span className="text-muted-foreground">Huésped: </span>{room.guest ? `${room.guest.nombres} ${room.guest.apellidos}` : '—'}</p>
             <p className="font-bold text-lg mt-1">
               Total pendiente: {formatCurrency(room.total)}
@@ -145,7 +145,7 @@ function PaymentFormDialog({ open, onClose, room }: { open: boolean; onClose: ()
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Monto a cobrar</label>
-            <Input type="number" step="0.01" min={0.01} max={room.total} value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="0.00" />
+            <Input type="number" step="0.01" min={0.01} max={room?.total ?? 0} value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="0.00" />
           </div>
 
           <div className="space-y-2">
@@ -175,7 +175,7 @@ function PaymentFormDialog({ open, onClose, room }: { open: boolean; onClose: ()
 
 function PaymentHistoryDialog({ open, onClose, room }: { open: boolean; onClose: () => void; room: any }) {
   const { data: paymentsResponse, isLoading } = usePayments(
-    room ? { roomId: room.room.id } : undefined
+    room?.room ? { roomId: room.room.id } : undefined
   );
   const payments = paymentsResponse?.data?.data || [];
 
@@ -188,7 +188,7 @@ function PaymentHistoryDialog({ open, onClose, room }: { open: boolean; onClose:
         {room && (
           <div className="rounded-lg bg-muted p-3 text-sm mb-2">
             <span className="text-muted-foreground">Habitación: </span>
-            <span className="font-medium">{room.room.numero} - {room.room.nombre}</span>
+            <span className="font-medium">{room.room ? `${room.room.numero} - ${room.room.nombre}` : 'Sin habitación'}</span>
           </div>
         )}
         <h4 className="text-sm font-medium mb-2">Pagos registrados</h4>

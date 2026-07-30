@@ -248,7 +248,7 @@ export class CheckInService {
       (new Date(reservation.fechaSalida).getTime() - new Date(reservation.fechaEntrada).getTime()) /
         (1000 * 60 * 60 * 24),
     );
-    const precioNoche = Number(reservation.room?.roomType?.precioBase || 0);
+    const precioNoche = Number(reservation.precioBase ?? reservation.room?.roomType?.precioBase ?? 0);
     const itemsData: any[] = [];
     if (precioNoche > 0) {
       itemsData.push({

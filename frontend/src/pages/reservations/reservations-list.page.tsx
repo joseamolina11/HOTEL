@@ -12,9 +12,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { ReservationForm } from '@/components/forms/reservation-form';
+import { ChangeRoomDialog } from '@/components/forms/change-room-dialog';
 import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
 import { ReservationDetailDialog } from '@/components/dialogs/reservation-detail-dialog';
-import { Search, Plus, Pencil, Eye, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload, Receipt, DollarSign } from 'lucide-react';
+import { Search, Plus, Pencil, Eye, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload, Receipt, DollarSign, ArrowRightLeft } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { useUpdateReservation, useCancelReservation, useConfirmReservation } from '@/hooks/useReservations';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
@@ -28,6 +29,7 @@ export function ReservationsListPage() {
   const [detailRes, setDetailRes] = useState<any>(null);
   const [fullDetailRes, setFullDetailRes] = useState<any>(null);
   const [reciboDetailId, setReciboDetailId] = useState<string | null>(null);
+  const [changeRoomRes, setChangeRoomRes] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [uploadingContract, setUploadingContract] = useState(false);
@@ -377,6 +379,12 @@ export function ReservationsListPage() {
                       Confirmar
                     </Button>
                   )}
+                  {['pendiente', 'confirmada', 'checkin'].includes(detailRes.estado) && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setChangeRoomRes(detailRes)}>
+                      <ArrowRightLeft className="h-4 w-4 mr-1" />
+                      Cambiar Hab.
+                    </Button>
+                  )}
                   {(detailRes.estado === 'pendiente' || detailRes.estado === 'confirmada') && (
                     <Button type="button" variant="destructive" size="sm" onClick={handleCancel} disabled={cancelMut.isPending}>
                       {cancelMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4 mr-1" />}
@@ -468,6 +476,18 @@ export function ReservationsListPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <ChangeRoomDialog
+        open={!!changeRoomRes}
+        onClose={() => setChangeRoomRes(null)}
+        reservation={changeRoomRes ? {
+          id: changeRoomRes.id,
+          roomId: changeRoomRes.roomId,
+          roomNombre: changeRoomRes.room?.nombre,
+          fechaEntrada: changeRoomRes.fechaEntrada,
+          fechaSalida: changeRoomRes.fechaSalida,
+          estado: changeRoomRes.estado,
+        } : { id: '', roomId: '', fechaEntrada: '', fechaSalida: '', estado: '' }}
+      />
       <ReciboCajaDetailDialog reciboId={reciboDetailId} open={!!reciboDetailId} onClose={() => setReciboDetailId(null)} />
       <ReservationDetailDialog
         reservation={fullDetailRes}

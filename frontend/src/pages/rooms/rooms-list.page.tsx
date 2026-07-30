@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { RoomForm } from '@/components/forms/room-form';
 import { ReservationForm } from '@/components/forms/reservation-form';
 import { CheckInDialog } from '@/components/forms/check-in-dialog';
-import { Search, Plus, LogIn, LogOut, CalendarCheck, Wrench, Sparkles, X, ShoppingCart, CalendarClock, User } from 'lucide-react';
+import { ChangeRoomDialog } from '@/components/forms/change-room-dialog';
+import { Search, Plus, LogIn, LogOut, CalendarCheck, Wrench, Sparkles, X, ShoppingCart, CalendarClock, User, ArrowRightLeft } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
 const STATUS_ACTIONS: Record<string, { label: string; icon: any; status: string; roles: string[] }[]> = {
@@ -28,6 +29,7 @@ const STATUS_ACTIONS: Record<string, { label: string; icon: any; status: string;
   ocupada: [
     { label: 'Tomar Pedido', icon: ShoppingCart, status: 'pedido', roles: ['ocupada'] },
     { label: 'Check-Out', icon: LogOut, status: 'checkout', roles: ['ocupada'] },
+    { label: 'Cambiar Habitación', icon: ArrowRightLeft, status: 'cambiar', roles: ['ocupada'] },
     { label: 'Limpieza', icon: Sparkles, status: 'limpieza', roles: ['ocupada'] },
     { label: 'Mantenimiento', icon: Wrench, status: 'mantenimiento', roles: ['disponible', 'reservada', 'ocupada', 'limpieza'] },
   ],
@@ -49,6 +51,7 @@ export function RoomsListPage() {
   const [menuRoom, setMenuRoom] = useState<any>(null);
   const [checkInRoom, setCheckInRoom] = useState<any>(null);
   const [reserveRoom, setReserveRoom] = useState<any>(null);
+  const [changeRoomReservation, setChangeRoomReservation] = useState<any>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
 
@@ -100,6 +103,19 @@ export function RoomsListPage() {
   const handleOrder = (room: any) => {
     setMenuRoom(null);
     navigate(`/orders?roomId=${room.id}`);
+  };
+
+  const handleChangeRoom = (room: any) => {
+    setMenuRoom(null);
+    const res = {
+      id: room.reservationId || room.id,
+      roomId: room.id,
+      roomNombre: `${room.numero} — ${room.nombre}`,
+      fechaEntrada: room.fechaEntrada || '',
+      fechaSalida: room.fechaSalida || '',
+      estado: 'checkin',
+    };
+    setChangeRoomReservation(res);
   };
 
   return (
@@ -202,6 +218,7 @@ export function RoomsListPage() {
                           if (action.status === 'checkout') { handleCheckOut(room); return; }
                           if (action.status === 'reservada') { handleReserve(room); return; }
                           if (action.status === 'ocupada' && ['disponible', 'reservada'].includes(room.estado)) { handleCheckIn(room); return; }
+                          if (action.status === 'cambiar') { handleChangeRoom(room); return; }
                           changeStatus.mutate({ id: room.id, dto: { estado: action.status } });
                         }}
                         className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors"
@@ -217,6 +234,12 @@ export function RoomsListPage() {
           ))
         )}
       </div>
+      <ChangeRoomDialog
+        open={!!changeRoomReservation}
+        onClose={() => setChangeRoomReservation(null)}
+        reservation={changeRoomReservation || { id: '', roomId: '', fechaEntrada: '', fechaSalida: '', estado: '' }}
+      />
+
       <CheckInDialog room={checkInRoom} open={!!checkInRoom} onClose={() => setCheckInRoom(null)} />
 
       <Dialog open={!!reserveRoom} onOpenChange={(v) => !v && setReserveRoom(null)}>

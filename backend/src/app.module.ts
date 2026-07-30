@@ -43,6 +43,8 @@ import { SurchargesModule } from './modules/surcharges/surcharges.module';
 import { BitacorasModule } from './modules/bitacoras/bitacoras.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
+import { ScheduleModule } from '@nestjs/schedule';
+import { CierreDiarioModule } from './modules/cierre-diario/cierre-diario.module';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 
 @Module({
@@ -85,6 +87,8 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     PermissionsModule,
     SurchargesModule,
     BitacorasModule,
+    ScheduleModule.forRoot(),
+    CierreDiarioModule,
   ],
   controllers: [AppController],
   providers: [

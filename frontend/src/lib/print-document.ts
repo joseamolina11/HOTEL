@@ -606,7 +606,7 @@ export async function printReservation(id: string) {
   const noches = Math.max(1, Math.ceil(
     (new Date(r.fechaSalida).getTime() - new Date(r.fechaEntrada).getTime()) / (1000 * 60 * 60 * 24),
   ));
-  const precioPorNoche = Number(r.room?.roomType?.precioBase || 0);
+  const precioPorNoche = Number(r.precioBase ?? r.room?.roomType?.precioBase ?? 0);
   const totalHabitacion = noches * precioPorNoche;
   const totalConsumos = (r.consumptions || []).reduce((sum: number, c: any) => sum + Number(c.subtotal), 0);
   const totalPedidos = (r.orders || []).reduce((sum: number, o: any) => sum + Number(o.total), 0);

@@ -35,8 +35,8 @@ export class Surcharge {
   @Column({ name: 'user_id', nullable: true })
   userId?: string;
 
-  @Column({ type: 'varchar', default: 'pendiente' })
-  estado: string;
+  @Column({ type: 'varchar', default: 'borrador' })
+  estado: 'borrador' | 'cargado' | 'pendiente' | 'facturado';
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

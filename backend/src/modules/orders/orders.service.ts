@@ -161,7 +161,7 @@ export class OrdersService {
       codigo,
       fecha: new Date(),
       total,
-      estado: 'pendiente' as const,
+      estado: 'borrador' as const,
       observaciones: dto.observaciones,
       items: itemsData as unknown as OrderItem[],
     } as DeepPartial<Order>);
@@ -185,9 +185,12 @@ export class OrdersService {
       await this.movementRepo.save(movements);
     }
 
-    // If payment provided (direct sale), process payment immediately
-    if (dto.pagoMetodoPagoId && dto.pagoMonto && dto.pagoMonto > 0) {
-      await this.processOrderPayment(saved, dto, userId);
+    // Direct sale: always create Recibo de Caja + Financial Movements
+    if (isDirectSale) {
+      const pagos = dto.pagos?.length ? dto.pagos : (dto.pagoMetodoPagoId && dto.pagoMonto && dto.pagoMonto > 0
+        ? [{ monto: dto.pagoMonto, metodoPagoId: dto.pagoMetodoPagoId }]
+        : []);
+      await this.processDirectSalePayment(saved, dto, userId, pagos);
     }
 
     return this.findOne(saved.id);
@@ -195,8 +198,11 @@ export class OrdersService {
 
   async update(id: string, dto: UpdateOrderDto, userId: string) {
     const order = await this.findOne(id);
-    if (order.estado !== 'pendiente') {
-      throw new BadRequestException('Solo se pueden editar pedidos pendientes');
+    if (order.estado === 'cargado') {
+      throw new BadRequestException('No se puede editar un pedido que ya fue cargado');
+    }
+    if (order.estado !== 'borrador' && order.estado !== 'pendiente') {
+      throw new BadRequestException('Solo se pueden editar pedidos en borrador o pendientes');
     }
 
     if (dto.items) {
@@ -307,30 +313,21 @@ export class OrdersService {
     return this.findOne(id);
   }
 
-  private async processOrderPayment(order: Order, dto: CreateOrderDto, userId: string) {
-    const pm = await this.paymentMethodsService.findOne(dto.pagoMetodoPagoId!);
+  private async processDirectSalePayment(
+    order: Order,
+    dto: CreateOrderDto,
+    userId: string,
+    pagos: { monto: number; metodoPagoId: string }[],
+  ) {
     const cashRegister = await this.cashRegisterRepo.findOne({ where: { estado: 'abierta' } });
-    const pagoMonto = dto.pagoMonto!;
 
-    // Reload order with items to get inventoryItem relation
     const orderWithItems = await this.orderRepo.findOne({
       where: { id: order.id },
       relations: ['items', 'items.inventoryItem'],
     });
 
-    // Create Payment record
-    const payment = await this.paymentRepo.save(
-      this.paymentRepo.create({
-        orderId: order.id,
-        roomId: order.roomId,
-        userId,
-        monto: pagoMonto,
-        metodoPagoId: dto.pagoMetodoPagoId,
-        comprobante: dto.pagoReferencia,
-        observaciones: `Venta directa ${order.codigo} - ${pm.nombre}`,
-        fecha: new Date(),
-      }),
-    );
+    const totalPagado = pagos.reduce((sum, p) => sum + p.monto, 0);
+    const isPaid = totalPagado > 0;
 
     // Build items for recibo
     const itemsData = (orderWithItems?.items || []).map((item: any) => ({
@@ -341,63 +338,76 @@ export class OrdersService {
       tipo: 'pedido' as const,
     }));
 
-    // Create Recibo de Caja
-    const recibo = await this.reciboCajaService.create({
-      clienteNombre: dto.clienteNombre || 'Venta directa',
-      fecha: new Date().toISOString().slice(0, 10),
-      subtotal: pagoMonto,
-      descuento: 0,
-      total: pagoMonto,
-      pagos: [{
-        concepto: `Venta directa ${order.codigo}`,
-        monto: pagoMonto,
-        metodoPagoId: dto.pagoMetodoPagoId!,
-        cuentaId: pm.financialAccountId || '',
-        referenciaTipo: 'order',
-        referenciaId: order.id,
-      }],
-      items: itemsData,
-    }, userId);
+    // Process each payment split
+    const pagosRecibo: any[] = [];
+    for (const split of pagos) {
+      const pm = await this.paymentMethodsService.findOne(split.metodoPagoId);
 
-    // Create Financial Movement
-    if (pm.financialAccountId) {
-      try {
-        await this.financialMovementsService.create({
-          accountId: pm.financialAccountId,
-          tipo: 'INGRESO',
-          monto: pagoMonto,
-          concepto: `Venta directa ${order.codigo} - ${pm.nombre}`,
-          referenciaTipo: 'order',
-          referenciaId: order.id,
-          reciboId: recibo.id,
-          cashRegisterId: cashRegister?.id,
-        }, userId);
-      } catch (e: any) {
-        // skip
+      const payment = await this.paymentRepo.save(
+        this.paymentRepo.create({
+          orderId: order.id,
+          userId,
+          monto: split.monto,
+          metodoPagoId: split.metodoPagoId,
+          observaciones: `Venta directa ${order.codigo} - ${pm.nombre}`,
+          fecha: new Date(),
+        }),
+      );
+
+      pagosRecibo.push({
+        concepto: `Venta directa ${order.codigo} - ${pm.nombre}`,
+        monto: split.monto,
+        metodoPagoId: pm.id,
+        cuentaId: pm.financialAccountId || '',
+        referenciaTipo: 'payment',
+        referenciaId: payment.id,
+      });
+
+      if (isPaid && pm.financialAccountId) {
+        try {
+          await this.financialMovementsService.create({
+            accountId: pm.financialAccountId,
+            tipo: 'INGRESO',
+            monto: split.monto,
+            concepto: `Venta directa ${order.codigo} - ${pm.nombre}`,
+            referenciaTipo: 'order',
+            referenciaId: order.id,
+            cashRegisterId: cashRegister?.id,
+          }, userId);
+        } catch (e: any) { /* skip */ }
+      }
+
+      if (isPaid && cashRegister) {
+        const tipo = pm.tipo || 'otros';
+        cashRegister.totalVentas = Number(cashRegister.totalVentas) + split.monto;
+        if (tipo === 'efectivo') cashRegister.totalEfectivo = Number(cashRegister.totalEfectivo) + split.monto;
+        else if (tipo === 'transferencia') cashRegister.totalTransferencia = Number(cashRegister.totalTransferencia) + split.monto;
+        else if (tipo === 'tarjeta') cashRegister.totalTarjeta = Number(cashRegister.totalTarjeta) + split.monto;
+        else cashRegister.totalOtros = Number(cashRegister.totalOtros) + split.monto;
+        cashRegister.cantidadTransacciones += 1;
+        await this.cashRegisterRepo.save(cashRegister);
       }
     }
 
-    // Update Cash Register
-    if (cashRegister) {
-      const tipo = pm.tipo || 'otros';
-      cashRegister.totalVentas = Number(cashRegister.totalVentas) + pagoMonto;
-      if (tipo === 'efectivo') cashRegister.totalEfectivo = Number(cashRegister.totalEfectivo) + pagoMonto;
-      else if (tipo === 'transferencia') cashRegister.totalTransferencia = Number(cashRegister.totalTransferencia) + pagoMonto;
-      else if (tipo === 'tarjeta') cashRegister.totalTarjeta = Number(cashRegister.totalTarjeta) + pagoMonto;
-      else cashRegister.totalOtros = Number(cashRegister.totalOtros) + pagoMonto;
-      cashRegister.cantidadTransacciones += 1;
-      await this.cashRegisterRepo.save(cashRegister);
-    }
+    const recibo = await this.reciboCajaService.create({
+      clienteNombre: dto.clienteNombre || 'Venta directa',
+      fecha: new Date().toISOString().slice(0, 10),
+      subtotal: totalPagado || order.total,
+      descuento: 0,
+      total: totalPagado || 0,
+      pagos: pagosRecibo,
+      items: itemsData,
+    }, userId);
 
-    // Mark order as paid
-    order.estado = 'pagado';
-    order.reciboId = recibo.id;
-    await this.orderRepo.save(order);
+    if (isPaid) {
+      await this.orderRepo.update(order.id, { estado: 'pagado', reciboId: recibo.id });
+    }
   }
 
   async cancel(id: string, userId?: string) {
     const order = await this.findOne(id);
     if (order.estado === 'cancelado') throw new BadRequestException('El pedido ya está cancelado');
+    if (order.estado === 'cargado') throw new BadRequestException('No se puede cancelar un pedido que ya fue cargado');
 
     // Reverse inventory
     for (const item of order.items) {
@@ -473,14 +483,17 @@ export class OrdersService {
 
   async getPendingByRoom() {
     const orders = await this.orderRepo.find({
-      where: { estado: 'pendiente' },
+      where: [
+        { estado: 'borrador' },
+        { estado: 'pendiente' },
+      ],
       relations: ['room', 'guest', 'items', 'items.inventoryItem'],
       order: { createdAt: 'DESC' },
     });
 
     const grouped = new Map<string, { room: any; guest: any; total: number; orders: Order[] }>();
     for (const order of orders) {
-      const key = order.roomId;
+      const key = order.roomId || '__no_room__';
       if (!grouped.has(key)) {
         grouped.set(key, {
           room: order.room,

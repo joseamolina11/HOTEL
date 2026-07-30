@@ -80,6 +80,9 @@ export class RoomsService {
       if (active) {
         const nombres = active.guest?.nombres || '';
         const apellidos = active.guest?.apellidos || '';
+        result.reservationId = active.id;
+        result.fechaEntrada = active.fechaEntrada;
+        result.fechaSalida = active.fechaSalida;
         result.huesped = `${nombres} ${apellidos}`.trim() || 'Sin huésped';
 
         const totalPagado = active.payments?.reduce((sum, p) => sum + Number(p.monto), 0) || 0;
@@ -89,7 +92,7 @@ export class RoomsService {
           (new Date(active.fechaSalida).getTime() - new Date(active.fechaEntrada).getTime()) /
             (1000 * 60 * 60 * 24),
         );
-        const precioNoche = Number(active.room?.roomType?.precioBase || 0);
+        const precioNoche = Number(active.precioBase ?? active.room?.roomType?.precioBase ?? 0);
         const totalHabitacion = noches * precioNoche;
         const totalConsumos = active.consumptions?.reduce((sum, c) => sum + Number(c.subtotal), 0) || 0;
         const totalPedidos = active.orders?.reduce((sum, o) => sum + Number(o.total), 0) || 0;

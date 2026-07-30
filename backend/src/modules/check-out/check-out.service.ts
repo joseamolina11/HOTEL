@@ -112,7 +112,7 @@ export class CheckOutService {
         (1000 * 60 * 60 * 24),
     );
 
-    const precioNoche = Number(reservation.room.roomType.precioBase);
+    const precioNoche = Number(reservation.precioBase ?? reservation.room?.roomType?.precioBase ?? 0);
     const totalHabitacion = noches * precioNoche;
 
     const surcharges = await this.surchargesService.findByReservation(reservationId);
@@ -233,7 +233,7 @@ export class CheckOutService {
         (new Date(reservation.fechaSalida).getTime() - new Date(reservation.fechaEntrada).getTime()) /
           (1000 * 60 * 60 * 24),
       );
-      const precioNoche = Number(reservation.room?.roomType?.precioBase || 0);
+      const precioNoche = Number(reservation.precioBase ?? reservation.room?.roomType?.precioBase ?? 0);
       const itemsData: any[] = [];
       if (precioNoche > 0) {
         itemsData.push({
@@ -266,7 +266,7 @@ export class CheckOutService {
       }
 
       const surcharges = await this.surchargesService.findByReservation(reservation.id);
-      for (const s of surcharges.filter((x) => !x.estado || x.estado === 'pendiente')) {
+      for (const s of surcharges.filter((x) => !x.estado || x.estado !== 'facturado')) {
         itemsData.push({
           concepto: s.descripcion,
           cantidad: s.cantidad,

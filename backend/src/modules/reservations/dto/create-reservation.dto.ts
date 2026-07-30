@@ -201,6 +201,12 @@ export class CancelReservationDto {
   reembolsoMetodoPagoId?: string;
 }
 
+export class ChangeRoomDto {
+  @ApiProperty({ example: 'uuid-new-room' })
+  @IsString()
+  newRoomId: string;
+}
+
 export class ReservationFilterDto {
   @ApiPropertyOptional()
   @IsOptional()

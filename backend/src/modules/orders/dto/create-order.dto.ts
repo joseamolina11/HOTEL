@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsArray, Min, ArrayMinSize, ValidateNested } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsArray, Min, ArrayMinSize, ValidateNested, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -16,6 +16,17 @@ export class OrderItemDto {
   @IsNumber()
   @Min(0)
   precioUnitario: number;
+}
+
+export class PagoDto {
+  @ApiProperty({ example: 50000 })
+  @IsNumber()
+  @Min(0)
+  monto: number;
+
+  @ApiProperty({ example: 'uuid-metodo-pago' })
+  @IsString()
+  metodoPagoId: string;
 }
 
 export class CreateOrderDto {
@@ -70,4 +81,11 @@ export class CreateOrderDto {
   @ApiPropertyOptional({ example: true, description: 'Si es venta directa (sin habitación)' })
   @IsOptional()
   ventaDirecta?: boolean;
+
+  @ApiPropertyOptional({ type: [PagoDto], description: 'Pagos divididos para venta directa' })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PagoDto)
+  pagos?: PagoDto[];
 }

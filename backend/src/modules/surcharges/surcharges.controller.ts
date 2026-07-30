@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { SurchargesService } from './surcharges.service';
 import { CreateSurchargeDto, SurchargeFilterDto } from './dto/surcharge.dto';
@@ -25,6 +25,10 @@ export class SurchargesController {
     const userId = (req.user as any)?.sub;
     return this.service.create(dto, userId);
   }
+
+  @Put(':id')
+  @Permissions('surcharges:update')
+  update(@Param('id') id: string, @Body() dto: CreateSurchargeDto) { return this.service.update(id, dto); }
 
   @Delete(':id')
   @Permissions('surcharges:delete')

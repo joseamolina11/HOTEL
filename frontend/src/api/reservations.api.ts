@@ -41,4 +41,9 @@ export const reservationsApi = {
     const { data } = await apiClient.put(`/reservations/${id}/confirm`);
     return data.data;
   },
+
+  changeRoom: async (id: string, newRoomId: string): Promise<Reservation> => {
+    const { data } = await apiClient.put(`/reservations/${id}/change-room`, { newRoomId });
+    return data.data;
+  },
 };

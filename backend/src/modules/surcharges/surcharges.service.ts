@@ -58,9 +58,21 @@ export class SurchargesService {
     return this.surchargeRepository.save(surcharge);
   }
 
+  async update(id: string, dto: Partial<CreateSurchargeDto>): Promise<Surcharge> {
+    const s = await this.surchargeRepository.findOne({ where: { id } });
+    if (!s) throw new NotFoundException('Recargo no encontrado');
+    if (s.estado === 'cargado') throw new BadRequestException('No se puede modificar un recargo que ya fue cargado');
+    if (dto.monto) s.monto = dto.monto;
+    if (dto.descripcion) s.descripcion = dto.descripcion;
+    if (dto.cantidad) s.cantidad = dto.cantidad;
+    s.subtotal = s.monto * s.cantidad;
+    return this.surchargeRepository.save(s);
+  }
+
   async remove(id: string): Promise<void> {
     const s = await this.surchargeRepository.findOne({ where: { id } });
     if (!s) throw new NotFoundException('Recargo no encontrado');
+    if (s.estado === 'cargado') throw new BadRequestException('No se puede eliminar un recargo que ya fue cargado');
     await this.surchargeRepository.remove(s);
   }
 

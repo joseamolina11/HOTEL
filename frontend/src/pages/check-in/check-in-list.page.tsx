@@ -10,11 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { LogIn, Plus, X, Loader2, DollarSign, Printer, Zap } from 'lucide-react';
+import { LogIn, Plus, X, Loader2, DollarSign, Printer, Zap, ArrowRightLeft } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
 import { renderContract, generateDefaultContract, printContract } from '@/lib/print-contract';
 import { RegistroHoteleroFields } from '@/components/forms/registro-hotelero-fields';
+import { ChangeRoomDialog } from '@/components/forms/change-room-dialog';
 import { surchargeTypesApi } from '@/api/surcharge-types.api';
 import { surchargesApi } from '@/api/surcharges.api';
 
@@ -119,6 +120,7 @@ export function CheckInListPage() {
 
 function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
+  const [changeRoomOpen, setChangeRoomOpen] = useState(false);
   const [companions, setCompanions] = useState<{
     nombres: string; apellidos: string; documento: string;
     nacionalidad: string; telefono: string; email: string;
@@ -163,11 +165,12 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   };
 
   const estimatedTotal = useMemo(() => {
-    if (!reservation?.room?.roomType?.precioBase) return 0;
+    const precioBase = reservation.precioBase ?? reservation?.room?.roomType?.precioBase;
+    if (!precioBase) return 0;
     const noches = Math.ceil(
       (new Date(reservation.fechaSalida).getTime() - new Date(reservation.fechaEntrada).getTime()) / (1000 * 60 * 60 * 24),
     );
-    return noches * Number(reservation.room.roomType.precioBase);
+    return noches * Number(precioBase);
   }, [reservation]);
 
   const advanceTotal = useMemo(() => {
@@ -213,7 +216,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         numero: reservation.room?.numero || '',
         nombre: reservation.room?.nombre || '',
         tipoHabitacion: reservation.room?.roomType?.nombre || '',
-        precioBase: reservation.room?.roomType?.precioBase,
+        precioBase: reservation.precioBase ?? reservation.room?.roomType?.precioBase,
       },
       hotel: {
         nombre: hotelConfig?.nombre || '',
@@ -356,7 +359,16 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Habitación</span>
-                <span>{reservation.room?.nombre}</span>
+                <span className="flex items-center gap-2">
+                  {reservation.room?.nombre}
+                  <button
+                    type="button"
+                    onClick={() => setChangeRoomOpen(true)}
+                    className="text-xs text-primary hover:underline inline-flex items-center gap-0.5"
+                  >
+                    <ArrowRightLeft className="h-3 w-3" /> Cambiar
+                  </button>
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Período</span>
@@ -583,6 +595,19 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
           </div>
         </DialogContent>
       </Dialog>
+
+      <ChangeRoomDialog
+        open={changeRoomOpen}
+        onClose={() => setChangeRoomOpen(false)}
+        reservation={{
+          id: reservation.id,
+          roomId: reservation.roomId,
+          roomNombre: reservation.room?.nombre,
+          fechaEntrada: reservation.fechaEntrada,
+          fechaSalida: reservation.fechaSalida,
+          estado: 'confirmada',
+        }}
+      />
     </>
   );
 }

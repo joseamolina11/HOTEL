@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, Like } from 'typeorm';
+import { Repository, Between, Like, FindOptionsWhere, In, Not } from 'typeorm';
 import { Reservation } from './entities/reservation.entity';
 import { ReservationGuest } from './entities/reservation-guest.entity';
 import { Room } from '../rooms/entities/room.entity';
 import { Guest } from '../guests/entities/guest.entity';
 import { RoomType } from '../room-types/entities/room-type.entity';
-import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto } from './dto/create-reservation.dto';
+import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto, ChangeRoomDto } from './dto/create-reservation.dto';
 import { generateReservationCode } from 'src/common/utils/generate-code';
 import { parseLocalDate } from 'src/common/utils/date';
 import { isDateOverlap } from 'src/common/utils/date-utils';
@@ -205,6 +205,7 @@ export class ReservationsService {
       estado: createDto.estado || 'pendiente',
       origen: 'directo',
       createdById: userId,
+      precioBase: room.roomType?.precioBase ? Number(room.roomType.precioBase) : undefined,
     });
 
     if (createDto.companions?.length) {
@@ -367,6 +368,100 @@ export class ReservationsService {
     if (updateDto.fechaSalida) reservation.fechaSalida = fechaSalida;
 
     return this.reservationRepository.save(reservation);
+  }
+
+  async changeRoom(id: string, newRoomId: string, userId?: string): Promise<Reservation> {
+    const reservation = await this.reservationRepository.findOne({
+      where: { id },
+      relations: ['room', 'room.roomType', 'guest'],
+    });
+    if (!reservation) throw new NotFoundException('Reserva no encontrada');
+
+    if (!['pendiente', 'confirmada', 'checkin'].includes(reservation.estado)) {
+      throw new BadRequestException('No se puede cambiar la habitación en el estado actual');
+    }
+
+    const newRoom = await this.roomRepository.findOne({
+      where: { id: newRoomId },
+      relations: ['roomType'],
+    });
+    if (!newRoom) throw new NotFoundException('Habitación no encontrada');
+    if (newRoom.estado === 'mantenimiento') {
+      throw new BadRequestException('La habitación de destino está en mantenimiento');
+    }
+
+    if (reservation.estado === 'checkin') {
+      if (newRoom.estado !== 'disponible') {
+        throw new BadRequestException('La habitación de destino no está disponible');
+      }
+    } else {
+      const overlapping = await this.reservationRepository
+        .createQueryBuilder('reservation')
+        .where('reservation.roomId = :roomId', { roomId: newRoomId })
+        .andWhere('reservation.id != :id', { id })
+        .andWhere('reservation.estado NOT IN (:...excludedStatuses)', {
+          excludedStatuses: ['cancelada', 'checkout'],
+        })
+        .andWhere('reservation.fechaEntrada < :fechaSalida', { fechaSalida: reservation.fechaSalida })
+        .andWhere('reservation.fechaSalida > :fechaEntrada', { fechaEntrada: reservation.fechaEntrada })
+        .getCount();
+      if (overlapping > 0) {
+        throw new ConflictException('La habitación de destino no está disponible en esas fechas');
+      }
+    }
+
+    const oldRoomId = reservation.roomId;
+    await this.reservationRepository.update(id, { roomId: newRoomId });
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    if (reservation.estado === 'checkin') {
+      await this.roomRepository.update(oldRoomId, { estado: 'disponible' });
+      await this.roomRepository.update(newRoomId, { estado: 'ocupada' });
+    } else {
+      const otherActive = await this.reservationRepository.count({
+        where: {
+          roomId: oldRoomId,
+          id: Not(id),
+          estado: In(['confirmada', 'checkin']),
+        },
+      });
+      if (!otherActive) {
+        await this.roomRepository.update(oldRoomId, { estado: 'disponible' });
+      }
+      if (reservation.fechaEntrada.getTime() <= hoy.getTime()) {
+        await this.roomRepository.update(newRoomId, { estado: 'reservada' });
+      }
+    }
+
+    const updated = await this.reservationRepository
+      .createQueryBuilder('reservation')
+      .leftJoinAndSelect('reservation.room', 'room')
+      .leftJoinAndSelect('room.roomType', 'roomType')
+      .leftJoinAndSelect('roomType.amenities', 'amenities')
+      .leftJoinAndSelect('reservation.guest', 'guest')
+      .leftJoinAndSelect('reservation.companions', 'companions')
+      .leftJoinAndSelect('reservation.checkIn', 'checkIn')
+      .leftJoinAndSelect('checkIn.user', 'checkInUser')
+      .leftJoinAndSelect('reservation.checkOut', 'checkOut')
+      .leftJoinAndSelect('checkOut.user', 'checkOutUser')
+      .leftJoinAndSelect('reservation.consumptions', 'consumptions')
+      .leftJoinAndSelect('consumptions.inventoryItem', 'consumptionItem')
+      .leftJoinAndSelect('reservation.orders', 'orders')
+      .leftJoinAndSelect('orders.items', 'orderItems')
+      .leftJoinAndSelect('orderItems.inventoryItem', 'orderItem')
+      .leftJoinAndSelect('reservation.payments', 'payments')
+      .leftJoinAndSelect('payments.metodoPago', 'metodoPago')
+      .leftJoinAndSelect('reservation.surcharges', 'surcharges')
+      .leftJoinAndSelect('surcharges.surchargeType', 'surchargeType')
+      .leftJoinAndSelect('reservation.recibosCaja', 'recibosCaja')
+      .leftJoinAndSelect('recibosCaja.items', 'reciboItems')
+      .leftJoinAndSelect('reservation.contratoFile', 'contratoFile')
+      .where('reservation.id = :id', { id })
+      .getOne();
+    if (!updated) throw new NotFoundException('Reserva no encontrada después del cambio');
+    return updated;
   }
 
   async cancel(id: string, cancelDto?: CancelReservationDto, userId?: string): Promise<Reservation> {

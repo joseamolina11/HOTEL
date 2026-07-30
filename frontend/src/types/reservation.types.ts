@@ -23,6 +23,7 @@ export interface Reservation {
   estado: 'pendiente' | 'confirmada' | 'checkin' | 'checkout' | 'cancelada';
   origen: 'directo' | 'booking' | 'airbnb';
   otaReservationId?: string;
+  precioBase?: number | null;
   contratoFileId?: string;
   contratoFile?: { id: string; url: string; originalName: string; mimeType: string; size: number };
   room?: Room;

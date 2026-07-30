@@ -32,6 +32,7 @@ export const ordersApi = {
     pagoMonto?: number;
     pagoReferencia?: string;
     ventaDirecta?: boolean;
+    pagos?: { metodoPagoId: string; monto: number }[];
   }) => {
     const { data } = await apiClient.post('/orders', dto);
     return data.data;

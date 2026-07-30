@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiProperty } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
 import { ReservationsService } from './reservations.service';
-import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto } from './dto/create-reservation.dto';
+import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto, ChangeRoomDto } from './dto/create-reservation.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
 
@@ -68,6 +68,13 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Cancelar reserva' })
   async cancel(@Param('id') id: string, @Body() cancelDto: CancelReservationDto, @CurrentUser('sub') userId: string) {
     return this.reservationsService.cancel(id, cancelDto, userId);
+  }
+
+  @Put(':id/change-room')
+  @Permissions('reservations:edit')
+  @ApiOperation({ summary: 'Cambiar habitación de la reserva' })
+  async changeRoom(@Param('id') id: string, @Body() dto: ChangeRoomDto, @CurrentUser('sub') userId: string) {
+    return this.reservationsService.changeRoom(id, dto.newRoomId, userId);
   }
 
   @Put(':id/confirm')
