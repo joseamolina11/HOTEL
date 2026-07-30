@@ -26,6 +26,7 @@ export interface ContractData {
   fechaSalida: string;
   cantidadHuespedes: number;
   huespedesLista?: string;
+  descuento?: number;
   registro?: {
     direccion?: string;
     ciudad?: string;
@@ -124,6 +125,10 @@ export function generateDefaultContract(data: ContractData): string {
   <div class="field"><span class="label">Noches:</span><span class="value">${nights}</span></div>
   <div class="field"><span class="label">Huéspedes:</span><span class="value">${data.cantidadHuespedes}</span></div>
   ${data.huespedesLista ? `<div class="field full-width"><span class="label">Acompañantes:</span><span class="value">${data.huespedesLista}</span></div>` : ''}
+  <div class="field"><span class="label">Valor por noche:</span><span class="value">$${(data.room.precioBase || 0).toFixed(2)}</span></div>
+  <div class="field"><span class="label">Total estimado:</span><span class="value">$${totalEstimado.toFixed(2)}</span></div>
+  ${data.descuento ? `<div class="field"><span class="label">Descuento:</span><span class="value">-$${Number(data.descuento).toFixed(2)}</span></div>
+  <div class="field"><span class="label">Total con descuento:</span><span class="value">$${Math.max(0, totalEstimado - Number(data.descuento)).toFixed(2)}</span></div>` : ''}
 </div>
 
 <div class="section-title">Condiciones</div>
@@ -181,6 +186,8 @@ export function renderContract(html: string, data: ContractData): string {
     '{{noches}}': String(nights),
     '{{precio_noche}}': data.room.precioBase ? `$${data.room.precioBase}` : '',
     '{{total_estimado}}': `$${totalEstimado.toFixed(2)}`,
+    '{{descuento}}': data.descuento ? `-$${Number(data.descuento).toFixed(2)}` : '',
+    '{{total_con_descuento}}': data.descuento ? `$${Math.max(0, totalEstimado - Number(data.descuento)).toFixed(2)}` : `$${totalEstimado.toFixed(2)}`,
     '{{direccion}}': reg.direccion || '',
     '{{ciudad}}': reg.ciudad || '',
     '{{pais}}': reg.pais || '',

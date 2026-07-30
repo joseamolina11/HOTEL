@@ -4,7 +4,6 @@ import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, addMonths, addWeeks, subMonths, subWeeks,
   isSameMonth, isToday, parseISO,
-  startOfDay,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { roomsApi } from '@/api/rooms.api';
@@ -84,6 +83,10 @@ export function CalendarPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [reserveCell, setReserveCell] = useState<{ room: any; date: string } | null>(null);
+  const monthOffset = Math.round(
+    (currentDate.getFullYear() - new Date().getFullYear()) * 12 +
+    (currentDate.getMonth() - new Date().getMonth())
+  );
   const [filterRoomType, setFilterRoomType] = useState('');
   const [filterCapacidad, setFilterCapacidad] = useState('');
 
@@ -144,75 +147,97 @@ export function CalendarPage() {
     setCurrentDate(viewMode === 'month' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1));
   };
 
-  const title =
-    viewMode === 'month'
-      ? format(currentDate, 'MMMM yyyy', { locale: es })
-      : `Semana del ${format(days[0], "d 'de' MMMM", { locale: es })}`;
+  const title = viewMode === 'month'
+    ? format(currentDate, "MMMM 'de' yyyy", { locale: es })
+    : `Semana del ${format(days[0], "d 'de' MMMM", { locale: es })}`;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Calendario de Habitaciones</h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>
-            Hoy
+        <div className="flex rounded-lg border">
+          <Button
+            variant={viewMode === 'month' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('month')}
+            className="rounded-r-none"
+          >
+            <CalendarDays className="mr-1 h-4 w-4" /> Mes
           </Button>
-          <Button variant="ghost" size="icon" onClick={prev}>
-            <ChevronLeft className="h-5 w-5" />
+          <Button
+            variant={viewMode === 'week' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('week')}
+            className="rounded-l-none"
+          >
+            <CalendarRange className="mr-1 h-4 w-4" /> Semana
           </Button>
-          <span className="min-w-[200px] text-center font-semibold capitalize">{title}</span>
-          <Button variant="ghost" size="icon" onClick={next}>
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-          <div className="ml-2 flex items-center gap-1">
-            <select
-              className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
-              value={String(currentDate.getMonth())}
-              onChange={(e) => {
-                const m = parseInt(e.target.value, 10);
-                setCurrentDate(new Date(currentDate.getFullYear(), m, 1));
-              }}
-            >
-              {Array.from({ length: 12 }, (_, i) => (
-                <option key={i} value={i}>
-                  {format(new Date(2024, i, 1), 'MMMM', { locale: es })}
-                </option>
-              ))}
-            </select>
-            <select
-              className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
-              value={String(currentDate.getFullYear())}
-              onChange={(e) => {
-                const y = parseInt(e.target.value, 10);
-                setCurrentDate(new Date(y, currentDate.getMonth(), 1));
-              }}
-            >
-              {Array.from({ length: 11 }, (_, i) => {
-                const y = new Date().getFullYear() - 5 + i;
-                return <option key={y} value={y}>{y}</option>;
-              })}
-            </select>
-          </div>
-          <div className="ml-4 flex rounded-lg border">
-            <Button
-              variant={viewMode === 'month' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('month')}
-              className="rounded-r-none"
-            >
-              <CalendarDays className="mr-1 h-4 w-4" /> Mes
-            </Button>
-            <Button
-              variant={viewMode === 'week' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('week')}
-              className="rounded-l-none"
-            >
-              <CalendarRange className="mr-1 h-4 w-4" /> Semana
-            </Button>
-          </div>
         </div>
       </div>
+
+      <Card>
+        <CardContent className="py-3 px-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={prev} className="h-8 w-8">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-base font-bold capitalize min-w-[180px] text-center select-none">{title}</span>
+              <Button variant="ghost" size="icon" onClick={next} className="h-8 w-8">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm font-medium capitalize cursor-pointer"
+                value={String(currentDate.getMonth())}
+                onChange={(e) => {
+                  const m = parseInt(e.target.value, 10);
+                  setCurrentDate(new Date(currentDate.getFullYear(), m, 1));
+                }}
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i} value={i}>
+                    {format(new Date(2024, i, 1), 'MMMM', { locale: es })}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm font-medium cursor-pointer"
+                value={String(currentDate.getFullYear())}
+                onChange={(e) => {
+                  const y = parseInt(e.target.value, 10);
+                  setCurrentDate(new Date(y, currentDate.getMonth(), 1));
+                }}
+              >
+                {Array.from({ length: 11 }, (_, i) => {
+                  const y = new Date().getFullYear() - 5 + i;
+                  return <option key={y} value={y}>{y}</option>;
+                })}
+              </select>
+            </div>
+            <div className="flex items-center gap-3 ml-auto">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Línea de tiempo:</span>
+                <input
+                  type="range"
+                  min={-24}
+                  max={12}
+                  value={monthOffset}
+                  onChange={(e) => {
+                    const offset = parseInt(e.target.value, 10);
+                    setCurrentDate(addMonths(new Date(), offset));
+                  }}
+                  className="w-32 h-2 cursor-pointer accent-primary"
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>
+                Hoy
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-3">
@@ -257,16 +282,15 @@ export function CalendarPage() {
         </CardContent>
       </Card>
 
-      <div className="overflow-auto">
-        <div className="min-w-[700px]">
-          {/* Header row: room label + day columns */}
-          <div className="grid sticky top-0 z-20 bg-background" style={{ gridTemplateColumns: `130px repeat(${days.length}, minmax(90px, 1fr))` }}>
-            <div className="border-b p-2" />
-            {days.filter((d) => startOfDay(new Date(d)) >= startOfDay(new Date())).map((d, i) => (
+      <div className="overflow-x-auto border rounded-lg">
+        <div style={{ width: `${130 + days.length * 90}px`, minWidth: '700px' }}>
+          <div className="grid" style={{ gridTemplateColumns: `130px repeat(${days.length}, 90px)` }}>
+            <div className="border-b border-r p-2 bg-background sticky top-0 z-20" />
+            {days.map((d, i) => (
               <div
                 key={i}
-                className={`border-b border-r p-1.5 text-center text-xs ${
-                  isToday(d) ? 'bg-primary/10 text-primary font-bold' : ''
+                className={`border-b border-r p-1.5 text-center text-xs font-medium bg-background sticky top-0 z-20 ${
+                  isToday(d) ? 'bg-primary/10 text-primary' : ''
                 } ${!isSameMonth(d, currentDate) && viewMode === 'month' ? 'text-muted-foreground' : ''}`}
               >
                 <div>{format(d, 'EEE', { locale: es })}</div>
@@ -275,7 +299,6 @@ export function CalendarPage() {
             ))}
           </div>
 
-          {/* Room rows */}
           {rooms.length === 0 && isLoading && (
             <div className="py-12 text-center text-muted-foreground">Cargando...</div>
           )}
@@ -284,16 +307,16 @@ export function CalendarPage() {
           )}
 
           {rooms.map((room: any) => (
-            <div key={room.id} className="grid" style={{ gridTemplateColumns: `130px repeat(${days.length}, minmax(90px, 1fr))` }}>
-              <div className="sticky left-0 z-10 bg-background border-b p-2 text-sm font-medium flex items-center gap-2 truncate">
+            <div key={room.id} className="grid" style={{ gridTemplateColumns: `130px repeat(${days.length}, 90px)` }}>
+              <div className="sticky left-0 z-10 bg-background border-b border-r p-2 text-sm font-medium flex items-center gap-2 truncate">
                 <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{
                   backgroundColor: room.roomType?.colorIdentificador || '#3B82F6',
                 }} />
                 <span className="shrink-0">{room.numero}</span>
                 <span className="text-muted-foreground text-xs truncate">{room.nombre}</span>
               </div>
-              {days.filter((d) => startOfDay(new Date(d)) >= startOfDay(new Date())).map((d, di) => {
-                const status = !isSameMonth(d, currentDate) && viewMode === 'month' ? null : getCellStatus(room, d);
+              {days.map((d, di) => {
+                const status = getCellStatus(room, d);
                 const today = isToday(d);
                 const guestName = (status === 'reservada' || status === 'checkout') ? getCellGuest(room, d) : '';
                 return (
@@ -307,13 +330,13 @@ export function CalendarPage() {
                       ${today ? 'ring-2 ring-inset ring-primary/30' : ''}
                     `}
                     onClick={() => {
-                      if (status === 'disponible' ||  status === 'checkout') {
+                      if (status === 'disponible' || status === 'checkout') {
                         setReserveCell({ room, date: format(d, 'yyyy-MM-dd') });
                       }
                     }}
                     title={status ? `${room.numero} ${format(d, 'yyyy-MM-dd')}: ${status}` : ''}
                   >
-                    <div className="flex flex-col items-center justify-center h-full ">
+                    <div className="flex flex-col items-center justify-center h-full">
                       <span className="text-[10px] font-semibold uppercase">{STATUS_LABELS[status || ''] || ''}</span>
                       {guestName && (
                         <span className="text-[8px] text-muted-foreground truncate max-w-full leading-tight mt-0.5">

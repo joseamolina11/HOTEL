@@ -23,6 +23,14 @@ export function useRoomOrders(roomId: string, page?: number) {
   });
 }
 
+export function useAllOrders(params?: Record<string, string>, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['orders', 'all', params],
+    queryFn: () => ordersApi.findAll(params),
+    enabled: options?.enabled ?? true,
+  });
+}
+
 export function useOrder(id: string) {
   return useQuery({
     queryKey: ['orders', id],
@@ -35,6 +43,17 @@ export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: Parameters<typeof ordersApi.create>[0]) => ordersApi.create(dto),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['inventory'] });
+    },
+  });
+}
+
+export function useUpdateOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: Parameters<typeof ordersApi.update>[1] }) => ordersApi.update(id, dto),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['inventory'] });

@@ -122,6 +122,8 @@ export class CheckOutService {
 
     const hotelConfig = await this.hotelConfigRepository.findOne({ where: {} });
 
+    const descuento = Number(reservation.descuento || 0);
+
     return {
       reservation,
       hotelConfig: hotelConfig || null,
@@ -135,10 +137,9 @@ export class CheckOutService {
         totalPedidos,
         surcharges,
         totalRecargos,
-        payments,
-        totalPagado,
+        descuento,
         totalEstancia,
-        saldoPendiente,
+        saldoPendiente: saldoPendiente - descuento,
       },
     };
   }
@@ -280,13 +281,14 @@ export class CheckOutService {
           referenciaId: p.id,
         };
       }));
+      const descuento = Number(reservation.descuento || 0);
       const recibo = await this.reciboCajaService.create({
         clienteNombre: reservation.guest?.nombres || 'Huésped',
         reservationId: reservation.id,
         fecha: new Date().toISOString().slice(0, 10),
         subtotal: totalPaymentAmount,
-        descuento: 0,
-        total: totalPaymentAmount,
+        descuento,
+        total: Math.max(0, totalPaymentAmount - descuento),
         pagos: pagosData,
         items: itemsData,
       }, userId);

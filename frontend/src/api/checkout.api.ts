@@ -36,6 +36,7 @@ export interface StaySummary {
     totalPagado: number;
     totalEstancia: number;
     saldoPendiente: number;
+    descuento: number;
   };
 }
 

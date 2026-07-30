@@ -360,9 +360,15 @@ function StaySummaryContent({
           </div>
         )}
 
+        {s.descuento > 0 && (
+          <div className="flex justify-between px-4 py-2 text-sm text-amber-600">
+            <span>Descuento</span>
+            <span>-{formatCurrency(s.descuento)}</span>
+          </div>
+        )}
         <div className="border-t bg-muted/30 px-4 py-3 flex justify-between text-sm font-bold">
-          <span>Total Estancia</span>
-          <span>{formatCurrency(s.totalEstancia)}</span>
+          <span>{s.descuento > 0 ? 'Total con Descuento' : 'Total Estancia'}</span>
+          <span>{formatCurrency(s.descuento > 0 ? s.totalEstancia - s.descuento : s.totalEstancia)}</span>
         </div>
       </div>
 

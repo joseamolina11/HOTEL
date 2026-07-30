@@ -58,6 +58,8 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
   const [showCreateGuest, setShowCreateGuest] = useState(false);
 
+  const [descuento, setDescuento] = useState(0);
+
   const [pagos, setPagos] = useState<{ monto: number; metodoPagoId: string; comprobante: string }[]>([
     { monto: 0, metodoPagoId: '', comprobante: '' },
   ]);
@@ -92,6 +94,10 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
     );
     return noches * Number(room.roomType.precioBase);
   }, [room, watchedEntrada, watchedSalida]);
+
+  const totalRecargos = useMemo(() => {
+    return recargos.reduce((sum, r) => sum + (r.monto || 0) * (r.cantidad || 1), 0);
+  }, [recargos]);
 
   const pagoActualTotal = useMemo(() => {
     return pagos.reduce((sum, p) => sum + (p.monto || 0), 0);
@@ -176,6 +182,7 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       huespedesLista: (formData.companions || [])
         .filter((c: any) => c.documento)
         .map((c: any) => `${c.nombres} ${c.apellidos} (${c.documento})`).join(', '),
+      descuento,
       registro: registroData,
     };
     const html = hotelConfig?.contratoHtml
@@ -207,6 +214,9 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       companions: companionsList.length > 0 ? companionsList : undefined,
       ...registroData,
     };
+    if (descuento > 0) {
+      paymentData.descuento = descuento;
+    }
     if (pagosValidos.length > 0) {
       paymentData.pagos = pagosValidos.map((p) => ({
         monto: p.monto,
@@ -235,6 +245,7 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
     qc.invalidateQueries({ queryKey: ['rooms'] });
     qc.invalidateQueries({ queryKey: ['reservations'] });
     qc.invalidateQueries({ queryKey: ['guests'] });
+    setDescuento(0);
     onClose();
   };
 
@@ -369,9 +380,43 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                 <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
                   <DollarSign className="h-4 w-4" /> Pago en entrada
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Total estimado: {formatCurrency(estimatedTotal)}
-                </p>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Alojamiento ({Math.ceil(
+                      (new Date(watchedSalida).getTime() - new Date(watchedEntrada).getTime()) / (1000 * 60 * 60 * 24)
+                    ) || 0} noches)</span>
+                    <span>{formatCurrency(estimatedTotal)}</span>
+                  </div>
+                  {recargos.map((r, i) => (
+                    <div key={i} className="flex justify-between text-xs text-violet-600">
+                      <span>Recargo: {r.descripcion} x{r.cantidad}</span>
+                      <span>{formatCurrency((r.monto || 0) * (r.cantidad || 1))}</span>
+                    </div>
+                  ))}
+                  {totalRecargos > 0 && (
+                    <div className="flex justify-between text-xs font-semibold text-violet-700 border-b pb-1">
+                      <span>Total recargos</span>
+                      <span>{formatCurrency(totalRecargos)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 border-b pb-2">
+                  <div className="w-36 space-y-1">
+                    <label className="text-xs text-muted-foreground">Descuento</label>
+                    <Input
+                      type="number" step="0.01" min={0}
+                      placeholder="0.00"
+                      value={descuento || ''}
+                      onChange={(e) => setDescuento(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground pt-5">
+                    <span className="font-semibold text-amber-600">
+                      Total a pagar: {formatCurrency(Math.max(0, estimatedTotal + totalRecargos - descuento))}
+                    </span>
+                  </div>
+                </div>
 
                 {pagos.map((pago, i) => (
                   <div key={i} className="flex items-end gap-2 border-b pb-2">

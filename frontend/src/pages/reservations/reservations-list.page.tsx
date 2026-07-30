@@ -140,6 +140,7 @@ export function ReservationsListPage() {
           consumos: [], totalConsumos: 0,
           pedidos: [], totalPedidos: 0,
           surcharges: [], totalRecargos: 0,
+          descuento: 0,
           payments: [], totalPagado: 0,
           totalEstancia: 0, saldoPendiente: 0,
         },
@@ -218,14 +219,15 @@ export function ReservationsListPage() {
                   <th className="px-4 py-3 text-left font-medium">Salida</th>
                   <th className="px-4 py-3 text-left font-medium">Estado</th>
                   <th className="px-4 py-3 text-left font-medium">Origen</th>
+                  <th className="px-4 py-3 text-right font-medium">Descuento</th>
                   <th className="px-4 py-3 text-left font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
                 ) : reservations.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Sin reservas</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Sin reservas</td></tr>
                 ) : (
                   reservations?.map((res: any) => (
                     <tr key={res.id} className="border-b hover:bg-muted/50">
@@ -236,6 +238,7 @@ export function ReservationsListPage() {
                       <td className="px-4 py-3">{formatDateShort(res.fechaSalida)}</td>
                       <td className="px-4 py-3"><StatusBadge status={res.estado} /></td>
                       <td className="px-4 py-3 capitalize">{res.origen}</td>
+                      <td className="px-4 py-3 text-right">{Number(res.descuento) > 0 ? formatCurrency(res.descuento) : '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => setFullDetailRes(res)} title="Ver detalle completo">
@@ -299,6 +302,9 @@ export function ReservationsListPage() {
                 <div><span className="text-muted-foreground">Estado:</span> <StatusBadge status={detailRes.estado} /></div>
                 <div><span className="text-muted-foreground">Origen:</span> <span className="font-medium capitalize">{detailRes.origen}</span></div>
                 <div><span className="text-muted-foreground">Huéspedes:</span> <span className="font-medium">{detailRes.cantidadHuespedes}</span></div>
+                {Number(detailRes.descuento) > 0 && (
+                  <div><span className="text-muted-foreground">Descuento:</span> <span className="font-medium text-amber-600">{formatCurrency(detailRes.descuento)}</span></div>
+                )}
                 {reciboVinculado && (
                   <div className="col-span-2">
                     <span className="text-muted-foreground">Recibo de Caja: </span>

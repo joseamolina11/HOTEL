@@ -145,6 +145,12 @@ export class CheckInDto {
   @IsString()
   numeroPlaca?: string;
 
+  @ApiPropertyOptional({ example: 0, description: 'Descuento a aplicar sobre el total' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  descuento?: number;
+
   @ApiPropertyOptional({ example: 150.00 })
   @IsOptional()
   @IsNumber()

@@ -93,6 +93,9 @@ export class Reservation {
   @Column({ name: 'numero_placa', type: 'varchar', nullable: true })
   numeroPlaca?: string;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  descuento: number;
+
   @Column({ name: 'ota_reservation_id', nullable: true })
   otaReservationId: string;
 

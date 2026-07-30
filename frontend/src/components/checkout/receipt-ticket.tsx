@@ -27,6 +27,7 @@ interface ReceiptTicketProps {
     totalPedidos: number;
     surcharges: any[];
     totalRecargos: number;
+    descuento: number;
     payments: any[];
     totalPagado: number;
     totalEstancia: number;
@@ -156,7 +157,8 @@ export function printReceipt(data: ReceiptTicketProps) {
     ${consumosHtml}
     ${pedidosHtml}
     ${recargosHtml}
-    <tr class="total-row"><td style="padding-top:8px;border-top:2px solid #222">TOTAL ESTANCIA</td><td style="text-align:right;padding-top:8px;border-top:2px solid #222" class="grand-total">${formatCurrency(s.totalEstancia)}</td></tr>
+    ${s.descuento > 0 ? `<tr><td style="padding-top:4px;color:#d97706">DESCUENTO</td><td style="text-align:right;padding-top:4px;color:#d97706">-${formatCurrency(s.descuento)}</td></tr>` : ''}
+    <tr class="total-row"><td style="padding-top:8px;border-top:2px solid #222">${s.descuento > 0 ? 'TOTAL CON DESCUENTO' : 'TOTAL ESTANCIA'}</td><td style="text-align:right;padding-top:8px;border-top:2px solid #222" class="grand-total">${formatCurrency(s.descuento > 0 ? s.totalEstancia - s.descuento : s.totalEstancia)}</td></tr>
   </table>
 
   ${s.payments?.length ? `<div class="divider"></div><table>${paymentsHtml}<tr class="total-row"><td>TOTAL PAGADO</td><td style="text-align:right" class="paid">${formatCurrency(s.totalPagado)}</td></tr></table>` : ''}

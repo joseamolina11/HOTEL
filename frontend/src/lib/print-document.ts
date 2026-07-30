@@ -613,6 +613,9 @@ export async function printReservation(id: string) {
   const totalRecargos = (r.surcharges || []).reduce((sum: number, s: any) => sum + Number(s.subtotal), 0);
   const totalEstancia = totalHabitacion + totalConsumos + totalPedidos + totalRecargos;
 
+  const descuentoAplicado = (r.recibosCaja || []).reduce((max: number, rc: any) => Math.max(max, Number(rc.descuento || 0)), 0);
+  const totalConDescuento = Math.max(0, totalEstancia - descuentoAplicado);
+
   const statusLabels: Record<string, string> = {
     pendiente: 'Pendiente', confirmada: 'Confirmada', checkin: 'Check-In', checkout: 'Check-Out', cancelada: 'Cancelada',
   };
@@ -725,6 +728,9 @@ export async function printReservation(id: string) {
         <tr><td class="total-label">Pedidos</td><td class="total-value">${formatCurrency(totalPedidos)}</td></tr>
         ${totalRecargos > 0 ? `<tr><td class="total-label">Recargos</td><td class="total-value">${formatCurrency(totalRecargos)}</td></tr>` : ''}
         <tr class="grand-total-row"><td>TOTAL ESTAD\u00cdA</td><td>${formatCurrency(totalEstancia)}</td></tr>
+        ${descuentoAplicado > 0 ? `
+        <tr><td class="total-label" style="color:#d97706">Descuento</td><td class="total-value" style="color:#d97706">-${formatCurrency(descuentoAplicado)}</td></tr>
+        <tr class="grand-total-row"><td>TOTAL A PAGAR</td><td>${formatCurrency(totalConDescuento)}</td></tr>` : ''}
       </table>
     </div>
 

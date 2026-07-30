@@ -433,7 +433,7 @@ function CloseDialog({ open, onClose, register, totalIngresos, totalEgresos, exp
             <Textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} placeholder="Opcional" />
           </div>
 
-          <Button className="w-full" disabled={closeMut.isPending || totalDeclarado === 0} onClick={handleSubmit}>
+          <Button className="w-full" disabled={closeMut.isPending} onClick={handleSubmit}>
             {closeMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
             Cerrar Caja
           </Button>

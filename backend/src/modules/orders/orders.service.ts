@@ -1,13 +1,19 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, DeepPartial, IsNull } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { InventoryItem } from '../inventory/entities/inventory-item.entity';
 import { InventoryMovement } from '../inventory/entities/inventory-movement.entity';
 import { Room } from '../rooms/entities/room.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { CashRegister } from '../cash-register/entities/cash-register.entity';
+import { Payment } from '../payments/entities/payment.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
+import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
+import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
+import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 
 @Injectable()
 export class OrdersService {
@@ -24,16 +30,24 @@ export class OrdersService {
     private readonly roomRepo: Repository<Room>,
     @InjectRepository(Reservation)
     private readonly reservationRepo: Repository<Reservation>,
+    @InjectRepository(CashRegister)
+    private readonly cashRegisterRepo: Repository<CashRegister>,
+    @InjectRepository(Payment)
+    private readonly paymentRepo: Repository<Payment>,
+    private readonly reciboCajaService: ReciboCajaService,
+    private readonly financialMovementsService: FinancialMovementsService,
+    private readonly paymentMethodsService: PaymentMethodsService,
   ) {}
 
-  async findAll(filters?: { roomId?: string; estado?: string }, page = 1, limit = 10) {
+  async findAll(filters?: { roomId?: string; estado?: string; reservationId?: string }, page = 1, limit = 10) {
     const where: any = {};
     if (filters?.roomId) where.roomId = filters.roomId;
     if (filters?.estado) where.estado = filters.estado;
+    if (filters?.reservationId) where.reservationId = filters.reservationId;
 
     const [data, total] = await this.orderRepo.findAndCount({
       where,
-      relations: ['room', 'guest', 'user', 'items', 'items.inventoryItem'],
+      relations: ['room', 'guest', 'user', 'items', 'items.inventoryItem', 'annulledBy'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -43,17 +57,32 @@ export class OrdersService {
   }
 
   async findByRoom(roomId: string) {
-    return this.orderRepo.find({
-      where: { roomId },
+    const activeReservation = await this.reservationRepo.findOne({
+      where: { roomId, estado: 'checkin' },
+      order: { fechaEntrada: 'DESC' },
+    });
+
+    if (!activeReservation) return [];
+
+    const orders = await this.orderRepo.find({
+      where: [
+        { reservationId: activeReservation.id },
+        { roomId, reservationId: IsNull() },
+      ],
       relations: ['items', 'items.inventoryItem', 'guest', 'user'],
       order: { createdAt: 'DESC' },
     });
+
+    return {
+      orders,
+      reservationId: activeReservation.id,
+    };
   }
 
   async findOne(id: string) {
     const order = await this.orderRepo.findOne({
       where: { id },
-      relations: ['room', 'guest', 'user', 'items', 'items.inventoryItem'],
+      relations: ['room', 'guest', 'user', 'items', 'items.inventoryItem', 'annulledBy'],
     });
     if (!order) throw new NotFoundException('Pedido no encontrado');
     return order;
@@ -77,16 +106,22 @@ export class OrdersService {
   }
 
   async create(dto: CreateOrderDto, userId: string) {
-    const room = await this.roomRepo.findOne({ where: { id: dto.roomId } });
-    if (!room) throw new NotFoundException('Habitación no encontrada');
+    const isDirectSale = dto.ventaDirecta || !dto.roomId;
 
+    let roomId = dto.roomId;
     let reservationId = dto.reservationId;
-    if (!reservationId) {
-      const activeReservation = await this.reservationRepo.findOne({
-        where: { roomId: dto.roomId, estado: 'checkin' },
-        order: { fechaEntrada: 'DESC' },
-      });
-      if (activeReservation) reservationId = activeReservation.id;
+
+    if (!isDirectSale) {
+      const room = await this.roomRepo.findOne({ where: { id: dto.roomId } });
+      if (!room) throw new NotFoundException('Habitación no encontrada');
+
+      if (!reservationId) {
+        const activeReservation = await this.reservationRepo.findOne({
+          where: { roomId: dto.roomId, estado: 'checkin' },
+          order: { fechaEntrada: 'DESC' },
+        });
+        if (activeReservation) reservationId = activeReservation.id;
+      }
     }
 
     const codigo = await this.generateCodigo();
@@ -119,19 +154,19 @@ export class OrdersService {
     }
 
     const order = this.orderRepo.create({
-      roomId: dto.roomId,
+      roomId: roomId || undefined,
       reservationId,
       guestId: dto.guestId,
       userId,
       codigo,
       fecha: new Date(),
       total,
-      estado: 'pendiente',
+      estado: 'pendiente' as const,
       observaciones: dto.observaciones,
       items: itemsData as unknown as OrderItem[],
-    });
+    } as DeepPartial<Order>);
 
-    const saved = await this.orderRepo.save(order);
+    const saved = await this.orderRepo.save(order) as Order;
 
     const movements = itemsData.map((item) =>
       this.movementRepo.create({
@@ -150,13 +185,221 @@ export class OrdersService {
       await this.movementRepo.save(movements);
     }
 
-    return saved;
+    // If payment provided (direct sale), process payment immediately
+    if (dto.pagoMetodoPagoId && dto.pagoMonto && dto.pagoMonto > 0) {
+      await this.processOrderPayment(saved, dto, userId);
+    }
+
+    return this.findOne(saved.id);
   }
 
-  async cancel(id: string) {
+  async update(id: string, dto: UpdateOrderDto, userId: string) {
+    const order = await this.findOne(id);
+    if (order.estado !== 'pendiente') {
+      throw new BadRequestException('Solo se pueden editar pedidos pendientes');
+    }
+
+    if (dto.items) {
+      const oldItems = [...order.items];
+
+      for (const newItem of dto.items) {
+        const oldItem = oldItems.find(i => i.inventoryItemId === newItem.inventoryItemId);
+        const oldQty = oldItem?.cantidad || 0;
+        const diff = newItem.cantidad - oldQty;
+
+        if (diff !== 0) {
+          const product = await this.inventoryRepo.findOne({ where: { id: newItem.inventoryItemId } });
+          if (!product) throw new NotFoundException(`Producto ${newItem.inventoryItemId} no encontrado`);
+
+          if (diff > 0) {
+            if (product.stockActual < diff) {
+              throw new BadRequestException(`Stock insuficiente para ${product.nombre}: disponible ${product.stockActual}, necesita ${diff}`);
+            }
+          }
+
+          const stockAnterior = product.stockActual;
+          product.stockActual -= diff;
+          await this.inventoryRepo.save(product);
+
+          await this.movementRepo.save(this.movementRepo.create({
+            inventoryItemId: newItem.inventoryItemId,
+            userId,
+            tipo: diff > 0 ? 'salida' : 'entrada',
+            cantidad: Math.abs(diff),
+            stockAnterior,
+            stockPosterior: product.stockActual,
+            precioUnitario: newItem.precioUnitario || 0,
+            observaciones: `Ajuste ${diff > 0 ? 'aumento' : 'reducción'} pedido ${order.codigo}`,
+          }));
+        }
+      }
+
+      for (const oldItem of oldItems) {
+        const stillExists = dto.items.find(i => i.inventoryItemId === oldItem.inventoryItemId);
+        if (!stillExists) {
+          const product = await this.inventoryRepo.findOne({ where: { id: oldItem.inventoryItemId } });
+          if (product) {
+            product.stockActual += oldItem.cantidad;
+            await this.inventoryRepo.save(product);
+
+            await this.movementRepo.save(this.movementRepo.create({
+              inventoryItemId: oldItem.inventoryItemId,
+              userId,
+              tipo: 'entrada',
+              cantidad: oldItem.cantidad,
+              stockAnterior: product.stockActual - oldItem.cantidad,
+              stockPosterior: product.stockActual,
+              precioUnitario: oldItem.precioUnitario || 0,
+              observaciones: `Eliminado de pedido ${order.codigo}`,
+            }));
+          }
+        }
+      }
+
+      await this.orderItemRepo.delete({ orderId: id });
+
+      if (dto.items.length > 0) {
+        const newItems = dto.items.map(i =>
+          this.orderItemRepo.create({
+            orderId: id,
+            inventoryItemId: i.inventoryItemId,
+            cantidad: i.cantidad,
+            precioUnitario: i.precioUnitario,
+            subtotal: i.cantidad * i.precioUnitario,
+          }),
+        );
+        await this.orderItemRepo.save(newItems);
+      }
+
+      order.total = dto.items.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
+    }
+
+    const updateFields: Record<string, any> = {};
+
+    if (dto.items) {
+      updateFields.total = order.total;
+    }
+
+    if (dto.roomId !== undefined) {
+      if (!dto.roomId) {
+        updateFields.roomId = null;
+        updateFields.reservationId = null;
+      } else {
+        const room = await this.roomRepo.findOne({ where: { id: dto.roomId } });
+        if (!room) throw new NotFoundException('Habitación no encontrada');
+        updateFields.roomId = dto.roomId;
+
+        const activeReservation = await this.reservationRepo.findOne({
+          where: { roomId: dto.roomId, estado: 'checkin' },
+          order: { fechaEntrada: 'DESC' },
+        });
+        updateFields.reservationId = activeReservation?.id || null;
+      }
+    }
+
+    if (dto.observaciones !== undefined) {
+      updateFields.observaciones = dto.observaciones;
+    }
+
+    if (Object.keys(updateFields).length > 0) {
+      await this.orderRepo.update(id, updateFields);
+    }
+    return this.findOne(id);
+  }
+
+  private async processOrderPayment(order: Order, dto: CreateOrderDto, userId: string) {
+    const pm = await this.paymentMethodsService.findOne(dto.pagoMetodoPagoId!);
+    const cashRegister = await this.cashRegisterRepo.findOne({ where: { estado: 'abierta' } });
+    const pagoMonto = dto.pagoMonto!;
+
+    // Reload order with items to get inventoryItem relation
+    const orderWithItems = await this.orderRepo.findOne({
+      where: { id: order.id },
+      relations: ['items', 'items.inventoryItem'],
+    });
+
+    // Create Payment record
+    const payment = await this.paymentRepo.save(
+      this.paymentRepo.create({
+        orderId: order.id,
+        roomId: order.roomId,
+        userId,
+        monto: pagoMonto,
+        metodoPagoId: dto.pagoMetodoPagoId,
+        comprobante: dto.pagoReferencia,
+        observaciones: `Venta directa ${order.codigo} - ${pm.nombre}`,
+        fecha: new Date(),
+      }),
+    );
+
+    // Build items for recibo
+    const itemsData = (orderWithItems?.items || []).map((item: any) => ({
+      concepto: item.inventoryItem?.nombre || 'Producto',
+      cantidad: item.cantidad,
+      precioUnitario: Number(item.precioUnitario),
+      subtotal: Number(item.subtotal),
+      tipo: 'pedido' as const,
+    }));
+
+    // Create Recibo de Caja
+    const recibo = await this.reciboCajaService.create({
+      clienteNombre: dto.clienteNombre || 'Venta directa',
+      fecha: new Date().toISOString().slice(0, 10),
+      subtotal: pagoMonto,
+      descuento: 0,
+      total: pagoMonto,
+      pagos: [{
+        concepto: `Venta directa ${order.codigo}`,
+        monto: pagoMonto,
+        metodoPagoId: dto.pagoMetodoPagoId!,
+        cuentaId: pm.financialAccountId || '',
+        referenciaTipo: 'order',
+        referenciaId: order.id,
+      }],
+      items: itemsData,
+    }, userId);
+
+    // Create Financial Movement
+    if (pm.financialAccountId) {
+      try {
+        await this.financialMovementsService.create({
+          accountId: pm.financialAccountId,
+          tipo: 'INGRESO',
+          monto: pagoMonto,
+          concepto: `Venta directa ${order.codigo} - ${pm.nombre}`,
+          referenciaTipo: 'order',
+          referenciaId: order.id,
+          reciboId: recibo.id,
+          cashRegisterId: cashRegister?.id,
+        }, userId);
+      } catch (e: any) {
+        // skip
+      }
+    }
+
+    // Update Cash Register
+    if (cashRegister) {
+      const tipo = pm.tipo || 'otros';
+      cashRegister.totalVentas = Number(cashRegister.totalVentas) + pagoMonto;
+      if (tipo === 'efectivo') cashRegister.totalEfectivo = Number(cashRegister.totalEfectivo) + pagoMonto;
+      else if (tipo === 'transferencia') cashRegister.totalTransferencia = Number(cashRegister.totalTransferencia) + pagoMonto;
+      else if (tipo === 'tarjeta') cashRegister.totalTarjeta = Number(cashRegister.totalTarjeta) + pagoMonto;
+      else cashRegister.totalOtros = Number(cashRegister.totalOtros) + pagoMonto;
+      cashRegister.cantidadTransacciones += 1;
+      await this.cashRegisterRepo.save(cashRegister);
+    }
+
+    // Mark order as paid
+    order.estado = 'pagado';
+    order.reciboId = recibo.id;
+    await this.orderRepo.save(order);
+  }
+
+  async cancel(id: string, userId?: string) {
     const order = await this.findOne(id);
     if (order.estado === 'cancelado') throw new BadRequestException('El pedido ya está cancelado');
 
+    // Reverse inventory
     for (const item of order.items) {
       const product = await this.inventoryRepo.findOne({ where: { id: item.inventoryItemId } });
       if (product) {
@@ -167,7 +410,7 @@ export class OrdersService {
         await this.movementRepo.save(
           this.movementRepo.create({
             inventoryItemId: item.inventoryItemId,
-            userId: order.userId,
+            userId: userId || order.userId,
             tipo: 'entrada' as const,
             cantidad: item.cantidad,
             stockAnterior,
@@ -179,7 +422,52 @@ export class OrdersService {
       }
     }
 
+    // Reverse financial movements and annul receipt if order was paid
+    if (order.estado === 'pagado' && order.reciboId) {
+      try {
+        // Find the receipt
+        const { recibo } = await this.reciboCajaService.findOne(order.reciboId);
+
+        // Create reverse financial movements for each payment in the receipt
+        const cashRegister = await this.cashRegisterRepo.findOne({ where: { estado: 'abierta' } });
+        for (const pago of recibo.pagos || []) {
+          if (pago.cuentaId) {
+            try {
+              await this.financialMovementsService.create({
+                accountId: pago.cuentaId,
+                tipo: 'EGRESO',
+                monto: Number(pago.monto),
+                concepto: `Anulación pedido ${order.codigo} - reverso`,
+                referenciaTipo: 'order_cancel',
+                referenciaId: order.id,
+                reciboId: order.reciboId,
+                cashRegisterId: cashRegister?.id,
+              }, userId || order.userId);
+            } catch (e: any) {
+              // skip
+            }
+          }
+        }
+
+        // Update cash register (subtract amounts)
+        if (cashRegister) {
+          const totalPaid = Number(order.total);
+          cashRegister.totalVentas = Math.max(0, Number(cashRegister.totalVentas) - totalPaid);
+          // We can't easily know exact split by payment type, so just reduce total
+          cashRegister.cantidadTransacciones = Math.max(0, cashRegister.cantidadTransacciones - 1);
+          await this.cashRegisterRepo.save(cashRegister);
+        }
+
+        // Annul the receipt
+        await this.reciboCajaService.anular(order.reciboId);
+      } catch (e: any) {
+        // skip if receipt not found or already annulled
+      }
+    }
+
     order.estado = 'cancelado';
+    (order as any).annulledById = userId || null;
+    (order as any).annulledAt = new Date();
     return this.orderRepo.save(order);
   }
 

@@ -5,9 +5,11 @@ import { reciboCajaApi } from '@/api/recibo-caja.api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
 import { formatCurrency } from '@/lib/utils';
-import { ExternalLink, Receipt, ShoppingCart, CreditCard, Package, BedDouble, Printer } from 'lucide-react';
+import { useReservationSurcharges, useActiveSurchargeTypes, useCreateSurcharge, useRemoveSurcharge } from '@/hooks/useSurcharges';
+import { ExternalLink, Receipt, ShoppingCart, CreditCard, Package, BedDouble, Printer, Zap, Plus, X, Loader2 } from 'lucide-react';
 
 const STATUS_LABELS: Record<string, string> = {
   pendiente: 'Pendiente',
@@ -32,6 +34,9 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
   onNavigateReservations?: () => void;
 }) {
   const [reciboDetailId, setReciboDetailId] = useState<string | null>(null);
+  const [newSurchargeType, setNewSurchargeType] = useState('');
+  const [newSurchargeMonto, setNewSurchargeMonto] = useState(0);
+  const [newSurchargeCantidad, setNewSurchargeCantidad] = useState(1);
 
   const { data: summary, isLoading } = useQuery({
     queryKey: ['stay-summary', reservation?.id],
@@ -44,6 +49,14 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
     queryFn: () => reciboCajaApi.findByReservation(reservation!.id),
     enabled: !!reservation && open && (reservation.estado === 'checkout' || reservation.estado === 'checkin'),
   });
+
+  const { data: activeSurchargeTypes } = useActiveSurchargeTypes();
+  const { data: surchargesData, refetch: refetchSurcharges } = useReservationSurcharges(
+    reservation?.estado === 'checkin' ? reservation.id : undefined,
+  );
+  const surcharges = surchargesData?.data || surchargesData || [];
+  const createSurchargeMut = useCreateSurcharge();
+  const removeSurchargeMut = useRemoveSurcharge();
 
   const res = summary?.reservation || reservation;
   const s = summary?.summary;
@@ -134,6 +147,84 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                     {res.companions.map((c: any) => (
                       <span key={c.id} className="bg-background px-2 py-1 rounded text-xs">{c.nombres} {c.apellidos}</span>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {res.estado === 'checkin' && (
+                <div>
+                  <h3 className="text-sm font-medium mb-2 flex items-center gap-1">
+                    <Zap className="h-4 w-4 text-violet-600" /> Recargos
+                  </h3>
+                  {surcharges.length > 0 && (
+                    <div className="rounded-lg border mb-2 divide-y text-sm">
+                      {surcharges.map((sc: any) => (
+                        <div key={sc.id} className="flex items-center justify-between px-3 py-2">
+                          <span className="text-muted-foreground">{sc.descripcion} x{sc.cantidad}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{formatCurrency(sc.subtotal)}</span>
+                            <Button
+                              type="button" variant="ghost" size="icon" className="h-6 w-6"
+                              disabled={removeSurchargeMut.isPending}
+                              onClick={async () => {
+                                await removeSurchargeMut.mutateAsync(sc.id);
+                                refetchSurcharges();
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Tipo</label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={newSurchargeType}
+                        onChange={(e) => {
+                          const t = (activeSurchargeTypes || []).find((st: any) => st.id === e.target.value);
+                          setNewSurchargeType(e.target.value);
+                          setNewSurchargeMonto(t ? Number(t.montoDefault) : 0);
+                        }}
+                      >
+                        <option value="">Seleccionar...</option>
+                        {(activeSurchargeTypes || []).map((st: any) => (
+                          <option key={st.id} value={st.id}>{st.nombre} — {formatCurrency(Number(st.montoDefault))}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="w-20 space-y-1">
+                      <label className="text-xs text-muted-foreground">Cant.</label>
+                      <Input type="number" min={1} value={newSurchargeCantidad}
+                        onChange={(e) => setNewSurchargeCantidad(Number(e.target.value))} />
+                    </div>
+                    <div className="w-24 space-y-1">
+                      <label className="text-xs text-muted-foreground">Monto</label>
+                      <Input type="number" step="0.01" min={0} value={newSurchargeMonto || ''}
+                        onChange={(e) => setNewSurchargeMonto(Number(e.target.value))} />
+                    </div>
+                    <Button type="button" size="sm" disabled={!newSurchargeType || createSurchargeMut.isPending}
+                      onClick={async () => {
+                        const st = (activeSurchargeTypes || []).find((t: any) => t.id === newSurchargeType);
+                        await createSurchargeMut.mutateAsync({
+                          reservationId: reservation.id,
+                          surchargeTypeId: newSurchargeType,
+                          descripcion: st?.nombre || '',
+                          monto: newSurchargeMonto,
+                          cantidad: newSurchargeCantidad,
+                        });
+                        setNewSurchargeType('');
+                        setNewSurchargeCantidad(1);
+                        setNewSurchargeMonto(0);
+                        refetchSurcharges();
+                      }}
+                    >
+                      {createSurchargeMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />}
+                      Agregar
+                    </Button>
                   </div>
                 </div>
               )}
@@ -263,6 +354,16 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                     <span className="text-muted-foreground">Total pedidos</span>
                     <span>{formatCurrency(s?.totalPedidos || 0)}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total recargos</span>
+                    <span className="text-violet-600">{formatCurrency(s?.totalRecargos || 0)}</span>
+                  </div>
+                  {Number(res.descuento) > 0 && (
+                    <div className="flex justify-between text-amber-600">
+                      <span>Descuento</span>
+                      <span>-{formatCurrency(res.descuento)}</span>
+                    </div>
+                  )}
                   <div className="border-t" />
                   <div className="flex justify-between font-bold text-base">
                     <span>Total estadía</span>

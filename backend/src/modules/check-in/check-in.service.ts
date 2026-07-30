@@ -129,6 +129,8 @@ export class CheckInService {
       observaciones: checkInDto.observaciones,
     });
 
+    const descuento = checkInDto.descuento || 0;
+
     await this.checkInRepository.save(checkIn);
     await this.reservationRepository.update(reservation.id, {
       estado: 'checkin',
@@ -146,18 +148,19 @@ export class CheckInService {
       destino: checkInDto.destino,
       motivoViaje: checkInDto.motivoViaje,
       numeroPlaca: checkInDto.numeroPlaca,
+      ...(descuento > 0 ? { descuento } : {}),
     });
     await this.roomRepository.update(reservation.roomId, { estado: 'ocupada' });
 
     // Process payment at check-in if provided (split payments or single payment)
     if (checkInDto.pagos && checkInDto.pagos.length > 0) {
-      await this.processCheckInPayments(reservation, checkInDto.pagos, userId);
+      await this.processCheckInPayments(reservation, checkInDto.pagos, userId, descuento);
     } else if (checkInDto.pagoMonto && checkInDto.pagoMonto > 0 && checkInDto.pagoMetodoPagoId) {
       await this.processCheckInPayments(reservation, [{
         monto: checkInDto.pagoMonto,
         metodoPagoId: checkInDto.pagoMetodoPagoId,
         comprobante: checkInDto.pagoReferencia,
-      }], userId);
+      }], userId, descuento);
     }
 
     return this.checkInRepository.findOne({
@@ -170,6 +173,7 @@ export class CheckInService {
     reservation: Reservation,
     pagos: { monto: number; metodoPagoId: string; comprobante?: string }[],
     userId: string,
+    descuento: number = 0,
   ) {
     const cashRegister = await this.cashRegisterRepository.findOne({
       where: { estado: 'abierta' },
@@ -229,8 +233,8 @@ export class CheckInService {
       reservationId: reservation.id,
       fecha: new Date().toISOString().slice(0, 10),
       subtotal: totalPagado,
-      descuento: 0,
-      total: totalPagado,
+      descuento,
+      total: Math.max(0, totalPagado - descuento),
       pagos: savedPayments.map(({ savedPayment, pm }) => ({
         concepto: `Check-in ${reservation.codigo} - ${pm.nombre}`,
         monto: savedPayment.monto,

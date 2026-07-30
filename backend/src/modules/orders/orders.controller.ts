@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/auth.interface';
@@ -19,10 +20,11 @@ export class OrdersController {
   async findAll(
     @Query('roomId') roomId?: string,
     @Query('estado') estado?: string,
+    @Query('reservationId') reservationId?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 10,
   ) {
-    return this.ordersService.findAll({ roomId, estado }, +page, +limit);
+    return this.ordersService.findAll({ roomId, estado, reservationId }, +page, +limit);
   }
 
   @Get('pending-by-room')
@@ -53,10 +55,17 @@ export class OrdersController {
     return this.ordersService.create(createDto, user.sub);
   }
 
+  @Put(':id')
+  @Permissions('orders:update')
+  @ApiOperation({ summary: 'Actualizar pedido (items, habitación, observaciones)' })
+  async update(@Param('id') id: string, @Body() dto: UpdateOrderDto, @CurrentUser() user: JwtPayload) {
+    return this.ordersService.update(id, dto, user.sub);
+  }
+
   @Put(':id/cancel')
   @Permissions('orders:annul')
-  @ApiOperation({ summary: 'Cancelar pedido' })
-  async cancel(@Param('id') id: string) {
-    return this.ordersService.cancel(id);
+  @ApiOperation({ summary: 'Cancelar/Anular pedido' })
+  async cancel(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.ordersService.cancel(id, user.sub);
   }
 }

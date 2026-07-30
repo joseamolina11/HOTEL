@@ -19,7 +19,7 @@ export class Payment {
   @Column({ name: 'reservation_id', nullable: true })
   reservationId: string;
 
-  @Column({ name: 'room_id' })
+  @Column({ name: 'room_id', nullable: true })
   roomId: string;
 
   @Column({ name: 'user_id' })

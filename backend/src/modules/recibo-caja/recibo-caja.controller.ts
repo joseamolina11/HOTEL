@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ReciboCajaService } from './recibo-caja.service';
 import { CreateReciboCajaDto } from './dto/create-recibo-caja.dto';
@@ -43,5 +43,12 @@ export class ReciboCajaController {
   @ApiOperation({ summary: 'Eliminar recibo' })
   async remove(@Param('id') id: string) {
     return this.service.remove(id);
+  }
+
+  @Put(':id/anular')
+  @Permissions('recibo-caja:annul')
+  @ApiOperation({ summary: 'Anular recibo de caja' })
+  async anular(@Param('id') id: string) {
+    return this.service.anular(id);
   }
 }

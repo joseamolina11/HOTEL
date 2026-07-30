@@ -22,12 +22,27 @@ export const ordersApi = {
   },
 
   create: async (dto: {
-    roomId: string;
+    roomId?: string;
+    reservationId?: string;
     guestId?: string;
+    clienteNombre?: string;
     items: { inventoryItemId: string; cantidad: number; precioUnitario: number }[];
     observaciones?: string;
+    pagoMetodoPagoId?: string;
+    pagoMonto?: number;
+    pagoReferencia?: string;
+    ventaDirecta?: boolean;
   }) => {
     const { data } = await apiClient.post('/orders', dto);
+    return data.data;
+  },
+
+  update: async (id: string, dto: {
+    roomId?: string;
+    observaciones?: string;
+    items?: { inventoryItemId: string; cantidad: number; precioUnitario: number }[];
+  }) => {
+    const { data } = await apiClient.put(`/orders/${id}`, dto);
     return data.data;
   },
 

@@ -19,9 +19,10 @@ export class OrderItemDto {
 }
 
 export class CreateOrderDto {
-  @ApiProperty({ example: 'uuid-room' })
+  @ApiPropertyOptional({ example: 'uuid-room' })
+  @IsOptional()
   @IsString()
-  roomId: string;
+  roomId?: string;
 
   @ApiPropertyOptional({ example: 'uuid-reservation' })
   @IsOptional()
@@ -32,6 +33,11 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   guestId?: string;
+
+  @ApiPropertyOptional({ example: 'Cliente venta directa' })
+  @IsOptional()
+  @IsString()
+  clienteNombre?: string;
 
   @ApiProperty({ type: [OrderItemDto] })
   @IsArray()
@@ -44,4 +50,24 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   observaciones?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-payment-method' })
+  @IsOptional()
+  @IsString()
+  pagoMetodoPagoId?: string;
+
+  @ApiPropertyOptional({ example: 50000 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pagoMonto?: number;
+
+  @ApiPropertyOptional({ example: 'Referencia pago' })
+  @IsOptional()
+  @IsString()
+  pagoReferencia?: string;
+
+  @ApiPropertyOptional({ example: true, description: 'Si es venta directa (sin habitación)' })
+  @IsOptional()
+  ventaDirecta?: boolean;
 }

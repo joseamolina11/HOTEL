@@ -172,6 +172,7 @@ export const ALL_PERMISSIONS: PermissionSeed[] = [
   { module: 'recibo-caja', action: 'view', nombre: 'Ver recibos caja', moduloNombre: 'Recibos Caja' },
   { module: 'recibo-caja', action: 'create', nombre: 'Crear recibos caja', moduloNombre: 'Recibos Caja' },
   { module: 'recibo-caja', action: 'delete', nombre: 'Eliminar recibos caja', moduloNombre: 'Recibos Caja' },
+  { module: 'recibo-caja', action: 'annul', nombre: 'Anular recibos caja', moduloNombre: 'Recibos Caja' },
 
   // Tax Config
   { module: 'tax-config', action: 'view', nombre: 'Ver impuestos', moduloNombre: 'Impuestos' },
@@ -229,7 +230,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'payment-methods:view',
     'financial-accounts:view',
     'financial-movements:view',
-    'recibo-caja:view', 'recibo-caja:create',
+    'recibo-caja:view', 'recibo-caja:create', 'recibo-caja:annul',
     'tax-config:view',
   ],
 

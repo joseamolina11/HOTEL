@@ -13,7 +13,7 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'room_id' })
+  @Column({ name: 'room_id', nullable: true })
   roomId: string;
 
   @Column({ name: 'reservation_id', nullable: true })
@@ -40,6 +40,15 @@ export class Order {
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
+  @Column({ name: 'recibo_id', nullable: true })
+  reciboId: string;
+
+  @Column({ name: 'annulled_by_id', nullable: true })
+  annulledById: string;
+
+  @Column({ name: 'annulled_at', nullable: true })
+  annulledAt: Date;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -61,6 +70,10 @@ export class Order {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
   user: User;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'annulled_by_id' })
+  annulledBy: User;
 
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })
   items: OrderItem[];

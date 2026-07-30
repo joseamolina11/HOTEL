@@ -37,6 +37,9 @@ export class ReciboCaja {
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
+  @Column({ type: 'varchar', default: 'activo' })
+  estado: 'activo' | 'anulado';
+
   @Column({ name: 'created_by_id', nullable: true })
   createdById: string;
 

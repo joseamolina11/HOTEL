@@ -103,4 +103,12 @@ export class ReciboCajaService {
     await this.pagosRepo.delete({ reciboId: id });
     await this.repo.delete(id);
   }
+
+  async anular(id: string): Promise<ReciboCaja> {
+    const recibo = await this.repo.findOne({ where: { id } });
+    if (!recibo) throw new NotFoundException('Recibo de caja no encontrado');
+    if (recibo.estado === 'anulado') throw new NotFoundException('El recibo ya está anulado');
+    recibo.estado = 'anulado';
+    return this.repo.save(recibo);
+  }
 }
