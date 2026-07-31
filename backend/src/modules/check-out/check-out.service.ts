@@ -14,6 +14,7 @@ import { PaymentMethodsService } from '../payment-methods/payment-methods.servic
 import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
 import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
 import { SurchargesService } from '../surcharges/surcharges.service';
+import { In } from 'typeorm';
 
 @Injectable()
 export class CheckOutService {
@@ -86,7 +87,7 @@ export class CheckOutService {
     const pendingOrders = await this.orderRepository.find({
       where: {
         reservationId,
-        estado: 'pendiente',
+        estado: In(['pendiente', 'cargado']),
       },
       relations: ['items', 'items.inventoryItem'],
     });
