@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { surchargeTypesApi } from '@/api/surcharge-types.api';
+import { tercerosApi } from '@/api/terceros.api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,10 +20,16 @@ export function SurchargeTypesPage() {
   const [descripcion, setDescripcion] = useState('');
   const [montoDefault, setMontoDefault] = useState(0);
   const [tipo, setTipo] = useState<'fijo' | 'por_noche' | 'porcentaje'>('fijo');
+  const [terceroId, setTerceroId] = useState('');
 
   const { data: types, isLoading } = useQuery({
     queryKey: ['surcharge-types'],
     queryFn: () => surchargeTypesApi.findAll(),
+  });
+
+  const { data: terceros } = useQuery({
+    queryKey: ['terceros', 'active'],
+    queryFn: () => tercerosApi.findAllActive(),
   });
 
   const createMut = useMutation({
@@ -58,6 +65,7 @@ export function SurchargeTypesPage() {
     setDescripcion('');
     setMontoDefault(0);
     setTipo('fijo');
+    setTerceroId('');
     setEditing(null);
   };
 
@@ -67,11 +75,12 @@ export function SurchargeTypesPage() {
     setDescripcion(st.descripcion || '');
     setMontoDefault(Number(st.montoDefault));
     setTipo(st.tipo);
+    setTerceroId(st.terceroId || '');
     setOpen(true);
   };
 
   const handleSubmit = () => {
-    const dto = { nombre, descripcion, montoDefault, tipo, activo: true };
+    const dto = { nombre, descripcion, montoDefault, tipo, terceroId, activo: true };
     if (editing) {
       updateMut.mutate({ id: editing.id, dto });
     } else {
@@ -97,6 +106,7 @@ export function SurchargeTypesPage() {
               <thead>
                 <tr className="border-b">
                   <th className="px-4 py-3 text-left font-medium">Nombre</th>
+                  <th className="px-4 py-3 text-left font-medium">Tercero</th>
                   <th className="px-4 py-3 text-left font-medium">Descripción</th>
                   <th className="px-4 py-3 text-right font-medium">Monto</th>
                   <th className="px-4 py-3 text-center font-medium">Tipo</th>
@@ -106,15 +116,16 @@ export function SurchargeTypesPage() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
                 ) : (types || []).length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Sin tipos de recargo registrados</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Sin tipos de recargo registrados</td></tr>
                 ) : (
                   (types || []).map((st: any) => (
                     <tr key={st.id} className="border-b hover:bg-muted/50">
                       <td className="px-4 py-3 font-medium flex items-center gap-2">
                         <Zap className="h-4 w-4 text-amber-500" /> {st.nombre}
                       </td>
+                      <td className="px-4 py-3">{st.tercero?.nombre || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{st.descripcion || '—'}</td>
                       <td className="px-4 py-3 text-right font-semibold">{formatCurrency(Number(st.montoDefault))}</td>
                       <td className="px-4 py-3 text-center">
@@ -153,6 +164,19 @@ export function SurchargeTypesPage() {
               <Input placeholder="Ej: Persona extra" value={nombre} onChange={(e) => setNombre(e.target.value)} />
             </div>
             <div className="space-y-1">
+              <label className="text-xs font-medium">Tercero *</label>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                value={terceroId}
+                onChange={(e) => setTerceroId(e.target.value)}
+              >
+                <option value="">Seleccionar tercero...</option>
+                {(terceros || []).map((t: any) => (
+                  <option key={t.id} value={t.id}>{t.nombre}{t.tipo === 'empresa' ? ' (Empresa)' : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
               <label className="text-xs font-medium">Descripción</label>
               <Input placeholder="Opcional" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
             </div>
@@ -174,7 +198,7 @@ export function SurchargeTypesPage() {
               <DialogClose asChild>
                 <Button variant="outline" onClick={resetForm}>Cancelar</Button>
               </DialogClose>
-              <Button onClick={handleSubmit} disabled={!nombre || montoDefault <= 0 || createMut.isPending || updateMut.isPending}>
+              <Button onClick={handleSubmit} disabled={!nombre || !terceroId || montoDefault <= 0 || createMut.isPending || updateMut.isPending}>
                 {(createMut.isPending || updateMut.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editing ? 'Actualizar' : 'Crear'}
               </Button>

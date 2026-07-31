@@ -15,7 +15,8 @@ import { ReservationForm } from '@/components/forms/reservation-form';
 import { ChangeRoomDialog } from '@/components/forms/change-room-dialog';
 import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
 import { ReservationDetailDialog } from '@/components/dialogs/reservation-detail-dialog';
-import { Search, Plus, Pencil, Eye, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload, Receipt, DollarSign, ArrowRightLeft } from 'lucide-react';
+import { AbonoDialog } from '@/components/dialogs/abono-dialog';
+import { Search, Plus, Pencil, Eye, XCircle, CheckCircle, Loader2, Printer, ChevronLeft, ChevronRight, FileText, ExternalLink, Upload, Receipt, DollarSign, ArrowRightLeft, HandCoins } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { useUpdateReservation, useCancelReservation, useConfirmReservation } from '@/hooks/useReservations';
 import { confirmAction, toastSuccess } from '@/lib/notifications';
@@ -30,6 +31,7 @@ export function ReservationsListPage() {
   const [fullDetailRes, setFullDetailRes] = useState<any>(null);
   const [reciboDetailId, setReciboDetailId] = useState<string | null>(null);
   const [changeRoomRes, setChangeRoomRes] = useState<any>(null);
+  const [abonoRes, setAbonoRes] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [uploadingContract, setUploadingContract] = useState(false);
@@ -107,8 +109,6 @@ export function ReservationsListPage() {
     await updateMut.mutateAsync({
       id: detailRes.id,
       dto: {
-        fechaEntrada: formData.fechaEntrada,
-        fechaSalida: formData.fechaSalida,
         observaciones: formData.observaciones || undefined,
       },
     });
@@ -183,9 +183,9 @@ export function ReservationsListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Reservas</h1>
-        <Button onClick={() => setOpen(true)}>
+        {/* <Button onClick={() => setOpen(true)}>
           <Plus className="mr-2 h-4 w-4" /> Nueva Reserva
-        </Button>
+        </Button> */}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -239,30 +239,48 @@ export function ReservationsListPage() {
                   <th className="px-4 py-3 text-left font-medium">Salida</th>
                   <th className="px-4 py-3 text-left font-medium">Estado</th>
                   <th className="px-4 py-3 text-left font-medium">Origen</th>
-                  <th className="px-4 py-3 text-right font-medium">Descuento</th>
+                  <th className="px-4 py-3 text-right font-medium">Abonado</th>
+                  <th className="px-4 py-3 text-right font-medium">Saldo</th>
                   <th className="px-4 py-3 text-left font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Cargando...</td></tr>
                 ) : reservations.length === 0 ? (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Sin reservas</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Sin reservas</td></tr>
                 ) : (
                   reservations?.map((res: any) => (
                     <tr key={res.id} className="border-b hover:bg-muted/50">
-                      <td className="px-4 py-3 font-medium">{res.codigo}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{res.codigo}</div>
+                        {res.checkinConsecutivo && (
+                          <div className="text-xs text-violet-600">Check-in {res.checkinConsecutivo}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">{res.guest?.nombres} {res.guest?.apellidos}</td>
                       <td className="px-4 py-3">{res.room?.nombre}</td>
                       <td className="px-4 py-3">{formatDateShort(res.fechaEntrada)}</td>
                       <td className="px-4 py-3">{formatDateShort(res.fechaSalida)}</td>
                       <td className="px-4 py-3"><StatusBadge status={res.estado} /></td>
                       <td className="px-4 py-3 capitalize">{res.origen}</td>
-                      <td className="px-4 py-3 text-right">{Number(res.descuento) > 0 ? formatCurrency(res.descuento) : '—'}</td>
+                      <td className="px-4 py-3 text-right text-green-600">{formatCurrency(res.resumen?.totalPagado || 0)}</td>
+                      <td className={`px-4 py-3 text-right font-medium ${Number(res.resumen?.saldoPendiente) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(res.resumen?.saldoPendiente || 0)}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => setFullDetailRes(res)} title="Ver detalle completo">
                             <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setAbonoRes(res)}
+                            title="Registrar abono"
+                            disabled={['cancelada', 'checkout'].includes(res.estado)}
+                          >
+                            <HandCoins className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => openDetail(res)} title="Editar">
                             <Pencil className="h-4 w-4" />
@@ -272,6 +290,12 @@ export function ReservationsListPage() {
                             printReservation(res.id);
                           }} title="Imprimir reserva">
                             <Printer className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={async () => {
+                            const { printReservationContract } = await import('@/lib/print-document');
+                            printReservationContract(res.id);
+                          }} title="Descargar contrato">
+                            <FileText className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>
@@ -319,6 +343,7 @@ export function ReservationsListPage() {
                 <div><span className="text-muted-foreground">Huésped:</span> <span className="font-medium">{detailRes.guest?.nombres} {detailRes.guest?.apellidos}</span></div>
                 <div><span className="text-muted-foreground">Habitación:</span> <span className="font-medium">{detailRes.room?.nombre}</span></div>
                 <div><span className="text-muted-foreground">Código:</span> <span className="font-medium">{detailRes.codigo}</span></div>
+                <div><span className="text-muted-foreground">Check-in:</span> <span className="font-medium text-violet-600">{detailRes.checkinConsecutivo || '—'}</span></div>
                 <div><span className="text-muted-foreground">Estado:</span> <StatusBadge status={detailRes.estado} /></div>
                 <div><span className="text-muted-foreground">Origen:</span> <span className="font-medium capitalize">{detailRes.origen}</span></div>
                 <div><span className="text-muted-foreground">Huéspedes:</span> <span className="font-medium">{detailRes.cantidadHuespedes}</span></div>
@@ -338,13 +363,14 @@ export function ReservationsListPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Fecha Entrada</label>
-                  <Input type="date" {...register('fechaEntrada', { required: true })} />
+                  <Input type="date" {...register('fechaEntrada', { required: true })} disabled />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Fecha Salida</label>
-                  <Input type="date" {...register('fechaSalida', { required: true })} />
+                  <Input type="date" {...register('fechaSalida', { required: true })} disabled />
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground -mt-1">Las fechas no se pueden modificar. Si necesita cambiar la fecha, cancele la reserva y cree una nueva.</p>
 
               <div className="space-y-1">
                 <label className="text-xs font-medium">Observaciones</label>
@@ -493,6 +519,11 @@ export function ReservationsListPage() {
         reservation={fullDetailRes}
         open={!!fullDetailRes}
         onClose={() => setFullDetailRes(null)}
+      />
+      <AbonoDialog
+        reservation={abonoRes}
+        open={!!abonoRes}
+        onClose={() => setAbonoRes(null)}
       />
     </div>
   );

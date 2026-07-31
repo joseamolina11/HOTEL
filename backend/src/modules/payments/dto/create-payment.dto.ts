@@ -1,6 +1,12 @@
 import { IsString, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class ChangeMetodoPagoDto {
+  @ApiProperty({ example: 'uuid-payment-method' })
+  @IsUUID()
+  metodoPagoId: string;
+}
+
 export class CreatePaymentDto {
   @ApiPropertyOptional({ example: 'uuid-order' })
   @IsOptional()

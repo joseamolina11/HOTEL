@@ -1,10 +1,14 @@
-import { IsString, IsNumber, IsOptional, Min, IsBoolean, IsEnum } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, IsBoolean, IsEnum, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateSurchargeTypeDto {
   @ApiProperty({ example: 'Persona extra' })
   @IsString()
   nombre: string;
+
+  @ApiProperty({ example: 'uuid-tercero' })
+  @IsUUID()
+  terceroId: string;
 
   @ApiPropertyOptional({ example: 'Cargo por huésped adicional' })
   @IsOptional()
@@ -32,6 +36,11 @@ export class UpdateSurchargeTypeDto {
   @IsOptional()
   @IsString()
   nombre?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  terceroId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

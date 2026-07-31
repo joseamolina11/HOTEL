@@ -5,6 +5,7 @@ import {
 import { Reservation } from 'src/modules/reservations/entities/reservation.entity';
 import { SurchargeType } from './surcharge-type.entity';
 import { User } from 'src/modules/auth/entities/user.entity';
+import { Tercero } from 'src/modules/terceros/entities/tercero.entity';
 
 @Entity('surcharges')
 export class Surcharge {
@@ -16,6 +17,15 @@ export class Surcharge {
 
   @Column({ name: 'surcharge_type_id', nullable: true })
   surchargeTypeId?: string;
+
+  @Column({ name: 'tercero_id', nullable: true })
+  terceroId?: string;
+
+  @Column({ type: 'varchar', unique: true, nullable: true })
+  consecutivo?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  referencia?: string;
 
   @Column({ type: 'varchar' })
   descripcion: string;
@@ -38,6 +48,15 @@ export class Surcharge {
   @Column({ type: 'varchar', default: 'borrador' })
   estado: 'borrador' | 'cargado' | 'pendiente' | 'facturado';
 
+  @Column({ type: 'boolean', default: false })
+  dispersado: boolean;
+
+  @Column({ name: 'dispersado_at', type: 'timestamptz', nullable: true })
+  dispersadoAt?: Date;
+
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt?: Date;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -52,4 +71,8 @@ export class Surcharge {
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'user_id' })
   user?: User;
+
+  @ManyToOne(() => Tercero, { nullable: true })
+  @JoinColumn({ name: 'tercero_id' })
+  tercero?: Tercero;
 }

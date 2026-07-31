@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { CalendarReserveDialog } from '@/components/forms/calendar-reserve-dialog';
+import { formatCurrency } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, CalendarDays, CalendarRange, Filter } from 'lucide-react';
 
 type ViewMode = 'month' | 'week';
@@ -79,10 +80,27 @@ function getCellGuest(room: any, date: Date): string {
   return salida?.guest?.nombres || '';
 }
 
+function getCellReservation(room: any, date: Date): any {
+  const dayStart = date;
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const active = (room.reservations || []).find((r: any) => {
+    const rStart = parseISO(r.fechaEntrada);
+    const rEnd = parseISO(r.fechaSalida);
+    return rStart < dayEnd && rEnd > dayStart;
+  });
+  if (active) return active;
+  const salida = (room.reservations || []).find((r: any) => {
+    const rEnd = parseISO(r.fechaSalida);
+    return rEnd.getTime() === dayStart.getTime();
+  });
+  return salida || null;
+}
+
 export function CalendarPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [reserveCell, setReserveCell] = useState<{ room: any; date: string } | null>(null);
+  const [tooltip, setTooltip] = useState<{ reservation: any; roomNumero: string; x: number; y: number } | null>(null);
   const monthOffset = Math.round(
     (currentDate.getFullYear() - new Date().getFullYear()) * 12 +
     (currentDate.getMonth() - new Date().getMonth())
@@ -318,6 +336,7 @@ export function CalendarPage() {
               {days.map((d, di) => {
                 const status = getCellStatus(room, d);
                 const today = isToday(d);
+                const cellReservation = getCellReservation(room, d);
                 const guestName = (status === 'reservada' || status === 'checkout') ? getCellGuest(room, d) : '';
                 return (
                   <div
@@ -334,6 +353,31 @@ export function CalendarPage() {
                         setReserveCell({ room, date: format(d, 'yyyy-MM-dd') });
                       }
                     }}
+                    onMouseEnter={(e) => {
+                      if (cellReservation) {
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        setTooltip({
+                          reservation: cellReservation,
+                          roomNumero: room.numero,
+                          x: rect.left,
+                          y: rect.bottom + 6,
+                        });
+                      }
+                    }}
+                    onMouseMove={(e) => {
+                      if (cellReservation) {
+                        setTooltip((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                x: Math.min(e.clientX + 12, window.innerWidth - 280),
+                                y: Math.min(e.clientY + 12, window.innerHeight - 220),
+                              }
+                            : prev,
+                        );
+                      }
+                    }}
+                    onMouseLeave={() => setTooltip(null)}
                     title={status ? `${room.numero} ${format(d, 'yyyy-MM-dd')}: ${status}` : ''}
                   >
                     <div className="flex flex-col items-center justify-center h-full">
@@ -352,6 +396,44 @@ export function CalendarPage() {
           ))}
         </div>
       </div>
+
+      {tooltip && tooltip.reservation && (
+        <div
+          className="pointer-events-none fixed z-50 w-64 rounded-lg border bg-background p-3 text-xs shadow-lg"
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="font-semibold text-primary">{tooltip.reservation.codigo || '—'}</span>
+            {tooltip.reservation.checkinConsecutivo && (
+              <span className="text-[10px] text-muted-foreground">CHK-{tooltip.reservation.checkinConsecutivo.replace(/^CHK-/, '')}</span>
+            )}
+          </div>
+          <div className="space-y-1 text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">{tooltip.reservation.guest?.nombres || ''}{' '}{tooltip.reservation.guest?.apellidos || ''}</span>
+            </p>
+            <p>{format(parseISO(tooltip.reservation.fechaEntrada), 'dd/MM/yyyy')} → {format(parseISO(tooltip.reservation.fechaSalida), 'dd/MM/yyyy')}</p>
+            <p>
+              Habitación {tooltip.roomNumero}
+            </p>
+            <p className="capitalize">Estado: {tooltip.reservation.estado}</p>
+          </div>
+          <div className="mt-2 space-y-1 border-t pt-2">
+            <div className="flex justify-between">
+              <span>Total estancia</span>
+              <span className="font-medium">{formatCurrency(tooltip.reservation.resumen?.totalEstancia || 0)}</span>
+            </div>
+            <div className="flex justify-between text-green-600">
+              <span>Tiene pagado</span>
+              <span className="font-medium">{formatCurrency(tooltip.reservation.resumen?.totalPagado || 0)}</span>
+            </div>
+            <div className="flex justify-between text-red-600">
+              <span>Debe</span>
+              <span className="font-medium">{formatCurrency(tooltip.reservation.resumen?.saldoPendiente || 0)}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CalendarReserveDialog
         room={reserveCell?.room}

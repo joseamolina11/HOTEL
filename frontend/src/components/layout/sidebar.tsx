@@ -37,6 +37,12 @@ import {
   FileText,
   Zap,
   ClipboardList,
+  Building2,
+  BarChart3,
+  Trash2,
+  FileX,
+  Wallet,
+  PieChart,
 } from "lucide-react";
 
 interface GroupItem {
@@ -87,6 +93,22 @@ const groups: GroupItem[] = [
   },
 ];
 
+interface NavChild {
+  to: string;
+  label: string;
+  icon: any;
+  show?: boolean;
+}
+
+interface NavGroup {
+  id: string;
+  label: string;
+  icon: any;
+  visible: boolean;
+  children?: NavChild[];
+  subgroups?: GroupItem[];
+}
+
 export function Sidebar() {
   const { sidebarOpen, toggleSidebar } = useUIStore();
   const theme = useUIStore((s) => s.theme);
@@ -104,6 +126,110 @@ export function Sidebar() {
 
   const userPermissions = user?.permissions ?? [];
   const hasPerm = (perm: string) => isAdmin || userPermissions.includes(perm);
+
+  const navGroups: NavGroup[] = [
+    {
+      id: 'operacion',
+      label: 'Operación',
+      icon: LayoutDashboard,
+      visible: true,
+      children: [
+        { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: hasPerm('dashboard:view') },
+        { to: '/guests', label: 'Clientes', icon: Users, show: hasPerm('guests:view') },
+        { to: '/housekeeping', label: 'Housekeeping', icon: Sparkles, show: hasPerm('housekeeping:view') },
+      ],
+    },
+    {
+      id: 'hotel',
+      label: 'Hotel',
+      icon: Hotel,
+      visible: true,
+      children: [
+        { to: '/room-types', label: 'Tipos Habitación', icon: Hotel, show: hasPerm('room-types:view') },
+        { to: '/amenities', label: 'Beneficios', icon: BetweenHorizonalEnd, show: hasPerm('amenities:view') },
+        { to: '/services', label: 'Servicios', icon: Wrench, show: hasPerm('services:view') },
+        { to: '/surcharge-types', label: 'Recargos', icon: Zap, show: hasPerm('surcharges:view') },
+        { to: '/terceros', label: 'Terceros', icon: Building2, show: hasPerm('terceros:view') },
+        { to: '/bitacoras', label: 'Bitácoras', icon: ClipboardList, show: hasPerm('bitacoras:view') },
+      ],
+    },
+    {
+      id: 'estadias',
+      label: 'Estadías',
+      icon: LogIn,
+      visible: hasPerm('check-in:view') || hasPerm('check-out:view'),
+      children: [
+        { to: '/check-in', label: 'Check-In', icon: LogIn, show: hasPerm('check-in:view') },
+        { to: '/check-out', label: 'Check-Out', icon: LogOut, show: hasPerm('check-out:view') },
+      ],
+    },
+    {
+      id: 'ventas',
+      label: 'Ventas',
+      icon: ShoppingCart,
+      visible: hasPerm('orders:view') || hasPerm('payments:view') || hasPerm('cash-register:view'),
+      children: [
+        { to: '/orders', label: 'Pedidos', icon: ShoppingCart, show: hasPerm('orders:view') },
+        { to: '/payments', label: 'Pagos', icon: CreditCard, show: hasPerm('payments:view') },
+        { to: '/cash-register', label: 'Caja', icon: DollarSign, show: hasPerm('cash-register:view') },
+      ],
+    },
+    {
+      id: 'inventario',
+      label: 'Inventario',
+      icon: Boxes,
+      visible: hasPerm('inventory:view') || hasPerm('supplies:view'),
+      subgroups: groups,
+    },
+    {
+      id: 'contabilidad',
+      label: 'Contabilidad',
+      icon: Landmark,
+      visible: true,
+      children: [
+        { to: '/expense-categories', label: 'Categorías Egreso', icon: Tags, show: hasPerm('expense-categories:view') },
+        { to: '/suppliers', label: 'Proveedores', icon: Truck, show: hasPerm('suppliers:view') },
+        { to: '/purchase-orders', label: 'Órdenes Compra', icon: ShoppingBag, show: hasPerm('purchase-orders:view') },
+        { to: '/expenses', label: 'Egresos', icon: Receipt, show: hasPerm('expenses:view') },
+        { to: '/accounts-payable', label: 'Ctas. por Pagar', icon: BookOpen, show: hasPerm('accounts-payable:view') },
+        { to: '/payment-methods', label: 'Métodos Pago', icon: CreditCard, show: hasPerm('payment-methods:view') },
+        { to: '/financial-accounts', label: 'Cuentas Financieras', icon: Landmark, show: hasPerm('financial-accounts:view') },
+        { to: '/financial-movements', label: 'Movimientos Financieros', icon: ArrowUpDown, show: hasPerm('financial-movements:view') },
+        { to: '/recibo-caja', label: 'Recibos de Caja', icon: FileText, show: hasPerm('recibo-caja:view') },
+        { to: '/tax-config', label: 'Impuestos', icon: Percent, show: hasPerm('tax-config:view') },
+      ],
+    },
+    {
+      id: 'reportes',
+      label: 'Reportes',
+      icon: BarChart3,
+      visible: hasPerm('reports:view'),
+      children: [
+        { to: '/reports', label: 'Terceros', icon: BarChart3, show: hasPerm('reports:view') },
+      ],
+    },
+    {
+      id: 'control-registros',
+      label: 'Control Registros',
+      icon: ClipboardList,
+      visible: hasPerm('record-control:view'),
+      children: [
+        { to: '/record-control/deleted-reservations', label: 'Reservas Eliminadas', icon: Trash2, show: hasPerm('record-control:view') },
+        { to: '/record-control/deleted-surcharges', label: 'Recargos Eliminados', icon: FileX, show: hasPerm('record-control:view') },
+        { to: '/record-control/discounts', label: 'Descuentos Realizados', icon: Percent, show: hasPerm('record-control:view') },
+        { to: '/record-control/unpaid-reservations', label: 'Reservas Sin Pagar', icon: Wallet, show: hasPerm('record-control:view') },
+      ],
+    },
+    {
+      id: 'estadisticas',
+      label: 'Estadísticas',
+      icon: BarChart3,
+      visible: hasPerm('statistics:view'),
+      children: [
+        { to: '/statistics/gerencial', label: 'Gerencial', icon: PieChart, show: hasPerm('statistics:view') },
+      ],
+    },
+  ];
 
   const toggleGroup = (to: string) => {
     setExpandedGroups((prev) => ({
@@ -167,6 +293,138 @@ export function Sidebar() {
       )}
     </NavLink>
   );
+  };
+
+  const FlyoutLink = ({
+    to,
+    label,
+    icon: Icon,
+  }: {
+    to: string;
+    label: string;
+    icon: any;
+  }) => (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        cn(
+          "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-foreground"
+            : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground",
+        )
+      }
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </NavLink>
+  );
+
+  const GroupSection = ({ group }: { group: NavGroup }) => {
+    if (!group.visible) return null;
+
+    const visibleChildren = (group.children || []).filter((c) => c.show);
+    const visibleSubgroups = (group.subgroups || []).filter((sub) =>
+      sub.to === '/inventory' ? hasPerm('inventory:view') : hasPerm('supplies:view'),
+    );
+    if (visibleChildren.length === 0 && visibleSubgroups.length === 0) return null;
+
+    const expanded = expandedGroups[group.id];
+
+    return (
+      <div
+        className="relative"
+        onMouseEnter={() => !sidebarOpen && setHoveredGroup(group.id)}
+        onMouseLeave={() => !sidebarOpen && setHoveredGroup(null)}
+      >
+        <button
+          onClick={() => sidebarOpen && toggleGroup(group.id)}
+          className={cn(
+            "group relative mx-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            !sidebarOpen && "justify-center px-2",
+          )}
+        >
+          <group.icon className="h-5 w-5 shrink-0" />
+          {sidebarOpen && <span className="truncate">{group.label}</span>}
+          {sidebarOpen && (
+            <ChevronDown
+              className={cn(
+                "ml-auto h-4 w-4 shrink-0 transition-transform",
+                expanded && "rotate-180",
+              )}
+            />
+          )}
+        </button>
+
+        {sidebarOpen && expanded && (
+          <div className="ml-6 mr-2 mt-1 space-y-0.5 border-l border-sidebar-border pl-2">
+            {visibleChildren.map((child) => (
+              <NavLinkItem
+                key={child.to}
+                to={child.to}
+                label={child.label}
+                icon={child.icon}
+                className="py-2 text-xs"
+              />
+            ))}
+            {visibleSubgroups.map((sub) => {
+              const subExpanded = expandedGroups[sub.to];
+              return (
+                <div key={sub.to}>
+                  <button
+                    onClick={() => toggleGroup(sub.to)}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  >
+                    <sub.icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{sub.label}</span>
+                    <ChevronDown
+                      className={cn(
+                        "ml-auto h-3.5 w-3.5 shrink-0 transition-transform",
+                        subExpanded && "rotate-180",
+                      )}
+                    />
+                  </button>
+                  {subExpanded && (
+                    <div className="ml-4 border-l border-sidebar-border pl-2">
+                      {sub.children.map((child) => (
+                        <NavLinkItem
+                          key={child.to}
+                          to={child.to}
+                          label={child.label}
+                          icon={child.icon}
+                          className="py-2 text-xs"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!sidebarOpen && hoveredGroup === group.id && (
+          <div className="absolute left-full top-0 z-50 ml-2 min-w-[220px] rounded-xl border border-sidebar-border bg-sidebar p-2 shadow-2xl">
+            <div className="mb-2 border-b border-sidebar-border px-2 pb-2 text-sm font-semibold text-sidebar-foreground">
+              {group.label}
+            </div>
+            {visibleChildren.map((child) => (
+              <FlyoutLink key={child.to} to={child.to} label={child.label} icon={child.icon} />
+            ))}
+            {visibleSubgroups.map((sub) => (
+              <div key={sub.to} className="mt-2">
+                <div className="px-3 pb-1 text-xs font-semibold uppercase text-sidebar-muted/70">
+                  {sub.label}
+                </div>
+                {sub.children.map((child) => (
+                  <FlyoutLink key={child.to} to={child.to} label={child.label} icon={child.icon} />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -241,13 +499,11 @@ export function Sidebar() {
           msOverflowStyle: "none",
         }}
       >
-        <SectionTitle title="Operación" />
-
         <NavLinkItem
-          to="/dashboard"
-          label="Dashboard"
-          icon={LayoutDashboard}
-          show={hasPerm('dashboard:view')}
+          to="/rooms"
+          label="Habitaciones"
+          icon={BedDouble}
+          show={hasPerm('rooms:view')}
         />
 
         <NavLinkItem
@@ -258,266 +514,17 @@ export function Sidebar() {
         />
 
         <NavLinkItem
-          to="/rooms"
-          label="Habitaciones"
-          icon={BedDouble}
-          show={hasPerm('rooms:view')}
-        />
-
-        <NavLinkItem
           to="/calendar"
           label="Calendario"
           icon={CalendarRange}
           show={hasPerm('rooms:view')}
         />
 
-        <NavLinkItem
-          to="/guests"
-          label="Clientes"
-          icon={Users}
-          show={hasPerm('guests:view')}
-        />
+        <SectionTitle title="Módulos" />
 
-        <NavLinkItem
-          to="/housekeeping"
-          label="Housekeeping"
-          icon={Sparkles}
-          show={hasPerm('housekeeping:view')}
-        />
-
-        <SectionTitle title="Hotel" />
-
-        <NavLinkItem
-          to="/room-types"
-          label="Tipos Habitación"
-          icon={Hotel}
-          show={hasPerm('room-types:view')}
-        />
-
-        <NavLinkItem
-          to="/amenities"
-          label="Beneficios"
-          icon={BetweenHorizonalEnd}
-          show={hasPerm('amenities:view')}
-        />
-
-        <NavLinkItem
-          to="/services"
-          label="Servicios"
-          icon={Wrench}
-          show={hasPerm('services:view')}
-        />
-
-        <NavLinkItem
-          to="/surcharge-types"
-          label="Recargos"
-          icon={Zap}
-          show={hasPerm('surcharges:view')}
-        />
-
-        <NavLinkItem
-          to="/bitacoras"
-          label="Bitácoras"
-          icon={ClipboardList}
-          show={hasPerm('bitacoras:view')}
-        />
-
-        <NavLinkItem
-          to="/check-in"
-          label="Check-In"
-          icon={LogIn}
-          show={hasPerm('check-in:view')}
-        />
-
-        <NavLinkItem
-          to="/check-out"
-          label="Check-Out"
-          icon={LogOut}
-          show={hasPerm('check-out:view')}
-        />
-
-        <SectionTitle title="Ventas" />
-
-        <NavLinkItem
-          to="/orders"
-          label="Pedidos"
-          icon={ShoppingCart}
-          show={hasPerm('orders:view')}
-        />
-
-        <NavLinkItem
-          to="/payments"
-          label="Pagos"
-          icon={CreditCard}
-          show={hasPerm('payments:view')}
-        />
-
-        <NavLinkItem
-          to="/cash-register"
-          label="Caja"
-          icon={DollarSign}
-          show={hasPerm('cash-register:view')}
-        />
-
-        <SectionTitle title="Inventario" />
-
-        {groups.map((group) => {
-          const groupVisible = group.to === '/inventory'
-            ? hasPerm('inventory:view')
-            : hasPerm('supplies:view');
-          if (!groupVisible && !sidebarOpen) return null;
-          if (!groupVisible) return null;
-          return (
-          <div
-            key={group.to}
-            className="relative"
-            onMouseEnter={() =>
-              !sidebarOpen && setHoveredGroup(group.to)
-            }
-            onMouseLeave={() =>
-              !sidebarOpen && setHoveredGroup(null)
-            }
-          >
-            <div className="relative">
-              <NavLinkItem
-                to={group.to}
-                label={group.label}
-                icon={group.icon}
-              />
-
-              {sidebarOpen && (
-                <button
-                  onClick={() => toggleGroup(group.to)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-md p-1 text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                >
-                  <ChevronDown
-                    className={cn(
-                      "h-4 w-4 transition-transform",
-                      expandedGroups[group.to] && "rotate-180",
-                    )}
-                  />
-                </button>
-              )}
-            </div>
-
-            {sidebarOpen && expandedGroups[group.to] && (
-              <div className="ml-6 mr-2 mt-1 border-l border-sidebar-border pl-2">
-                {group.children.map((child) => (
-                  <NavLinkItem
-                    key={child.to}
-                    to={child.to}
-                    label={child.label}
-                    icon={child.icon}
-                    className="py-2 text-xs"
-                  />
-                ))}
-              </div>
-            )}
-
-            {!sidebarOpen &&
-              hoveredGroup === group.to && (
-                <div className="absolute left-full top-0 z-50 ml-2 min-w-[220px] rounded-xl border border-sidebar-border bg-sidebar p-2 shadow-2xl">
-                  <div className="mb-2 border-b border-sidebar-border px-2 pb-2 text-sm font-semibold text-sidebar-foreground">
-                    {group.label}
-                  </div>
-
-                  {group.children.map((child) => {
-                    const ChildIcon = child.icon;
-
-                    return (
-                      <NavLink
-                        key={child.to}
-                        to={child.to}
-                        className={({ isActive }) =>
-                          cn(
-                            "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
-                            isActive
-                              ? "bg-sidebar-accent text-sidebar-foreground"
-                              : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                          )
-                        }
-                      >
-                        <ChildIcon className="h-4 w-4" />
-                        {child.label}
-                      </NavLink>
-                    );
-                  })}
-                </div>
-              )}
-          </div>
-        );
-      })}
-        <SectionTitle title="Contabilidad" />
-
-        <NavLinkItem
-          to="/expense-categories"
-          label="Categorías Egreso"
-          icon={Tags}
-          show={hasPerm('expense-categories:view')}
-        />
-
-        <NavLinkItem
-          to="/suppliers"
-          label="Proveedores"
-          icon={Truck}
-          show={hasPerm('suppliers:view')}
-        />
-
-        <NavLinkItem
-          to="/purchase-orders"
-          label="Órdenes Compra"
-          icon={ShoppingBag}
-          show={hasPerm('purchase-orders:view')}
-        />
-
-        <NavLinkItem
-          to="/expenses"
-          label="Egresos"
-          icon={Receipt}
-          show={hasPerm('expenses:view')}
-        />
-
-        <NavLinkItem
-          to="/accounts-payable"
-          label="Ctas. por Pagar"
-          icon={BookOpen}
-          show={hasPerm('accounts-payable:view')}
-        />
-
-        <NavLinkItem
-          to="/payment-methods"
-          label="Métodos Pago"
-          icon={CreditCard}
-          show={hasPerm('payment-methods:view')}
-        />
-
-        <NavLinkItem
-          to="/financial-accounts"
-          label="Cuentas Financieras"
-          icon={Landmark}
-          show={hasPerm('financial-accounts:view')}
-        />
-
-        <NavLinkItem
-          to="/financial-movements"
-          label="Movimientos Financieros"
-          icon={ArrowUpDown}
-          show={hasPerm('financial-movements:view')}
-        />
-
-        <NavLinkItem
-          to="/recibo-caja"
-          label="Recibos de Caja"
-          icon={FileText}
-          show={hasPerm('recibo-caja:view')}
-        />
-
-        <NavLinkItem
-          to="/tax-config"
-          label="Impuestos"
-          icon={Percent}
-          show={hasPerm('tax-config:view')}
-        />
+        {navGroups.map((group) => (
+          <GroupSection key={group.id} group={group} />
+        ))}
       </nav>
 
       {/* FOOTER */}

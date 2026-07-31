@@ -11,8 +11,11 @@ import { RoomForm } from '@/components/forms/room-form';
 import { ReservationForm } from '@/components/forms/reservation-form';
 import { CheckInDialog } from '@/components/forms/check-in-dialog';
 import { ChangeRoomDialog } from '@/components/forms/change-room-dialog';
-import { Search, Plus, LogIn, LogOut, CalendarCheck, Wrench, Sparkles, X, ShoppingCart, CalendarClock, User, ArrowRightLeft } from 'lucide-react';
+import { Search, Plus, LogIn, LogOut, CalendarCheck, Wrench, Sparkles, X, ShoppingCart, CalendarClock, User, ArrowRightLeft, FileText } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+
+const toDateKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const STATUS_ACTIONS: Record<string, { label: string; icon: any; status: string; roles: string[] }[]> = {
   disponible: [
@@ -52,6 +55,9 @@ export function RoomsListPage() {
   const [checkInRoom, setCheckInRoom] = useState<any>(null);
   const [reserveRoom, setReserveRoom] = useState<any>(null);
   const [changeRoomReservation, setChangeRoomReservation] = useState<any>(null);
+  const [occOpen, setOccOpen] = useState(false);
+  const [occDesde, setOccDesde] = useState(() => toDateKey(new Date()));
+  const [occHasta, setOccHasta] = useState(() => toDateKey(new Date()));
   const menuRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
 
@@ -118,6 +124,13 @@ export function RoomsListPage() {
     setChangeRoomReservation(res);
   };
 
+  const handleOccupancyPdf = async () => {
+    if (!occDesde || !occHasta) return;
+    const { printOccupancyControl } = await import('@/lib/print-document');
+    printOccupancyControl({ desde: occDesde, hasta: occHasta });
+    setOccOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -138,8 +151,40 @@ export function RoomsListPage() {
               <RoomForm onSuccess={() => { setOpen(false); refetch(); }} />
             </DialogContent>
           </Dialog>
+
+          <Button variant="outline" onClick={() => setOccOpen(true)}>
+            <FileText className="mr-2 h-4 w-4" /> Control de Ocupación
+          </Button>
         </div>
       </div>
+
+      <Dialog open={occOpen} onOpenChange={setOccOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Control de Ocupación</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Genera el PDF con las habitaciones ocupadas o con checkout, horas de entrada/salida,
+            valor de habitación, cargos y saldo por huésped.
+          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Desde</span>
+              <Input type="date" value={occDesde} onChange={(e) => setOccDesde(e.target.value)} className="w-40" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Hasta</span>
+              <Input type="date" value={occHasta} onChange={(e) => setOccHasta(e.target.value)} className="w-40" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setOccOpen(false)}>Cancelar</Button>
+            <Button onClick={handleOccupancyPdf} disabled={!occDesde || !occHasta}>
+              <FileText className="mr-2 h-4 w-4" /> Generar PDF
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {isLoading ? (

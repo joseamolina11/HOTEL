@@ -37,6 +37,11 @@ export class CreateFinancialMovementDto {
   @IsOptional()
   @IsString()
   cashRegisterId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-reservation' })
+  @IsOptional()
+  @IsString()
+  reservationId?: string;
 }
 
 export class TransferDto {

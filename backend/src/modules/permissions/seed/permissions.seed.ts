@@ -53,6 +53,7 @@ export const ALL_PERMISSIONS: PermissionSeed[] = [
   // Payments
   { module: 'payments', action: 'view', nombre: 'Ver pagos', moduloNombre: 'Pagos' },
   { module: 'payments', action: 'create', nombre: 'Registrar pagos', moduloNombre: 'Pagos' },
+  { module: 'payments', action: 'edit', nombre: 'Editar pagos', moduloNombre: 'Pagos' },
   { module: 'payments', action: 'delete', nombre: 'Eliminar pagos', moduloNombre: 'Pagos' },
 
   // Cash Register
@@ -103,6 +104,22 @@ export const ALL_PERMISSIONS: PermissionSeed[] = [
   { module: 'surcharges', action: 'create', nombre: 'Crear recargos', moduloNombre: 'Recargos' },
   { module: 'surcharges', action: 'edit', nombre: 'Editar recargos', moduloNombre: 'Recargos' },
   { module: 'surcharges', action: 'delete', nombre: 'Eliminar recargos', moduloNombre: 'Recargos' },
+
+  // Terceros
+  { module: 'terceros', action: 'view', nombre: 'Ver terceros', moduloNombre: 'Terceros' },
+  { module: 'terceros', action: 'create', nombre: 'Crear terceros', moduloNombre: 'Terceros' },
+  { module: 'terceros', action: 'edit', nombre: 'Editar terceros', moduloNombre: 'Terceros' },
+  { module: 'terceros', action: 'delete', nombre: 'Eliminar terceros', moduloNombre: 'Terceros' },
+
+  // Reports
+  { module: 'reports', action: 'view', nombre: 'Ver reportes', moduloNombre: 'Reportes' },
+  { module: 'reports', action: 'disperse', nombre: 'Dispersar recargos', moduloNombre: 'Reportes' },
+
+  // Record Control
+  { module: 'record-control', action: 'view', nombre: 'Ver control de registros', moduloNombre: 'Control Registros' },
+
+  // Statistics
+  { module: 'statistics', action: 'view', nombre: 'Ver estadísticas gerenciales', moduloNombre: 'Estadísticas' },
 
   // Services
   { module: 'services', action: 'view', nombre: 'Ver servicios', moduloNombre: 'Servicios' },
@@ -217,7 +234,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'check-in:view', 'check-in:create',
     'check-out:view', 'check-out:create',
     'orders:view', 'orders:create', 'orders:edit', 'orders:annul',
-    'payments:view', 'payments:create',
+    'payments:view', 'payments:create', 'payments:edit',
     'cash-register:view', 'cash-register:open', 'cash-register:close',
     'inventory:view', 'inventory:movements-view',
     'supplies:view', 'supplies:movements-view',
@@ -237,6 +254,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'financial-movements:view',
     'recibo-caja:view', 'recibo-caja:create', 'recibo-caja:annul',
     'tax-config:view',
+    'terceros:view', 'terceros:create', 'terceros:edit',
+    'reports:view', 'reports:disperse',
+    'record-control:view',
+    'statistics:view',
   ],
 
   limpieza: [

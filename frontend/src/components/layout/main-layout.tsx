@@ -2,10 +2,13 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { useUIStore } from '@/stores/ui.store';
+import { useOpenCashRegister } from '@/hooks/useCashRegister';
+import { OpenCashRegisterDialog } from '@/components/dialogs/open-cash-register-dialog';
 import { cn } from '@/lib/utils';
 
 export function MainLayout() {
   const { sidebarOpen } = useUIStore();
+  const { data: openRegister, isLoading } = useOpenCashRegister();
 
   return (
     <>
@@ -32,6 +35,11 @@ export function MainLayout() {
           </div>
         </footer>
       </main>
+      <OpenCashRegisterDialog
+        open={!isLoading && !openRegister}
+        onClose={() => {}}
+        dismissible={false}
+      />
     </>
   );
 }

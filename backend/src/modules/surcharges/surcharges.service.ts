@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Like, IsNull } from 'typeorm';
 import { Surcharge } from './entities/surcharge.entity';
+import { SurchargeType } from './entities/surcharge-type.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { CreateSurchargeDto, SurchargeFilterDto } from './dto/surcharge.dto';
 
@@ -10,26 +11,39 @@ export class SurchargesService {
   constructor(
     @InjectRepository(Surcharge)
     private readonly surchargeRepository: Repository<Surcharge>,
+    @InjectRepository(SurchargeType)
+    private readonly surchargeTypeRepository: Repository<SurchargeType>,
     @InjectRepository(Reservation)
     private readonly reservationRepository: Repository<Reservation>,
   ) {}
 
+  async generateConsecutivo(): Promise<string> {
+    const now = new Date();
+    const prefix = `RCG-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-`;
+    const last = await this.surchargeRepository.findOne({
+      where: { consecutivo: Like(`${prefix}%`) },
+      order: { consecutivo: 'DESC' },
+    });
+    const lastNum = last?.consecutivo ? parseInt(last.consecutivo.split('-').pop() || '0', 10) : 0;
+    return `${prefix}${String(lastNum + 1).padStart(4, '0')}`;
+  }
+
   async findAll(filters: SurchargeFilterDto): Promise<Surcharge[]> {
-    const where: any = {};
+    const where: any = { deletedAt: IsNull() };
     if (filters.reservationId) {
       where.reservationId = filters.reservationId;
     }
     return this.surchargeRepository.find({
       where,
-      relations: ['surchargeType', 'reservation', 'user'],
+      relations: ['surchargeType', 'reservation', 'user', 'tercero'],
       order: { fecha: 'DESC' },
     });
   }
 
   async findByReservation(reservationId: string): Promise<Surcharge[]> {
     return this.surchargeRepository.find({
-      where: { reservationId },
-      relations: ['surchargeType'],
+      where: { reservationId, deletedAt: IsNull() },
+      relations: ['surchargeType', 'tercero'],
       order: { fecha: 'ASC' },
     });
   }
@@ -43,10 +57,20 @@ export class SurchargesService {
 
     const cantidad = dto.cantidad || 1;
     const subtotal = dto.monto * cantidad;
+    const consecutivo = await this.generateConsecutivo();
+
+    let terceroId = dto.terceroId;
+    if (!terceroId && dto.surchargeTypeId) {
+      const st = await this.surchargeTypeRepository.findOne({ where: { id: dto.surchargeTypeId } });
+      terceroId = st?.terceroId;
+    }
 
     const surcharge = this.surchargeRepository.create({
       reservationId: dto.reservationId,
       surchargeTypeId: dto.surchargeTypeId,
+      terceroId,
+      consecutivo,
+      referencia: dto.referencia,
       descripcion: dto.descripcion,
       monto: dto.monto,
       cantidad,
@@ -65,6 +89,8 @@ export class SurchargesService {
     if (dto.monto) s.monto = dto.monto;
     if (dto.descripcion) s.descripcion = dto.descripcion;
     if (dto.cantidad) s.cantidad = dto.cantidad;
+    if (dto.terceroId !== undefined) s.terceroId = dto.terceroId;
+    if (dto.referencia !== undefined) s.referencia = dto.referencia;
     s.subtotal = s.monto * s.cantidad;
     return this.surchargeRepository.save(s);
   }
@@ -73,7 +99,8 @@ export class SurchargesService {
     const s = await this.surchargeRepository.findOne({ where: { id } });
     if (!s) throw new NotFoundException('Recargo no encontrado');
     if (s.estado === 'cargado') throw new BadRequestException('No se puede eliminar un recargo que ya fue cargado');
-    await this.surchargeRepository.remove(s);
+    s.deletedAt = new Date();
+    await this.surchargeRepository.save(s);
   }
 
   async getTotalByReservation(reservationId: string): Promise<number> {

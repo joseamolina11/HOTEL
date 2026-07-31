@@ -12,30 +12,42 @@ export function formatCurrency(amount: number, currency = 'MXN'): string {
   }).format(amount);
 }
 
+function toValidDate(date: string | Date): Date | null {
+  if (date === null || date === undefined || date === '') return null;
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export function formatDate(date: string | Date): string {
+  const d = toValidDate(date);
+  if (!d) return '—';
   return new Intl.DateTimeFormat('es-MX', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(new Date(date));
+  }).format(d);
 }
 
 export function formatDateShort(date: string | Date): string {
+  const d = toValidDate(date);
+  if (!d) return '—';
   return new Intl.DateTimeFormat('es-MX', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(new Date(date));
+  }).format(d);
 }
 
 export function formatDateTime(date: string | Date): string {
+  const d = toValidDate(date);
+  if (!d) return '—';
   return new Intl.DateTimeFormat('es-MX', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(date));
+  }).format(d);
 }
 
 export function getStatusColor(status: string): string {

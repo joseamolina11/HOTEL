@@ -46,4 +46,9 @@ export const reservationsApi = {
     const { data } = await apiClient.put(`/reservations/${id}/change-room`, { newRoomId });
     return data.data;
   },
+
+  addAbono: async (id: string, dto: { monto: number; metodoPagoId: string; comprobante?: string; observaciones?: string }): Promise<Reservation> => {
+    const { data } = await apiClient.post(`/reservations/${id}/abono`, dto);
+    return data.data;
+  },
 };

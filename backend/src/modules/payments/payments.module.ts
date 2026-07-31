@@ -9,9 +9,11 @@ import { FinancialMovementsModule } from '../financial-movements/financial-movem
 import { FinancialAccountsModule } from '../financial-accounts/financial-accounts.module';
 import { PaymentMethodsModule } from '../payment-methods/payment-methods.module';
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
+import { ReciboCajaPago } from '../recibo-caja/entities/recibo-caja-pago.entity';
+import { CashRegister } from '../cash-register/entities/cash-register.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Payment, Order, Reservation, PaymentMethod]),FinancialMovementsModule,FinancialAccountsModule,PaymentMethodsModule],
+  imports: [TypeOrmModule.forFeature([Payment, Order, Reservation, PaymentMethod, ReciboCajaPago, CashRegister]),FinancialMovementsModule,FinancialAccountsModule,PaymentMethodsModule],
   controllers: [PaymentsController],
   providers: [PaymentsService],
   exports: [PaymentsService],

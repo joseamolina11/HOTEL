@@ -151,15 +151,16 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
   const handlePrintContract = () => {
     if (!selectedGuest) return;
     const formData = getValues();
+    const guestData = {
+      nombres: (registroData.huespedNombres || '').trim() || selectedGuest.nombres,
+      apellidos: (registroData.huespedApellidos || '').trim() || selectedGuest.apellidos,
+      documento: (registroData.huespedDocumento || '').trim() || selectedGuest.documento,
+      nacionalidad: selectedGuest.nacionalidad,
+      telefono: (registroData.huespedCelular || '').trim() || selectedGuest.telefono,
+      email: selectedGuest.email,
+    };
     const contractData = {
-      guest: {
-        nombres: selectedGuest.nombres,
-        apellidos: selectedGuest.apellidos,
-        documento: selectedGuest.documento,
-        nacionalidad: selectedGuest.nacionalidad,
-        telefono: selectedGuest.telefono,
-        email: selectedGuest.email,
-      },
+      guest: guestData,
       room: {
         numero: room.numero,
         nombre: room.nombre,
@@ -184,9 +185,7 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       descuento,
       registro: registroData,
     };
-    const html = hotelConfig?.contratoHtml
-      ? renderContract(hotelConfig.contratoHtml, contractData)
-      : generateDefaultContract(contractData);
+    const html = generateDefaultContract(contractData)
     printContract(html);
   };
 
@@ -375,7 +374,7 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
                 <Input {...register('observaciones')} placeholder="Opcional" />
               </div>
 
-              <RegistroHoteleroFields data={registroData} onChange={updateRegistro} />
+              <RegistroHoteleroFields data={registroData} onChange={updateRegistro} guestDefault={selectedGuest} />
 
               <div className="rounded-lg border border-violet-200 p-3 space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-violet-700">

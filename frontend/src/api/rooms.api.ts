@@ -44,4 +44,9 @@ export const roomsApi = {
     });
     return data.data;
   },
+
+  getOccupancyControl: async (params?: Record<string, string>): Promise<any> => {
+    const { data } = await apiClient.get('/rooms/occupancy-control', { params });
+    return data?.data ?? data;
+  },
 };

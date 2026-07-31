@@ -6,8 +6,8 @@ import { ReservationGuest } from './entities/reservation-guest.entity';
 import { Room } from '../rooms/entities/room.entity';
 import { Guest } from '../guests/entities/guest.entity';
 import { RoomType } from '../room-types/entities/room-type.entity';
-import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto, ChangeRoomDto } from './dto/create-reservation.dto';
-import { generateReservationCode } from 'src/common/utils/generate-code';
+import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto, ChangeRoomDto, AddAbonoDto } from './dto/create-reservation.dto';
+import { getMaxSequence, sequentialCode } from 'src/common/utils/generate-code';
 import { parseLocalDate } from 'src/common/utils/date';
 import { isDateOverlap } from 'src/common/utils/date-utils';
 import { Payment } from '../payments/entities/payment.entity';
@@ -36,6 +36,16 @@ export class ReservationsService {
     private readonly financialMovementsService: FinancialMovementsService,
   ) {}
 
+  async generateNextReservationCode(): Promise<string> {
+    const last = await getMaxSequence(this.reservationRepository, 'codigo', 'RES');
+    return sequentialCode(last + 1, 'RES');
+  }
+
+  async generateNextCheckinCode(): Promise<string> {
+    const last = await getMaxSequence(this.reservationRepository, 'checkin_consecutivo', 'CHK');
+    return sequentialCode(last + 1, 'CHK');
+  }
+
   async findAll(filters: ReservationFilterDto) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
@@ -47,6 +57,9 @@ export class ReservationsService {
       .leftJoinAndSelect('reservation.contratoFile', 'contratoFile')
       .leftJoinAndSelect('room.roomType', 'roomType')
       .leftJoinAndSelect('reservation.payments', 'payments')
+      .leftJoinAndSelect('payments.metodoPago', 'metodoPago')
+      .leftJoinAndSelect('metodoPago.financialAccount', 'financialAccount')
+      .leftJoinAndSelect('reservation.surcharges', 'surcharges', 'surcharges.deleted_at IS NULL')
       .skip(skip)
       .take(limit)
       .orderBy('reservation.fechaEntrada', 'DESC');
@@ -70,11 +83,37 @@ export class ReservationsService {
     const [data, total] = await query.getManyAndCount();
 
     return {
-      data,
+      data: data.map((r) => this.withBalance(r)),
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  private withBalance(reservation: Reservation) {
+    const noches = Math.max(0, Math.ceil(
+      (new Date(reservation.fechaSalida).getTime() - new Date(reservation.fechaEntrada).getTime()) /
+        (1000 * 60 * 60 * 24),
+    ));
+    const precioNoche = Number(reservation.precioBase ?? reservation.room?.roomType?.precioBase ?? 0);
+    const totalHabitacion = noches * precioNoche;
+    const totalRecargos = (reservation.surcharges || []).reduce((sum, s) => sum + Number(s.subtotal), 0);
+    const totalEstancia = totalHabitacion + totalRecargos;
+    const totalPagado = (reservation.payments || []).reduce((sum, p) => sum + Number(p.monto), 0);
+    const descuento = Number(reservation.descuento || 0);
+    const saldoPendiente = Math.max(0, totalEstancia - descuento - totalPagado);
+    return {
+      ...reservation,
+      resumen: {
+        noches,
+        precioPorNoche: precioNoche,
+        totalHabitacion,
+        totalRecargos,
+        totalEstancia,
+        totalPagado,
+        saldoPendiente,
+      },
     };
   }
 
@@ -96,6 +135,9 @@ export class ReservationsService {
     });
     if (!reservation) {
       throw new NotFoundException('Reserva no encontrada');
+    }
+    if (reservation.surcharges) {
+      reservation.surcharges = reservation.surcharges.filter((s) => !s.deletedAt);
     }
     return reservation;
   }
@@ -192,7 +234,7 @@ export class ReservationsService {
       throw new ConflictException('La habitación ya está reservada en esas fechas');
     }
 
-    const codigo = generateReservationCode();
+    const codigo = await this.generateNextReservationCode();
 
     const reservation = this.reservationRepository.create({
       codigo,
@@ -245,44 +287,53 @@ export class ReservationsService {
     }
 
     if (createDto.pagoMonto && createDto.pagoMonto > 0 && createDto.pagoMetodoPagoId) {
-      await this.processAdvancePayment(saved, createDto, userId, `${guest.nombres} ${guest.apellidos}`, createDto.descuento || 0);
+      await this.registerPayment(
+        saved,
+        {
+          monto: createDto.pagoMonto,
+          metodoPagoId: createDto.pagoMetodoPagoId,
+          comprobante: createDto.pagoReferencia,
+          concepto: 'Anticipo',
+        },
+        userId,
+        `${guest.nombres} ${guest.apellidos}`,
+      );
     }
 
     return this.findOne(saved.id);
   }
 
-  private async processAdvancePayment(
+  private async registerPayment(
     reservation: Reservation,
-    dto: CreateReservationDto,
+    paymentData: { monto: number; metodoPagoId: string; comprobante?: string; concepto: string },
     userId: string,
     clienteNombre: string,
-    descuento: number = 0,
   ) {
     const cashRegister = await this.cashRegisterRepository.findOne({
       where: { estado: 'abierta' },
     });
 
-    const pm = await this.paymentMethodsService.findOne(dto.pagoMetodoPagoId!);
+    const pm = await this.paymentMethodsService.findOne(paymentData.metodoPagoId);
 
     const payment = this.paymentRepository.create({
       roomId: reservation.roomId,
       reservationId: reservation.id,
       userId,
-      monto: dto.pagoMonto!,
-      metodoPagoId: dto.pagoMetodoPagoId,
-      comprobante: dto.pagoReferencia || '',
-      observaciones: `Anticipo ${reservation.codigo} - ${pm.nombre}`,
+      monto: paymentData.monto,
+      metodoPagoId: paymentData.metodoPagoId,
+      comprobante: paymentData.comprobante || '',
+      observaciones: `${paymentData.concepto} ${reservation.codigo} - ${pm.nombre}`,
       fecha: new Date(),
     });
     const savedPayment = await this.paymentRepository.save(payment);
 
     const tipo = pm.tipo || 'otros';
     if (cashRegister) {
-      cashRegister.totalVentas = Number(cashRegister.totalVentas) + dto.pagoMonto!;
-      if (tipo === 'efectivo') cashRegister.totalEfectivo = Number(cashRegister.totalEfectivo) + dto.pagoMonto!;
-      else if (tipo === 'transferencia') cashRegister.totalTransferencia = Number(cashRegister.totalTransferencia) + dto.pagoMonto!;
-      else if (tipo === 'tarjeta') cashRegister.totalTarjeta = Number(cashRegister.totalTarjeta) + dto.pagoMonto!;
-      else cashRegister.totalOtros = Number(cashRegister.totalOtros) + dto.pagoMonto!;
+      cashRegister.totalVentas = Number(cashRegister.totalVentas) + paymentData.monto;
+      if (tipo === 'efectivo') cashRegister.totalEfectivo = Number(cashRegister.totalEfectivo) + paymentData.monto;
+      else if (tipo === 'transferencia') cashRegister.totalTransferencia = Number(cashRegister.totalTransferencia) + paymentData.monto;
+      else if (tipo === 'tarjeta') cashRegister.totalTarjeta = Number(cashRegister.totalTarjeta) + paymentData.monto;
+      else cashRegister.totalOtros = Number(cashRegister.totalOtros) + paymentData.monto;
       cashRegister.cantidadTransacciones += 1;
       await this.cashRegisterRepository.save(cashRegister);
     }
@@ -291,13 +342,13 @@ export class ReservationsService {
       clienteNombre,
       reservationId: reservation.id,
       fecha: new Date().toISOString().slice(0, 10),
-      subtotal: dto.pagoMonto!,
+      subtotal: paymentData.monto,
       descuento: 0,
-      total: dto.pagoMonto!,
+      total: paymentData.monto,
       pagos: [{
-        concepto: `Anticipo ${reservation.codigo}`,
-        monto: dto.pagoMonto!,
-        metodoPagoId: dto.pagoMetodoPagoId!,
+        concepto: `${paymentData.concepto} ${reservation.codigo}`,
+        monto: paymentData.monto,
+        metodoPagoId: paymentData.metodoPagoId,
         cuentaId: pm.financialAccountId || '',
         referenciaTipo: 'payment',
         referenciaId: savedPayment.id,
@@ -310,8 +361,8 @@ export class ReservationsService {
         await this.financialMovementsService.create({
           accountId: pm.financialAccountId,
           tipo: 'INGRESO',
-          monto: dto.pagoMonto!,
-          concepto: `Anticipo ${reservation.codigo} - ${pm.nombre}`,
+          monto: paymentData.monto,
+          concepto: `${paymentData.concepto} ${reservation.codigo} - ${pm.nombre}`,
           referenciaTipo: 'payment',
           referenciaId: savedPayment.id,
           reciboId: recibo.id,
@@ -321,6 +372,8 @@ export class ReservationsService {
         // skip
       }
     }
+
+    return savedPayment;
   }
 
   async update(id: string, updateDto: UpdateReservationDto): Promise<Reservation> {
@@ -455,7 +508,7 @@ export class ReservationsService {
       .leftJoinAndSelect('orderItems.inventoryItem', 'orderItem')
       .leftJoinAndSelect('reservation.payments', 'payments')
       .leftJoinAndSelect('payments.metodoPago', 'metodoPago')
-      .leftJoinAndSelect('reservation.surcharges', 'surcharges')
+      .leftJoinAndSelect('reservation.surcharges', 'surcharges', 'surcharges.deleted_at IS NULL')
       .leftJoinAndSelect('surcharges.surchargeType', 'surchargeType')
       .leftJoinAndSelect('reservation.recibosCaja', 'recibosCaja')
       .leftJoinAndSelect('recibosCaja.items', 'reciboItems')
@@ -528,5 +581,33 @@ export class ReservationsService {
     await this.roomRepository.update(reservation.roomId, { estado: 'reservada' });
 
     return saved;
+  }
+
+  async addAbono(id: string, dto: AddAbonoDto, userId: string): Promise<Reservation> {
+    const reservation = await this.reservationRepository.findOne({
+      where: { id },
+      relations: ['guest', 'room', 'room.roomType', 'payments'],
+    });
+    if (!reservation) {
+      throw new NotFoundException('Reserva no encontrada');
+    }
+    if (['cancelada', 'checkout'].includes(reservation.estado)) {
+      throw new BadRequestException('No se pueden registrar abonos en una reserva cancelada o finalizada');
+    }
+
+    await this.registerPayment(
+      reservation,
+      {
+        monto: dto.monto,
+        metodoPagoId: dto.metodoPagoId,
+        comprobante: dto.comprobante,
+        concepto: dto.observaciones || 'Abono',
+      },
+      userId,
+      `${reservation.guest?.nombres || ''} ${reservation.guest?.apellidos || ''}`.trim(),
+    );
+
+    const updated = await this.findOne(id);
+    return this.withBalance(updated);
   }
 }

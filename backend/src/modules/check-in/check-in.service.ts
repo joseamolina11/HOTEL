@@ -10,6 +10,8 @@ import { Payment } from '../payments/entities/payment.entity';
 import { CashRegister } from '../cash-register/entities/cash-register.entity';
 import { HotelConfig } from '../hotel-config/entities/hotel-config.entity';
 import { Surcharge } from '../surcharges/entities/surcharge.entity';
+import { SurchargesService } from '../surcharges/surcharges.service';
+import { ReservationsService } from '../reservations/reservations.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
@@ -39,6 +41,8 @@ export class CheckInService {
     private readonly paymentMethodsService: PaymentMethodsService,
     private readonly reciboCajaService: ReciboCajaService,
     private readonly financialMovementsService: FinancialMovementsService,
+    private readonly surchargesService: SurchargesService,
+    private readonly reservationsService: ReservationsService,
   ) {}
 
   async findPendingCheckIns() {
@@ -83,6 +87,36 @@ export class CheckInService {
       throw new ConflictException(
         `La habitación no está disponible (estado: ${reservation.room.estado})`,
       );
+    }
+
+    // Actualizar / crear huésped real si es distinto al que reservó
+    if (checkInDto.huespedDocumento && checkInDto.huespedDocumento.trim()) {
+      const documento = checkInDto.huespedDocumento.trim();
+      const esOtro = documento !== reservation.guest?.documento;
+
+      let guest = await this.guestRepository.findOne({ where: { documento } });
+      if (!guest) {
+        guest = this.guestRepository.create({
+          nombres: checkInDto.huespedNombres || reservation.guest?.nombres || '',
+          apellidos: checkInDto.huespedApellidos || reservation.guest?.apellidos || '',
+          documento,
+          nacionalidad: reservation.guest?.nacionalidad || '',
+          telefono: checkInDto.huespedCelular || reservation.guest?.telefono || '',
+          email: reservation.guest?.email || '',
+        });
+        guest = await this.guestRepository.save(guest);
+      } else if (esOtro) {
+        if (checkInDto.huespedNombres) guest.nombres = checkInDto.huespedNombres;
+        if (checkInDto.huespedApellidos) guest.apellidos = checkInDto.huespedApellidos;
+        if (checkInDto.huespedCelular) guest.telefono = checkInDto.huespedCelular;
+        guest = await this.guestRepository.save(guest);
+      }
+
+      if (esOtro && guest.id !== reservation.guestId) {
+        await this.reservationRepository.update(reservation.id, { guestId: guest.id });
+        reservation.guestId = guest.id;
+        reservation.guest = guest;
+      }
     }
 
     if (checkInDto.companions?.length) {
@@ -135,8 +169,10 @@ export class CheckInService {
     const descuento = checkInDto.descuento || 0;
 
     await this.checkInRepository.save(checkIn);
+    const checkinConsecutivo = reservation.checkinConsecutivo || (await this.reservationsService.generateNextCheckinCode());
     await this.reservationRepository.update(reservation.id, {
       estado: 'checkin',
+      checkinConsecutivo,
       direccion: checkInDto.direccion,
       ciudad: checkInDto.ciudad,
       pais: checkInDto.pais,
@@ -162,13 +198,15 @@ export class CheckInService {
         const cantidad = r.cantidad || 1;
         if (r.id) {
           // Existing surcharge from reservation: mark as facturado
-          await this.surchargeRepository.update(r.id, { estado: 'facturado' });
+          await this.surchargeRepository.update(r.id, { estado: 'facturado', ...(r.terceroId ? { terceroId: r.terceroId } : {}) });
           checkInSurcharges.push({ descripcion: r.descripcion, monto: r.monto, cantidad });
         } else {
           // New surcharge added at check-in: create with facturado
           const surcharge = this.surchargeRepository.create({
             reservationId: reservation.id,
             surchargeTypeId: r.surchargeTypeId || undefined,
+            terceroId: r.terceroId || undefined,
+            consecutivo: await this.surchargesService.generateConsecutivo(),
             descripcion: r.descripcion,
             monto: r.monto,
             cantidad,

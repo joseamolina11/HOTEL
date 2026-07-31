@@ -99,7 +99,7 @@ export class CheckOutService {
 
     const payments = await this.paymentRepository.find({
       where: { reservationId },
-      relations: ['metodoPago'],
+      relations: ['metodoPago', 'metodoPago.financialAccount'],
       order: { createdAt: 'DESC' },
     });
 
@@ -141,9 +141,14 @@ export class CheckOutService {
         payments: payments.map((p) => ({
           id: p.id,
           monto: p.monto,
-          metodoPago: p.metodoPago ? { id: p.metodoPago.id, nombre: p.metodoPago.nombre } : null,
+          fecha: p.fecha,
+          observaciones: p.observaciones,
           comprobante: p.comprobante,
           createdAt: p.createdAt,
+          metodoPago: p.metodoPago ? { id: p.metodoPago.id, nombre: p.metodoPago.nombre } : null,
+          cuenta: p.metodoPago?.financialAccount
+            ? { id: p.metodoPago.financialAccount.id, nombre: p.metodoPago.financialAccount.nombre }
+            : null,
         })),
         totalPagado,
         descuento,

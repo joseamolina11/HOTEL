@@ -213,6 +213,27 @@ export class ChangeRoomDto {
   newRoomId: string;
 }
 
+export class AddAbonoDto {
+  @ApiProperty({ example: 50000 })
+  @IsNumber()
+  @Min(1)
+  monto: number;
+
+  @ApiProperty({ example: 'uuid-metodo-pago' })
+  @IsString()
+  metodoPagoId: string;
+
+  @ApiPropertyOptional({ example: 'Consignación 12345' })
+  @IsOptional()
+  @IsString()
+  comprobante?: string;
+
+  @ApiPropertyOptional({ example: 'Abono parcial por transferencia' })
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
+
 export class ReservationFilterDto {
   @ApiPropertyOptional()
   @IsOptional()

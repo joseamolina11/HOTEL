@@ -22,4 +22,9 @@ export const paymentsApi = {
     const { data } = await apiClient.post('/payments', dto);
     return data.data;
   },
+
+  changeMetodoPago: async (paymentId: string, dto: { metodoPagoId: string }) => {
+    const { data } = await apiClient.put(`/payments/${paymentId}/metodo-pago`, dto);
+    return data.data;
+  },
 };

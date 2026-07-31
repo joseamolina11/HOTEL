@@ -41,32 +41,52 @@ export class PermissionsService implements OnModuleInit {
   }
 
   private async seedPermissions() {
-    const count = await this.permissionRepo.count();
-    if (count > 0) return;
+    const existing = await this.permissionRepo.find();
 
-    this.logger.log('Seeding permissions...');
+    this.logger.log('Syncing permissions...');
 
-    const savedPermissions = await this.permissionRepo.save(
-      ALL_PERMISSIONS.map(p => this.permissionRepo.create(p)),
-    );
+    const existingMap = new Map<string, Permission>();
+    for (const p of existing) {
+      existingMap.set(`${p.module}:${p.action}`, p);
+    }
+
+    const toCreate = ALL_PERMISSIONS.filter(p => !existingMap.has(`${p.module}:${p.action}`));
+    let savedPermissions = existing;
+
+    if (toCreate.length > 0) {
+      this.logger.log(`Creating ${toCreate.length} new permissions...`);
+      const created = await this.permissionRepo.save(
+        toCreate.map(p => this.permissionRepo.create(p)),
+      );
+      savedPermissions = [...existing, ...created];
+    }
 
     const permissionMap = new Map<string, Permission>();
     for (const p of savedPermissions) {
       permissionMap.set(`${p.module}:${p.action}`, p);
     }
 
-    const rolePermissions: RolePermission[] = [];
     for (const [role, keys] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
+      const currentRps = await this.rolePermissionRepo.find({
+        where: { role },
+        relations: ['permission'],
+      });
+      const currentKeys = new Set(currentRps.map(rp => `${rp.permission.module}:${rp.permission.action}`));
+
+      const missing: RolePermission[] = [];
       for (const key of keys) {
         const perm = permissionMap.get(key);
-        if (perm) {
-          rolePermissions.push(this.rolePermissionRepo.create({ role, permissionId: perm.id }));
+        if (perm && !currentKeys.has(key)) {
+          missing.push(this.rolePermissionRepo.create({ role, permissionId: perm.id }));
         }
+      }
+      if (missing.length > 0) {
+        await this.rolePermissionRepo.save(missing);
+        this.logger.log(`Assigned ${missing.length} new permissions to role ${role}`);
       }
     }
 
-    await this.rolePermissionRepo.save(rolePermissions);
-    this.logger.log(`Seeded ${savedPermissions.length} permissions for ${Object.keys(DEFAULT_ROLE_PERMISSIONS).length} roles`);
+    this.logger.log(`Permissions synced: ${savedPermissions.length} total`);
   }
 
   async findAllPermissions() {

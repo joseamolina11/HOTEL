@@ -218,6 +218,10 @@ export class RoomsService {
       .createQueryBuilder('reservation')
       .leftJoinAndSelect('reservation.guest', 'guest')
       .leftJoinAndSelect('reservation.companions', 'companions')
+      .leftJoinAndSelect('reservation.payments', 'payments')
+      .leftJoinAndSelect('reservation.surcharges', 'surcharges', 'surcharges.deleted_at IS NULL')
+      .leftJoinAndSelect('reservation.room', 'calRoom')
+      .leftJoinAndSelect('calRoom.roomType', 'calRoomType')
       .where('reservation.estado NOT IN (:...excluded)', {
         excluded: ['cancelada', 'checkout'],
       })
@@ -253,17 +257,123 @@ export class RoomsService {
         piso: room.piso,
         estado: currentStatus,
         roomType: room.roomType,
-        reservations: roomReservations.map((r) => ({
-          id: r.id,
-          codigo: r.codigo,
-          guest: r.guest
-            ? { id: r.guest.id, nombres: r.guest.nombres, apellidos: r.guest.apellidos }
-            : null,
-          fechaEntrada: r.fechaEntrada,
-          fechaSalida: r.fechaSalida,
-          estado: r.estado,
-        })),
+        reservations: roomReservations.map((r) => {
+          const noches = Math.max(0, Math.ceil(
+            (new Date(r.fechaSalida).getTime() - new Date(r.fechaEntrada).getTime()) /
+              (1000 * 60 * 60 * 24),
+          ));
+          const precioNoche = Number(r.precioBase ?? r.room?.roomType?.precioBase ?? 0);
+          const totalHabitacion = noches * precioNoche;
+          const totalRecargos = (r.surcharges || []).reduce(
+            (sum, sc) => sum + Number(sc.subtotal || 0),
+            0,
+          );
+          const totalEstancia = totalHabitacion + totalRecargos;
+          const totalPagado = (r.payments || []).reduce(
+            (sum, p) => sum + Number(p.monto || 0),
+            0,
+          );
+          const descuento = Number(r.descuento || 0);
+          const saldoPendiente = Math.max(0, totalEstancia - descuento - totalPagado);
+          return {
+            id: r.id,
+            codigo: r.codigo,
+            checkinConsecutivo: r.checkinConsecutivo,
+            guest: r.guest
+              ? { id: r.guest.id, nombres: r.guest.nombres, apellidos: r.guest.apellidos }
+              : null,
+            fechaEntrada: r.fechaEntrada,
+            fechaSalida: r.fechaSalida,
+            estado: r.estado,
+            resumen: {
+              noches,
+              precioPorNoche: precioNoche,
+              totalHabitacion,
+              totalRecargos,
+              totalEstancia,
+              totalPagado,
+              descuento,
+              saldoPendiente,
+            },
+          };
+        }),
       };
     });
+  }
+
+  async getOccupancyControl(desde?: Date, hasta?: Date) {
+    const qb = this.reservationRepository.createQueryBuilder('r')
+      .leftJoinAndSelect('r.room', 'room')
+      .leftJoinAndSelect('room.roomType', 'roomType')
+      .leftJoinAndSelect('r.guest', 'guest')
+      .leftJoinAndSelect('r.checkIn', 'checkIn')
+      .leftJoinAndSelect('r.checkOut', 'checkOut')
+      .leftJoinAndSelect('r.payments', 'payments')
+      .leftJoinAndSelect('r.surcharges', 'surcharges', 'surcharges.deleted_at IS NULL')
+      .where('r.estado IN (:...estados)', { estados: ['checkin', 'checkout'] });
+
+    if (desde && hasta) {
+      qb.andWhere('r.fechaEntrada <= :hasta AND r.fechaSalida >= :desde', { desde, hasta });
+    }
+
+    const reservations = await qb
+      .orderBy('room.numero', 'ASC')
+      .addOrderBy('r.fechaEntrada', 'ASC')
+      .getMany();
+
+    const rows = reservations.map((r) => {
+      const noches = Math.max(0, Math.ceil(
+        (new Date(r.fechaSalida).getTime() - new Date(r.fechaEntrada).getTime()) /
+          (1000 * 60 * 60 * 24),
+      ));
+      const precioNoche = Number(r.precioBase ?? r.room?.roomType?.precioBase ?? 0);
+      const valorHabitaciones = noches * precioNoche;
+      const cargos = (r.surcharges || []).reduce((sum, s) => sum + Number(s.subtotal || 0), 0);
+      const totalPagado = (r.payments || []).reduce((sum, p) => sum + Number(p.monto || 0), 0);
+      const descuento = Number(r.descuento || 0);
+      const debe = Math.max(0, valorHabitaciones + cargos - descuento - totalPagado);
+      return {
+        id: r.id,
+        codigo: r.codigo,
+        estado: r.estado,
+        fechaEntrada: r.fechaEntrada,
+        fechaSalida: r.fechaSalida,
+        horaEntrada: r.checkIn?.fechaHora || r.fechaEntrada,
+        horaSalida: r.checkOut?.fechaHora || null,
+        noches,
+        precioPorNoche: precioNoche,
+        valorHabitaciones,
+        cargos,
+        descuento,
+        totalPagado,
+        debe,
+        room: r.room
+          ? { id: r.room.id, numero: r.room.numero, nombre: r.room.nombre }
+          : null,
+        guest: r.guest
+          ? {
+              id: r.guest.id,
+              nombres: r.guest.nombres,
+              apellidos: r.guest.apellidos,
+              documento: r.guest.documento,
+              telefono: r.guest.telefono,
+            }
+          : null,
+      };
+    });
+
+    const totals = rows.reduce(
+      (acc, r) => {
+        if (r.estado === 'checkin') acc.ocupadas += 1;
+        if (r.estado === 'checkout') acc.checkouts += 1;
+        acc.valorHabitaciones += r.valorHabitaciones;
+        acc.cargos += r.cargos;
+        acc.debe += r.debe;
+        return acc;
+      },
+      { ocupadas: 0, checkouts: 0, valorHabitaciones: 0, cargos: 0, debe: 0 },
+    );
+
+    return { data: rows, totals };
   }
 }

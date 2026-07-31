@@ -1,5 +1,5 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
+  Entity, PrimaryGeneratedColumn, Column, Index,
   CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn,
   OneToMany, OneToOne,
 } from 'typeorm';
@@ -21,8 +21,13 @@ export class Reservation {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Index({ unique: true })
+  @Column({ type: 'varchar', nullable: true })
   codigo: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', nullable: true, name: 'checkin_consecutivo' })
+  checkinConsecutivo?: string;
 
   @Column({ name: 'room_id' })
   roomId: string;

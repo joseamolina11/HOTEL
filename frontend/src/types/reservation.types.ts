@@ -24,6 +24,7 @@ export interface Reservation {
   origen: 'directo' | 'booking' | 'airbnb';
   otaReservationId?: string;
   precioBase?: number | null;
+  descuento?: number;
   contratoFileId?: string;
   contratoFile?: { id: string; url: string; originalName: string; mimeType: string; size: number };
   room?: Room;
@@ -36,6 +37,20 @@ export interface Reservation {
   recibosCaja?: any[];
   checkIn?: any;
   checkOut?: any;
+  direccion?: string;
+  ciudad?: string;
+  pais?: string;
+  oficio?: string;
+  empresa?: string;
+  telefonoContacto?: string;
+  emailContacto?: string;
+  transporteLlegada?: string;
+  transporteSalida?: string;
+  reservacionOrigen?: string;
+  procedencia?: string;
+  destino?: string;
+  motivoViaje?: string;
+  numeroPlaca?: string;
 }
 
 export interface CreateReservationDto {

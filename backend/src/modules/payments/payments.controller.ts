@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
-import { CreatePaymentDto } from './dto/create-payment.dto';
+import { CreatePaymentDto, ChangeMetodoPagoDto } from './dto/create-payment.dto';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/auth.interface';
@@ -37,5 +37,12 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Registrar pago' })
   async create(@Body() createDto: CreatePaymentDto, @CurrentUser() user: JwtPayload) {
     return this.paymentsService.create(createDto, user.sub);
+  }
+
+  @Put(':id/metodo-pago')
+  @Permissions('payments:edit')
+  @ApiOperation({ summary: 'Cambiar método de pago de un pago (genera transferencia entre cuentas)' })
+  async changeMetodoPago(@Param('id') id: string, @Body() dto: ChangeMetodoPagoDto, @CurrentUser() user: JwtPayload) {
+    return this.paymentsService.changeMetodoPago(id, dto, user.sub);
   }
 }

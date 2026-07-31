@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, Jo
 import { FinancialAccount } from 'src/modules/financial-accounts/entities/financial-account.entity';
 import { User } from 'src/modules/auth/entities/user.entity';
 import { ReciboCaja } from 'src/modules/recibo-caja/entities/recibo-caja.entity';
+import { Reservation } from 'src/modules/reservations/entities/reservation.entity';
 
 @Entity('financial_movements')
 export class FinancialMovement {
@@ -14,6 +15,13 @@ export class FinancialMovement {
   @ManyToOne(() => FinancialAccount)
   @JoinColumn({ name: 'account_id' })
   account: FinancialAccount;
+
+  @Column({ name: 'reservation_id', nullable: true })
+  reservationId: string;
+
+  @ManyToOne(() => Reservation, { nullable: true })
+  @JoinColumn({ name: 'reservation_id' })
+  reservation: Reservation;
 
   @Column({
     type: 'varchar',

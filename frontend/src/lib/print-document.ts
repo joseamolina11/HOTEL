@@ -1,6 +1,6 @@
-import { formatCurrency, formatDateTime } from '@/lib/utils';
+import { formatCurrency, formatDateTime, formatDateShort } from '@/lib/utils';
 
-const API_URL = (import.meta as any).env?.VITE_API_URL_BACKEND || '';
+const API_URL = (import.meta as any).env?.VITE_API_URL_BACKEND || 'https://intranet.cytech.net.co:4000';
 
 const STYLES = `
 @page { margin: 10mm 8mm; }
@@ -592,6 +592,71 @@ export async function printCashClose(register: any) {
   `);
 }
 
+export async function printReservationContract(id: string) {
+  const [resModule, configModule, contractModule] = await Promise.all([
+    import('@/api/reservations.api'),
+    import('@/api/hotel-config.api'),
+    import('@/lib/print-contract'),
+  ]);
+  const [reservation, config] = await Promise.all([
+    resModule.reservationsApi.findOne(id),
+    configModule.hotelConfigApi.getConfig(),
+  ]);
+
+  const r = reservation;
+  const contractData: any = {
+    guest: {
+      nombres: r.guest?.nombres || '',
+      apellidos: r.guest?.apellidos || '',
+      documento: r.guest?.documento || '',
+      nacionalidad: r.guest?.nacionalidad || '',
+      telefono: r.guest?.telefono || '',
+      email: r.guest?.email || '',
+    },
+    room: {
+      numero: r.room?.numero || '',
+      nombre: r.room?.nombre || '',
+      tipoHabitacion: r.room?.roomType?.nombre || '',
+      precioBase: r.precioBase ?? r.room?.roomType?.precioBase,
+    },
+    hotel: {
+      nombre: config?.nombre || '',
+      direccion: config?.direccion || '',
+      ciudad: config?.ciudad || '',
+      pais: config?.pais || '',
+      telefono: config?.telefono || '',
+      email: config?.email || '',
+      logo: config?.logo,
+    },
+    fechaEntrada: r.fechaEntrada,
+    fechaSalida: r.fechaSalida,
+    cantidadHuespedes: r.cantidadHuespedes || 1,
+    huespedesLista: (r.companions || [])
+      .map((c: any) => `${c.nombres} ${c.apellidos} (${c.documento || '—'})`)
+      .join(', '),
+    descuento: r.descuento,
+    registro: {
+      direccion: r.direccion,
+      ciudad: r.ciudad,
+      pais: r.pais,
+      oficio: r.oficio,
+      empresa: r.empresa,
+      telefonoContacto: r.telefonoContacto,
+      emailContacto: r.emailContacto,
+      transporteLlegada: r.transporteLlegada,
+      transporteSalida: r.transporteSalida,
+      reservacionOrigen: r.reservacionOrigen,
+      procedencia: r.procedencia,
+      destino: r.destino,
+      motivoViaje: r.motivoViaje,
+      numeroPlaca: r.numeroPlaca,
+    },
+  };
+
+  const html = contractModule.generateDefaultContract(contractData as any);
+  contractModule.printContract(html);
+}
+
 export async function printReservation(id: string) {
   const [resModule, configModule] = await Promise.all([
     import('@/api/reservations.api'),
@@ -765,6 +830,73 @@ export async function printReservation(id: string) {
     <div class="signatures">
       <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Hu\u00e9sped</div><div class="sig-name">${r.guest?.nombres || ''} ${r.guest?.apellidos || ''}</div></div>
       <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Recibido por</div><div class="sig-name">________________</div></div>
+      <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Autorizado por</div><div class="sig-name">________________</div></div>
+    </div>
+  `);
+}
+
+export async function printOccupancyControl(params?: { desde?: string; hasta?: string }) {
+  const [roomsModule, configModule] = await Promise.all([
+    import('@/api/rooms.api'),
+    import('@/api/hotel-config.api'),
+  ]);
+  const [result, config] = await Promise.all([
+    roomsModule.roomsApi.getOccupancyControl(params as Record<string, string>),
+    configModule.hotelConfigApi.getConfig(),
+  ]);
+
+  const rows = result?.data || [];
+  const totals = result?.totals || { ocupadas: 0, checkouts: 0, valorHabitaciones: 0, cargos: 0, debe: 0 };
+
+  const rowHtml = rows.map((r: any) => `
+    <tr>
+      <td>${r.room?.numero || '—'} ${r.room?.nombre || ''}</td>
+      <td>${r.guest?.nombres || ''} ${r.guest?.apellidos || ''}${r.guest?.documento ? `<br><span style="font-size:8px;color:#718096">${r.guest.documento}</span>` : ''}</td>
+      <td>${r.codigo || '—'}</td>
+      <td class="text-center">${r.noches}</td>
+      <td class="text-center" style="text-transform:capitalize">${r.estado}</td>
+      <td>${new Date(r.horaEntrada || r.fechaEntrada).toLocaleString('es-MX')}</td>
+      <td>${r.horaSalida ? new Date(r.horaSalida).toLocaleString('es-MX') : '—'}</td>
+      <td class="text-right">${formatCurrency(r.precioPorNoche)}</td>
+      <td class="text-right">${formatCurrency(r.valorHabitaciones)}</td>
+      <td class="text-right">${formatCurrency(r.cargos)}</td>
+      <td class="text-right">${formatCurrency(r.descuento)}</td>
+      <td class="text-right">${formatCurrency(r.totalPagado)}</td>
+      <td class="text-right" style="color:${r.debe > 0 ? '#9b2c2c' : '#22543d'};font-weight:700">${formatCurrency(r.debe)}</td>
+    </tr>`).join('');
+
+  const fromLabel = params?.desde ? new Date(params.desde).toLocaleDateString('es-MX') : '—';
+  const toLabel = params?.hasta ? new Date(params.hasta).toLocaleDateString('es-MX') : '—';
+
+  openPrintWindow('Control de Ocupaci\u00f3n', `
+    ${getHeader(config)}
+    <div class="doc-title">
+      <h2>Control de Ocupaci\u00f3n</h2>
+      <div class="doc-ref">Del ${fromLabel} al ${toLabel} &mdash; ${rows.length} reserva(s)</div>
+    </div>
+
+    <div class="summary-cards">
+      <div class="summary-card total"><div class="card-label">Ocupadas</div><div class="card-value">${totals.ocupadas || 0}</div></div>
+      <div class="summary-card initial"><div class="card-label">Check-Outs</div><div class="card-value">${totals.checkouts || 0}</div></div>
+      <div class="summary-card positive"><div class="card-label">Valor Habitaciones</div><div class="card-value">${formatCurrency(totals.valorHabitaciones || 0)}</div></div>
+      <div class="summary-card negative"><div class="card-label">Cargos</div><div class="card-value">${formatCurrency(totals.cargos || 0)}</div></div>
+      <div class="summary-card"><div class="card-label" style="color:#9b2c2c">Por Cobrar</div><div class="card-value" style="color:${totals.debe > 0 ? '#9b2c2c' : '#22543d'}">${formatCurrency(totals.debe || 0)}</div></div>
+    </div>
+
+    <div style="overflow-x:auto">
+    <table class="compact-table" style="min-width:1100px">
+      <thead>
+        <tr><th>Habitaci\u00f3n</th><th>Hu\u00e9sped</th><th>Reserva</th><th class="text-center">Noches</th><th class="text-center">Estado</th><th>Entrada</th><th>Salida</th><th class="text-right">Precio/Noche</th><th class="text-right">Valor Hab.</th><th class="text-right">Cargos</th><th class="text-right">Descuento</th><th class="text-right">Pagado</th><th class="text-right">Por Cobrar</th></tr>
+      </thead>
+      <tbody>
+        ${rowHtml || '<tr><td colspan="13" class="text-center" style="color:#a0aec0">Sin reservas en el periodo</td></tr>'}
+      </tbody>
+    </table>
+    </div>
+
+    <div class="signatures">
+      <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Elaborado por</div><div class="sig-name">________________</div></div>
+      <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Revisado por</div><div class="sig-name">________________</div></div>
       <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Autorizado por</div><div class="sig-name">________________</div></div>
     </div>
   `);

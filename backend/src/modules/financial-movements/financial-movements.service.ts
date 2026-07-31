@@ -19,6 +19,7 @@ export class FinancialMovementsService {
       .leftJoinAndSelect('m.user', 'user')
       .leftJoinAndSelect('m.reciboCaja', 'reciboCaja')
       .leftJoinAndSelect('reciboCaja.reservation', 'reciboReservation')
+      .leftJoinAndSelect('m.reservation', 'reservation')
       .orderBy('m.fechaMovimiento', 'DESC')
       .addOrderBy('m.createdAt', 'DESC');
 
@@ -94,6 +95,7 @@ export class FinancialMovementsService {
       referenciaId: dto.referenciaId,
       reciboId: dto.reciboId,
       cashRegisterId: dto.cashRegisterId,
+      reservationId: dto.reservationId,
       userId: userId || null,
       fechaMovimiento: new Date(),
     });

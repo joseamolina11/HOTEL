@@ -6,7 +6,7 @@ import { AirbnbAdapter } from './adapters/airbnb.adapter';
 import { OTAAdapter, OTACredentials } from './adapters/ota-adapter.interface';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { Room } from '../rooms/entities/room.entity';
-import { generateReservationCode } from 'src/common/utils/generate-code';
+import { getMaxSequence, sequentialCode } from 'src/common/utils/generate-code';
 
 @Injectable()
 export class OtaService {
@@ -57,7 +57,8 @@ export class OtaService {
           continue;
         }
 
-        const codigo = generateReservationCode();
+        const last = await getMaxSequence(this.reservationRepository, 'codigo', 'RES');
+        const codigo = sequentialCode(last + 1, 'RES');
         // @ts-ignore
         const reservation: Partial<Reservation> = this.reservationRepository.create({
           codigo,

@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Tercero } from 'src/modules/terceros/entities/tercero.entity';
 
 @Entity('surcharge_types')
 export class SurchargeType {
@@ -7,6 +8,13 @@ export class SurchargeType {
 
   @Column({ type: 'varchar' })
   nombre: string;
+
+  @Column({ name: 'tercero_id', nullable: true })
+  terceroId?: string;
+
+  @ManyToOne(() => Tercero, { nullable: true })
+  @JoinColumn({ name: 'tercero_id' })
+  tercero?: Tercero;
 
   @Column({ type: 'text', nullable: true })
   descripcion?: string;

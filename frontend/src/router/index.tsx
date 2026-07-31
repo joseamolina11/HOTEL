@@ -37,6 +37,15 @@ import { ReciboCajaListPage } from '@/pages/recibo-caja/recibo-caja-list.page';
 import { PermissionsPage } from '@/pages/permissions/permissions.page';
 import { SurchargeTypesPage } from '@/pages/surcharges/surcharge-types.page';
 import { BitacorasListPage } from '@/pages/bitacoras/bitacoras-list.page';
+import { TercerosPage } from '@/pages/terceros/terceros.page';
+import { ReportsPage } from '@/pages/reports/reports.page';
+import { GerencialPage } from '@/pages/statistics/gerencial.page';
+import {
+  DeletedReservationsPage,
+  DeletedSurchargesPage,
+  DiscountsPage,
+  UnpaidReservationsPage,
+} from '@/pages/record-control/record-control.page';
 
 export const router = createBrowserRouter([
   {
@@ -83,6 +92,13 @@ export const router = createBrowserRouter([
       { path: 'financial-movements', element: <FinancialMovementsListPage /> },
       { path: 'recibo-caja', element: <ReciboCajaListPage /> },
       { path: 'surcharge-types', element: <SurchargeTypesPage /> },
+      { path: 'terceros', element: <TercerosPage /> },
+      { path: 'reports', element: <ReportsPage /> },
+      { path: 'statistics/gerencial', element: <GerencialPage /> },
+      { path: 'record-control/deleted-reservations', element: <DeletedReservationsPage /> },
+      { path: 'record-control/deleted-surcharges', element: <DeletedSurchargesPage /> },
+      { path: 'record-control/discounts', element: <DiscountsPage /> },
+      { path: 'record-control/unpaid-reservations', element: <UnpaidReservationsPage /> },
       { path: 'bitacoras', element: <BitacorasListPage /> },
       { path: 'permissions', element: <RoleGuard roles={['admin']}><PermissionsPage /></RoleGuard> },
       { path: 'users', element: <RoleGuard roles={['admin']}><UsersListPage /></RoleGuard> },

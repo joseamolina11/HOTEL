@@ -46,6 +46,21 @@ export class RoomsController {
     return this.roomsService.getCalendar(parseLocalDate(fechaInicio), parseLocalDate(fechaFin));
   }
 
+  @Get('occupancy-control')
+  @Permissions('rooms:view')
+  @ApiOperation({ summary: 'Control de ocupación: habitaciones ocupadas y con checkout' })
+  @ApiQuery({ name: 'desde', required: false })
+  @ApiQuery({ name: 'hasta', required: false })
+  async getOccupancyControl(
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.roomsService.getOccupancyControl(
+      desde ? parseLocalDate(desde) : undefined,
+      hasta ? parseLocalDate(hasta) : undefined,
+    );
+  }
+
   @Get(':id')
   @Permissions('rooms:view')
   @ApiOperation({ summary: 'Obtener habitación por ID' })

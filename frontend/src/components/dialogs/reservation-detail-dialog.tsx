@@ -1,15 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { checkoutApi } from '@/api/checkout.api';
 import { reciboCajaApi } from '@/api/recibo-caja.api';
+import { paymentsApi } from '@/api/payments.api';
+import { paymentMethodsApi } from '@/api/payment-methods.api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ReciboCajaDetailDialog } from '@/components/dialogs/recibo-caja-detail-dialog';
 import { formatCurrency } from '@/lib/utils';
+import { toastSuccess, toastError } from '@/lib/notifications';
 import { useReservationSurcharges, useActiveSurchargeTypes, useCreateSurcharge, useRemoveSurcharge } from '@/hooks/useSurcharges';
-import { ExternalLink, Receipt, ShoppingCart, CreditCard, Package, BedDouble, Printer, Zap, Plus, X, Loader2 } from 'lucide-react';
+import { ExternalLink, Receipt, ShoppingCart, CreditCard, Package, BedDouble, Printer, Zap, Plus, X, Loader2, ArrowLeftRight } from 'lucide-react';
+import { generateDefaultContract } from '@/lib/print-contract';
 
 const STATUS_LABELS: Record<string, string> = {
   pendiente: 'Pendiente',
@@ -37,6 +41,9 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
   const [newSurchargeType, setNewSurchargeType] = useState('');
   const [newSurchargeMonto, setNewSurchargeMonto] = useState(0);
   const [newSurchargeCantidad, setNewSurchargeCantidad] = useState(1);
+  const [newSurchargeReferencia, setNewSurchargeReferencia] = useState('');
+  const [changeMethodFor, setChangeMethodFor] = useState<any | null>(null);
+  const qc = useQueryClient();
 
   const { data: summary, isLoading } = useQuery({
     queryKey: ['stay-summary', reservation?.id],
@@ -58,6 +65,18 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
   const createSurchargeMut = useCreateSurcharge();
   const removeSurchargeMut = useRemoveSurcharge();
 
+  const changeMethodMut = useMutation({
+    mutationFn: ({ paymentId, metodoPagoId }: { paymentId: string; metodoPagoId: string }) =>
+      paymentsApi.changeMetodoPago(paymentId, { metodoPagoId }),
+    onSuccess: () => {
+      toastSuccess('Método de pago actualizado');
+      setChangeMethodFor(null);
+      qc.invalidateQueries({ queryKey: ['stay-summary'] });
+      qc.invalidateQueries({ queryKey: ['reservations'] });
+    },
+    onError: () => toastError('No se pudo cambiar el método de pago'),
+  });
+
   const res = summary?.reservation || reservation;
   const s = summary?.summary;
   const recibo = reciboData?.recibo;
@@ -68,7 +87,8 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              Reserva {res?.codigo || ''}
+              Reserva {res?.codigo || '—'}
+              {res?.checkinConsecutivo && <span className="text-xs font-normal text-violet-600">· Check-in {res.checkinConsecutivo}</span>}
               {res?.estado && <Badge variant="outline" className={STATUS_COLORS[res.estado]}>{STATUS_LABELS[res.estado] || res.estado}</Badge>}
             </DialogTitle>
           </DialogHeader>
@@ -160,7 +180,11 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                     <div className="rounded-lg border mb-2 divide-y text-sm">
                       {surcharges.map((sc: any) => (
                         <div key={sc.id} className="flex items-center justify-between px-3 py-2">
-                          <span className="text-muted-foreground">{sc.descripcion} x{sc.cantidad}</span>
+                          <div>
+                            <span className="font-medium text-violet-700">{sc.consecutivo || '—'}</span>
+                            {sc.referencia && <span className="ml-2 text-xs text-muted-foreground">Ref: {sc.referencia}</span>}
+                            <span className="ml-2 text-muted-foreground">{sc.descripcion} x{sc.cantidad}</span>
+                          </div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{formatCurrency(sc.subtotal)}</span>
                             <Button
@@ -206,6 +230,11 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                       <Input type="number" step="0.01" min={0} value={newSurchargeMonto || ''}
                         onChange={(e) => setNewSurchargeMonto(Number(e.target.value))} />
                     </div>
+                    <div className="w-40 space-y-1">
+                      <label className="text-xs text-muted-foreground">Referencia</label>
+                      <Input placeholder="Opcional" value={newSurchargeReferencia}
+                        onChange={(e) => setNewSurchargeReferencia(e.target.value)} />
+                    </div>
                     <Button type="button" size="sm" disabled={!newSurchargeType || createSurchargeMut.isPending}
                       onClick={async () => {
                         const st = (activeSurchargeTypes || []).find((t: any) => t.id === newSurchargeType);
@@ -215,10 +244,12 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                           descripcion: st?.nombre || '',
                           monto: newSurchargeMonto,
                           cantidad: newSurchargeCantidad,
+                          referencia: newSurchargeReferencia || undefined,
                         });
                         setNewSurchargeType('');
                         setNewSurchargeCantidad(1);
                         setNewSurchargeMonto(0);
+                        setNewSurchargeReferencia('');
                         refetchSurcharges();
                       }}
                     >
@@ -322,7 +353,10 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                         <tr className="border-b">
                           <th className="px-3 py-2 text-left font-medium">Fecha</th>
                           <th className="px-3 py-2 text-left font-medium">Concepto</th>
+                          <th className="px-3 py-2 text-left font-medium">Método</th>
+                          <th className="px-3 py-2 text-left font-medium">Cuenta</th>
                           <th className="px-3 py-2 text-right font-medium">Monto</th>
+                          <th className="px-3 py-2 text-right font-medium"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -330,7 +364,19 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
                           <tr key={p.id} className="border-b">
                             <td className="px-3 py-2 text-xs text-muted-foreground">{p.fecha ? new Date(p.fecha).toLocaleDateString() : '—'}</td>
                             <td className="px-3 py-2">{p.observaciones || '—'}</td>
+                            <td className="px-3 py-2">{p.metodoPago?.nombre || '—'}</td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground">{p.cuenta?.nombre || '—'}</td>
                             <td className="px-3 py-2 text-right font-medium">{formatCurrency(p.monto)}</td>
+                            <td className="px-3 py-2 text-right">
+                              {['confirmada', 'checkin'].includes(res.estado) ? (
+                                <Button
+                                  type="button" variant="ghost" size="sm" className="h-7 text-xs"
+                                  onClick={() => setChangeMethodFor(p)}
+                                >
+                                  <ArrowLeftRight className="h-3 w-3 mr-1" /> Cambiar
+                                </Button>
+                              ) : '—'}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -398,6 +444,86 @@ export function ReservationDetailDialog({ reservation, open, onClose, onNavigate
         </DialogContent>
       </Dialog>
       <ReciboCajaDetailDialog reciboId={reciboDetailId} open={!!reciboDetailId} onClose={() => setReciboDetailId(null)} />
+      <ChangeMethodDialog
+        payment={changeMethodFor}
+        open={!!changeMethodFor}
+        onClose={() => setChangeMethodFor(null)}
+        onConfirm={(metodoPagoId) => changeMethodMut.mutateAsync({ paymentId: changeMethodFor.id, metodoPagoId })}
+        isPending={changeMethodMut.isPending}
+      />
     </>
+  );
+}
+
+function ChangeMethodDialog({ payment, open, onClose, onConfirm, isPending }: {
+  payment: any;
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (metodoPagoId: string) => void;
+  isPending: boolean;
+}) {
+  const [metodoPagoId, setMetodoPagoId] = useState('');
+
+  const { data: paymentMethods } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: () => paymentMethodsApi.findAllActive(),
+    enabled: open,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setMetodoPagoId(''); onClose(); } }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowLeftRight className="h-5 w-5" /> Cambiar método de pago
+          </DialogTitle>
+        </DialogHeader>
+        {payment && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Pago</span>
+                <span className="font-medium">{formatCurrency(payment.monto)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Método actual</span>
+                <span className="font-medium">{payment.metodoPago?.nombre || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Cuenta actual</span>
+                <span className="font-medium">{payment.cuenta?.nombre || '—'}</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Nuevo método de pago</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                value={metodoPagoId}
+                onChange={(e) => setMetodoPagoId(e.target.value)}
+              >
+                <option value="">Seleccionar...</option>
+                {(paymentMethods || [])
+                  .filter((pm: any) => pm.id !== payment.metodoPagoId)
+                  .map((pm: any) => (
+                    <option key={pm.id} value={pm.id}>
+                      {pm.nombre}{pm.financialAccount ? ` — ${pm.financialAccount.nombre}` : ''}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Se generará una transferencia contable entre las cuentas de ambos métodos.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
+              <Button className="flex-1" disabled={!metodoPagoId || isPending} onClick={() => onConfirm(metodoPagoId)}>
+                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowLeftRight className="mr-2 h-4 w-4" />}
+                Confirmar cambio
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

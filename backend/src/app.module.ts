@@ -41,6 +41,10 @@ import { AuditTrailModule } from './modules/audit-trail/audit-trail.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { SurchargesModule } from './modules/surcharges/surcharges.module';
 import { BitacorasModule } from './modules/bitacoras/bitacoras.module';
+import { TercerosModule } from './modules/terceros/terceros.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { RecordControlModule } from './modules/record-control/record-control.module';
+import { StatisticsModule } from './modules/statistics/statistics.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 import { ScheduleModule } from '@nestjs/schedule';
@@ -87,6 +91,10 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     PermissionsModule,
     SurchargesModule,
     BitacorasModule,
+    TercerosModule,
+    ReportsModule,
+    RecordControlModule,
+    StatisticsModule,
     ScheduleModule.forRoot(),
     CierreDiarioModule,
   ],

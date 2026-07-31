@@ -352,7 +352,8 @@ function StaySummaryContent({
             {s.surcharges.map((sc: any) => (
               <div key={sc.id} className="flex justify-between px-4 py-2 text-sm">
                 <span className="text-muted-foreground">
-                  {sc.descripcion} x{sc.cantidad}
+                  <span className="font-medium text-violet-700">{sc.consecutivo || '—'}</span>
+                  {' '}{sc.descripcion} x{sc.cantidad}
                 </span>
                 <span>{formatCurrency(sc.subtotal)}</span>
               </div>

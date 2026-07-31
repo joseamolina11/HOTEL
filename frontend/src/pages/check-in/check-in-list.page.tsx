@@ -12,12 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@
 import { Input } from '@/components/ui/input';
 import { LogIn, Plus, X, Loader2, DollarSign, Printer, Zap, ArrowRightLeft } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
-import { toastSuccess } from '@/lib/notifications';
+import { toastSuccess, toastError } from '@/lib/notifications';
 import { renderContract, generateDefaultContract, printContract } from '@/lib/print-contract';
 import { RegistroHoteleroFields } from '@/components/forms/registro-hotelero-fields';
 import { ChangeRoomDialog } from '@/components/forms/change-room-dialog';
 import { surchargeTypesApi } from '@/api/surcharge-types.api';
 import { surchargesApi } from '@/api/surcharges.api';
+import { tercerosApi } from '@/api/terceros.api';
 
 export function CheckInListPage() {
   const qc = useQueryClient();
@@ -133,11 +134,17 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   const [registroData, setRegistroData] = useState<Record<string, string>>({});
 
   const [descuento, setDescuento] = useState(0);
-  const [recargos, setRecargos] = useState<{ id?: string; surchargeTypeId: string; descripcion: string; monto: number; cantidad: number }[]>([]);
+  const [recargos, setRecargos] = useState<{ id?: string; consecutivo?: string; surchargeTypeId: string; descripcion: string; monto: number; cantidad: number; terceroId?: string }[]>([]);
 
   const { data: surchargeTypes } = useQuery({
     queryKey: ['surcharge-types', 'active'],
     queryFn: () => surchargeTypesApi.findActive(),
+  });
+
+  const { data: terceros } = useQuery({
+    queryKey: ['terceros', 'active'],
+    queryFn: () => tercerosApi.findAllActive(),
+    enabled: open,
   });
 
   const { data: existingSurcharges } = useQuery({
@@ -152,10 +159,12 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
       if (existingSurcharges?.length) {
         setRecargos(existingSurcharges.map((s: any) => ({
           id: s.id,
+          consecutivo: s.consecutivo || undefined,
           surchargeTypeId: s.surchargeTypeId || '',
           descripcion: s.descripcion,
           monto: Number(s.monto),
           cantidad: s.cantidad,
+          terceroId: s.terceroId || undefined,
         })));
       } else {
         setRecargos([]);
@@ -205,16 +214,19 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   });
 
   const handlePrintContract = () => {
-    if (!reservation.guest) return;
+    if (!reservation.guest) { toastError('Datos del huésped no disponibles'); return; }
+
+    const guestData = {
+      nombres: (registroData.huespedNombres || '').trim() || reservation.guest.nombres,
+      apellidos: (registroData.huespedApellidos || '').trim() || reservation.guest.apellidos,
+      documento: (registroData.huespedDocumento || '').trim() || reservation.guest.documento,
+      nacionalidad: reservation.guest.nacionalidad,
+      telefono: (registroData.huespedCelular || '').trim() || reservation.guest.telefono,
+      email: reservation.guest.email,
+    };
+
     const contractData = {
-      guest: {
-        nombres: reservation.guest.nombres,
-        apellidos: reservation.guest.apellidos,
-        documento: reservation.guest.documento,
-        nacionalidad: reservation.guest.nacionalidad,
-        telefono: reservation.guest.telefono,
-        email: reservation.guest.email,
-      },
+      guest: guestData,
       room: {
         numero: reservation.room?.numero || '',
         nombre: reservation.room?.nombre || '',
@@ -235,9 +247,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
       descuento,
       registro: registroData,
     };
-    const html = hotelConfig?.contratoHtml
-      ? renderContract(hotelConfig.contratoHtml, contractData)
-      : generateDefaultContract(contractData);
+    const html = generateDefaultContract(contractData);
     printContract(html);
   };
 
@@ -319,6 +329,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         descripcion: r.descripcion,
         monto: r.monto,
         cantidad: r.cantidad,
+        terceroId: r.terceroId || undefined,
       }));
     }
     await checkInMut.mutateAsync(dto);
@@ -342,7 +353,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
         </td>
       </tr>
 
-      <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setOpen(false); setCompanions([]); setObservaciones(''); setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]); setDescuento(0); setRecargos([]); } }}>
+      <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setOpen(false); setCompanions([]); setObservaciones(''); setPagos([{ monto: 0, metodoPagoId: '', comprobante: '' }]); setDescuento(0); setRecargos([]); setRegistroData({}); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -406,7 +417,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
               <Printer className="mr-2 h-4 w-4" /> Imprimir / Descargar Contrato
             </Button>
 
-            <RegistroHoteleroFields data={registroData} onChange={updateRegistro} />
+            <RegistroHoteleroFields data={registroData} onChange={updateRegistro} guestDefault={reservation.guest} />
 
             <div className="rounded-lg border border-violet-200 p-3 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-violet-700">
@@ -416,54 +427,76 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
                 <p className="text-xs text-muted-foreground">No hay tipos de recargo configurados</p>
               )}
               {recargos.map((r, i) => (
-                <div key={i} className="flex items-end gap-2 border-b pb-2">
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs text-muted-foreground">Tipo</label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                      value={r.surchargeTypeId}
-                      onChange={(e) => {
-                        const type = (surchargeTypes || []).find((t: any) => t.id === e.target.value);
-                        const updated = [...recargos];
-                        updated[i].surchargeTypeId = e.target.value;
-                        updated[i].descripcion = type?.nombre || '';
-                        updated[i].monto = type ? Number(type.montoDefault) : 0;
-                        setRecargos(updated);
-                      }}
-                    >
-                      <option value="">Seleccionar...</option>
-                      {(surchargeTypes || []).map((st: any) => (
-                        <option key={st.id} value={st.id}>{st.nombre} — {formatCurrency(Number(st.montoDefault))}</option>
-                      ))}
-                    </select>
+                <div key={i} className="space-y-2 border-b pb-2">
+                  {r.id && (
+                    <p className="text-xs font-medium text-violet-700">Consecutivo: {r.consecutivo || '—'}</p>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Tipo</label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={r.surchargeTypeId}
+                        onChange={(e) => {
+                          const type = (surchargeTypes || []).find((t: any) => t.id === e.target.value);
+                          const updated = [...recargos];
+                          updated[i].surchargeTypeId = e.target.value;
+                          updated[i].descripcion = type?.nombre || '';
+                          updated[i].monto = type ? Number(type.montoDefault) : 0;
+                          setRecargos(updated);
+                        }}
+                      >
+                        <option value="">Seleccionar...</option>
+                        {(surchargeTypes || []).map((st: any) => (
+                          <option key={st.id} value={st.id}>{st.nombre} — {formatCurrency(Number(st.montoDefault))}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Tercero</label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                        value={r.terceroId || ''}
+                        onChange={(e) => {
+                          const updated = [...recargos];
+                          updated[i].terceroId = e.target.value || undefined;
+                          setRecargos(updated);
+                        }}
+                      >
+                        <option value="">Sin tercero</option>
+                        {(terceros || []).map((t: any) => (
+                          <option key={t.id} value={t.id}>{t.nombre}{t.tipo === 'empresa' ? ' (Empresa)' : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="w-20 space-y-1">
+                      <label className="text-xs text-muted-foreground">Cant.</label>
+                      <Input
+                        type="number" min={1}
+                        value={r.cantidad}
+                        onChange={(e) => {
+                          const updated = [...recargos];
+                          updated[i].cantidad = Number(e.target.value);
+                          setRecargos(updated);
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">Monto</label>
+                      <Input
+                        type="number" step="0.01" min={0}
+                        value={r.monto}
+                        onChange={(e) => {
+                          const updated = [...recargos];
+                          updated[i].monto = Number(e.target.value);
+                          setRecargos(updated);
+                        }}
+                      />
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => setRecargos(recargos.filter((_, j) => j !== i))}>
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div className="w-20 space-y-1">
-                    <label className="text-xs text-muted-foreground">Cant.</label>
-                    <Input
-                      type="number" min={1}
-                      value={r.cantidad}
-                      onChange={(e) => {
-                        const updated = [...recargos];
-                        updated[i].cantidad = Number(e.target.value);
-                        setRecargos(updated);
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs text-muted-foreground">Monto</label>
-                    <Input
-                      type="number" step="0.01" min={0}
-                      value={r.monto}
-                      onChange={(e) => {
-                        const updated = [...recargos];
-                        updated[i].monto = Number(e.target.value);
-                        setRecargos(updated);
-                      }}
-                    />
-                  </div>
-                  <Button type="button" variant="ghost" size="icon" className="mb-0.5" onClick={() => setRecargos(recargos.filter((_, j) => j !== i))}>
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
               ))}
               {(surchargeTypes || []).length > 0 && (

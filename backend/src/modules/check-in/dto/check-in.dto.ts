@@ -41,6 +41,11 @@ class CheckInSurchargeDto {
   @IsString()
   surchargeTypeId?: string;
 
+  @ApiPropertyOptional({ example: 'uuid-tercero' })
+  @IsOptional()
+  @IsString()
+  terceroId?: string;
+
   @ApiProperty({ example: 'Persona extra' })
   @IsString()
   descripcion: string;
@@ -82,6 +87,26 @@ export class CheckInDto {
   @ApiProperty({ example: 'uuid-reservation' })
   @IsString()
   reservationId: string;
+
+  @ApiPropertyOptional({ example: 'María' })
+  @IsOptional()
+  @IsString()
+  huespedNombres?: string;
+
+  @ApiPropertyOptional({ example: 'López' })
+  @IsOptional()
+  @IsString()
+  huespedApellidos?: string;
+
+  @ApiPropertyOptional({ example: 'V-12345678' })
+  @IsOptional()
+  @IsString()
+  huespedDocumento?: string;
+
+  @ApiPropertyOptional({ example: '+584141234567' })
+  @IsOptional()
+  @IsString()
+  huespedCelular?: string;
 
   @ApiPropertyOptional({ example: 'Llegada puntual' })
   @IsOptional()

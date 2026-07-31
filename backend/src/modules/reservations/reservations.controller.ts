@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiProperty } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
 import { ReservationsService } from './reservations.service';
-import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto, ChangeRoomDto } from './dto/create-reservation.dto';
+import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto, ChangeRoomDto, AddAbonoDto } from './dto/create-reservation.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
 
@@ -89,5 +89,12 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Asignar contrato a reserva' })
   async updateContract(@Param('id') id: string, @Body() dto: UpdateContractDto) {
     return this.reservationsService.updateContract(id, dto.contratoFileId);
+  }
+
+  @Post(':id/abono')
+  @Permissions('payments:create')
+  @ApiOperation({ summary: 'Registrar abono (pago parcial) a una reserva' })
+  async addAbono(@Param('id') id: string, @Body() dto: AddAbonoDto, @CurrentUser('sub') userId: string) {
+    return this.reservationsService.addAbono(id, dto, userId);
   }
 }

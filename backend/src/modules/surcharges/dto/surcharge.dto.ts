@@ -11,9 +11,19 @@ export class CreateSurchargeDto {
   @IsString()
   surchargeTypeId?: string;
 
+  @ApiPropertyOptional({ example: 'uuid-tercero' })
+  @IsOptional()
+  @IsString()
+  terceroId?: string;
+
   @ApiProperty({ example: 'Persona extra' })
   @IsString()
   descripcion: string;
+
+  @ApiPropertyOptional({ example: 'Referencia del recargo' })
+  @IsOptional()
+  @IsString()
+  referencia?: string;
 
   @ApiProperty({ example: 25000 })
   @IsNumber()
