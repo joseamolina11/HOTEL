@@ -11,6 +11,7 @@ import { getMaxSequence, sequentialCode } from 'src/common/utils/generate-code';
 import { parseLocalDate } from 'src/common/utils/date';
 import { isDateOverlap } from 'src/common/utils/date-utils';
 import { Payment } from '../payments/entities/payment.entity';
+import { Order } from '../orders/entities/order.entity';
 import { CashRegister } from '../cash-register/entities/cash-register.entity';
 import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
@@ -29,6 +30,8 @@ export class ReservationsService {
     private readonly guestRepository: Repository<Guest>,
     @InjectRepository(Payment)
     private readonly paymentRepository: Repository<Payment>,
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
     @InjectRepository(CashRegister)
     private readonly cashRegisterRepository: Repository<CashRegister>,
     private readonly paymentMethodsService: PaymentMethodsService,
@@ -82,8 +85,23 @@ export class ReservationsService {
 
     const [data, total] = await query.getManyAndCount();
 
+    const ids = data.map((r) => r.id);
+    let pendingOrders: Order[] = [];
+    if (ids.length > 0) {
+      pendingOrders = await this.orderRepository.find({
+        where: [
+          { reservationId: In(ids), estado: 'borrador' },
+          { reservationId: In(ids), estado: 'pendiente' },
+        ],
+      });
+    }
+    const pendingByReservation = new Map<string, number>();
+    for (const o of pendingOrders) {
+      pendingByReservation.set(o.reservationId, (pendingByReservation.get(o.reservationId) || 0) + Number(o.total));
+    }
+
     return {
-      data: data.map((r) => this.withBalance(r)),
+      data: data.map((r) => this.withBalance(r, pendingByReservation.get(r.id) || 0)),
       total,
       page,
       limit,
@@ -91,7 +109,7 @@ export class ReservationsService {
     };
   }
 
-  private withBalance(reservation: Reservation) {
+  private withBalance(reservation: Reservation, totalPedidos = 0) {
     const noches = Math.max(0, Math.ceil(
       (new Date(reservation.fechaSalida).getTime() - new Date(reservation.fechaEntrada).getTime()) /
         (1000 * 60 * 60 * 24),
@@ -102,7 +120,7 @@ export class ReservationsService {
     const totalEstancia = totalHabitacion + totalRecargos;
     const totalPagado = (reservation.payments || []).reduce((sum, p) => sum + Number(p.monto), 0);
     const descuento = Number(reservation.descuento || 0);
-    const saldoPendiente = Math.max(0, totalEstancia - descuento - totalPagado);
+    const saldoPendiente = Math.max(0, totalEstancia + totalPedidos - descuento - totalPagado);
     return {
       ...reservation,
       resumen: {
@@ -110,6 +128,7 @@ export class ReservationsService {
         precioPorNoche: precioNoche,
         totalHabitacion,
         totalRecargos,
+        totalPedidos,
         totalEstancia,
         totalPagado,
         saldoPendiente,

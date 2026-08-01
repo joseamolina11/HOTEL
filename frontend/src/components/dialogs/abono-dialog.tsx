@@ -98,6 +98,9 @@ export function AbonoDialog({
                 {Number(resumen?.totalRecargos) > 0 && (
                   <p className="text-[10px] text-violet-600">Recargos: {formatCurrency(resumen.totalRecargos)}</p>
                 )}
+                {Number(resumen?.totalPedidos) > 0 && (
+                  <p className="text-[10px] text-red-500">Pedidos pend.: +{formatCurrency(resumen.totalPedidos)}</p>
+                )}
               </div>
               <div className="rounded bg-green-50 p-2">
                 <p className="text-[10px] text-green-700">Abonado</p>
@@ -106,6 +109,9 @@ export function AbonoDialog({
               <div className="rounded bg-amber-50 p-2">
                 <p className="text-[10px] text-amber-700">Saldo</p>
                 <p className="text-sm font-bold text-amber-700">{formatCurrency(resumen?.saldoPendiente || 0)}</p>
+                {Number(resumen?.totalPedidos) > 0 && (
+                  <p className="text-[10px] text-red-500">incluye pedidos</p>
+                )}
               </div>
             </div>
           </div>

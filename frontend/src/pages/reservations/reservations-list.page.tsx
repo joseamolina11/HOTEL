@@ -267,6 +267,9 @@ export function ReservationsListPage() {
                       <td className="px-4 py-3 text-right text-green-600">{formatCurrency(res.resumen?.totalPagado || 0)}</td>
                       <td className={`px-4 py-3 text-right font-medium ${Number(res.resumen?.saldoPendiente) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {formatCurrency(res.resumen?.saldoPendiente || 0)}
+                        {Number(res.resumen?.totalPedidos) > 0 && (
+                          <div className="text-[11px] text-red-500 font-normal">incluye pedidos {formatCurrency(res.resumen.totalPedidos)}</div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">

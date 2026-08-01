@@ -64,6 +64,11 @@ const groups: GroupItem[] = [
     icon: Package,
     children: [
       {
+        to: "/inventory",
+        label: "Ver Productos",
+        icon: Package,
+      },
+      {
         to: "/inventory/categories",
         label: "Categorías",
         icon: Tags,
@@ -80,6 +85,11 @@ const groups: GroupItem[] = [
     label: "Suministros",
     icon: Boxes,
     children: [
+      {
+        to: "/supplies",
+        label: "Ver Suministros",
+        icon: Boxes,
+      },
       {
         to: "/supplies/categories",
         label: "Categorías",

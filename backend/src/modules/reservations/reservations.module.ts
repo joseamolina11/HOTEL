@@ -7,6 +7,7 @@ import { ReservationGuest } from './entities/reservation-guest.entity';
 import { Room } from '../rooms/entities/room.entity';
 import { Guest } from '../guests/entities/guest.entity';
 import { Payment } from '../payments/entities/payment.entity';
+import { Order } from '../orders/entities/order.entity';
 import { CashRegister } from '../cash-register/entities/cash-register.entity';
 import { PaymentMethodsModule } from '../payment-methods/payment-methods.module';
 import { ReciboCajaModule } from '../recibo-caja/recibo-caja.module';
@@ -14,7 +15,7 @@ import { FinancialMovementsModule } from '../financial-movements/financial-movem
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Reservation, ReservationGuest, Room, Guest, Payment, CashRegister]),
+    TypeOrmModule.forFeature([Reservation, ReservationGuest, Room, Guest, Payment, Order, CashRegister]),
     PaymentMethodsModule,
     ReciboCajaModule,
     FinancialMovementsModule,
