@@ -9,6 +9,7 @@ const guestSchema = z.object({
   nombres: z.string().min(1, 'Nombre requerido'),
   apellidos: z.string().min(1, 'Apellidos requeridos'),
   documento: z.string().min(1, 'Documento requerido'),
+  tipoIdentificacion: z.string().default('CC'),
   nacionalidad: z.string().min(1, 'Nacionalidad requerida'),
   telefono: z.string().min(7, 'Teléfono inválido'),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
@@ -26,6 +27,7 @@ export function GuestForm({ onSuccess }: GuestFormProps) {
   const createGuest = useCreateGuest();
   const { register, handleSubmit, formState: { errors } } = useForm<GuestFormData>({
     resolver: zodResolver(guestSchema),
+    defaultValues: { tipoIdentificacion: 'CC' },
   });
 
   const onSubmit = async (data: GuestFormData) => {
@@ -50,7 +52,15 @@ export function GuestForm({ onSuccess }: GuestFormProps) {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Documento</label>
-          <Input {...register('documento')} placeholder="PAS123456" />
+          <div className="flex gap-2">
+            <Input {...register('documento')} placeholder="PAS123456" />
+            <select className="w-24 rounded-md border border-input bg-transparent px-2 py-2 text-sm" {...register('tipoIdentificacion')}>
+              <option value="CC">CC</option>
+              <option value="C.E">C.E</option>
+              <option value="P.E.P">P.E.P</option>
+              <option value="D.N.I">D.N.I</option>
+            </select>
+          </div>
           {errors.documento && <p className="text-xs text-destructive">{errors.documento.message}</p>}
         </div>
         <div className="space-y-2">

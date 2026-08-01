@@ -34,7 +34,7 @@ export class Order {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   total: number;
 
-  @Column({ type: 'varchar', default: 'borrador' })
+  @Column({ type: 'varchar', default: 'cargado' })
   estado: 'borrador' | 'cargado' | 'pendiente' | 'pagado' | 'cancelado';
 
   @Column({ type: 'text', nullable: true })

@@ -14,6 +14,11 @@ export class CreateGuestDto {
   @IsString()
   documento: string;
 
+  @ApiPropertyOptional({ example: 'CC', description: 'Tipo de identificación: CC, C.E, P.E.P, D.N.I' })
+  @IsOptional()
+  @IsString()
+  tipoIdentificacion?: string;
+
   @ApiProperty({ example: 'Mexicana' })
   @IsString()
   nacionalidad: string;
@@ -53,6 +58,11 @@ export class UpdateGuestDto {
   @IsOptional()
   @IsString()
   documento?: string;
+
+  @ApiPropertyOptional({ example: 'CC', description: 'Tipo de identificación: CC, C.E, P.E.P, D.N.I' })
+  @IsOptional()
+  @IsString()
+  tipoIdentificacion?: string;
 
   @ApiPropertyOptional({ example: 'Mexicana' })
   @IsOptional()

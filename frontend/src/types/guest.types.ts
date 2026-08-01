@@ -3,6 +3,7 @@ export interface Guest {
   nombres: string;
   apellidos: string;
   documento: string;
+  tipoIdentificacion?: string;
   nacionalidad: string;
   telefono: string;
   email?: string;
@@ -15,6 +16,7 @@ export interface CreateGuestDto {
   nombres: string;
   apellidos: string;
   documento: string;
+  tipoIdentificacion?: string;
   nacionalidad: string;
   telefono: string;
   email?: string;

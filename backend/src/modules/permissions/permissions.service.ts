@@ -30,6 +30,7 @@ export class PermissionsService implements OnModuleInit {
       reception: 'Operaciones de recepción y reservas',
       limpieza: 'Gestión de housekeeping y habitaciones',
       mantenimiento: 'Tareas de mantenimiento y habitaciones',
+      gerencia: 'Análisis gerencial, reportes y visibilidad de operación',
     };
 
     for (const [name, description] of Object.entries(roleDescriptions)) {

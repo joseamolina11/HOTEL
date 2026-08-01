@@ -52,6 +52,13 @@ export class CashRegisterController {
     return this.cashRegisterService.findMovements(id, +page, +limit, userId);
   }
 
+  @Get(':id/summary')
+  @Permissions('cash-register:view')
+  @ApiOperation({ summary: 'Resumen del turno de caja por método de pago' })
+  async getSummary(@Param('id') id: string) {
+    return this.cashRegisterService.getSummary(id);
+  }
+
   @Post('open')
   @Permissions('cash-register:open')
   @ApiOperation({ summary: 'Abrir caja' })

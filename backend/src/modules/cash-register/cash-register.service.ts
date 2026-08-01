@@ -5,12 +5,24 @@ import { CashRegister } from './entities/cash-register.entity';
 import { OpenCashRegisterDto, CloseCashRegisterDto } from './dto/create-cash-register.dto';
 import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
 import { FinancialAccountsService } from '../financial-accounts/financial-accounts.service';
+import { FinancialMovement } from '../financial-movements/entities/financial-movement.entity';
+import { ReciboCajaPago } from '../recibo-caja/entities/recibo-caja-pago.entity';
+import { Payment } from '../payments/entities/payment.entity';
+import { Expense } from '../expenses/entities/expense.entity';
 
 @Injectable()
 export class CashRegisterService {
   constructor(
     @InjectRepository(CashRegister)
     private readonly repo: Repository<CashRegister>,
+    @InjectRepository(FinancialMovement)
+    private readonly movementRepo: Repository<FinancialMovement>,
+    @InjectRepository(ReciboCajaPago)
+    private readonly reciboPagoRepo: Repository<ReciboCajaPago>,
+    @InjectRepository(Payment)
+    private readonly paymentRepo: Repository<Payment>,
+    @InjectRepository(Expense)
+    private readonly expenseRepo: Repository<Expense>,
     private readonly financialMovementsService: FinancialMovementsService,
     private readonly financialAccountsService: FinancialAccountsService,
   ) {}
@@ -106,5 +118,146 @@ export class CashRegisterService {
       register,
       movements,
     };
+  }
+
+  /**
+   * Desglose del turno de caja por método de pago.
+   * - efectivo: montoInicial + ingresos - egresos (caja física)
+   * - transferencia / tarjeta / otros: ingresos - egresos de cada método
+   * - transferencias entre cuentas: mostradas aparte (solo las que tocan la
+   *   cuenta de caja afectan al efectivo en caja)
+   */
+  async getSummary(id: string) {
+    const register = await this.findOne(id);
+    const movements = await this.movementRepo.find({
+      where: { cashRegisterId: id },
+      relations: ['account', 'user', 'reciboCaja'],
+      order: { fechaMovimiento: 'ASC', createdAt: 'ASC' },
+    });
+
+    const methods: Record<'efectivo' | 'transferencia' | 'tarjeta' | 'otros', { ingresos: number; egresos: number; total: number }> = {
+      efectivo: { ingresos: 0, egresos: 0, total: 0 },
+      transferencia: { ingresos: 0, egresos: 0, total: 0 },
+      tarjeta: { ingresos: 0, egresos: 0, total: 0 },
+      otros: { ingresos: 0, egresos: 0, total: 0 },
+    };
+
+    let transferenciasEntradas = 0;
+    let transferenciasSalidas = 0;
+    let transferenciasCajaNeto = 0;
+    let ajustes = 0;
+
+    const reciboCache = new Map<string, ReciboCajaPago[]>();
+    const paymentCache = new Map<string, Payment | Payment[]>();
+
+    for (const m of movements) {
+      const monto = Number(m.monto) || 0;
+
+      if (m.tipo === 'INGRESO' || m.tipo === 'EGRESO') {
+        const method = await this.resolveMethod(m, reciboCache, paymentCache);
+        const bucket = methods[method] || methods.otros;
+        if (m.tipo === 'INGRESO') bucket.ingresos += monto;
+        else bucket.egresos += monto;
+      } else if (m.tipo === 'TRANSFERENCIA_ENTRADA') {
+        transferenciasEntradas += monto;
+        if (register.accountId && m.accountId === register.accountId) transferenciasCajaNeto += monto;
+      } else if (m.tipo === 'TRANSFERENCIA_SALIDA') {
+        transferenciasSalidas += monto;
+        if (register.accountId && m.accountId === register.accountId) transferenciasCajaNeto -= monto;
+      } else if (m.tipo === 'AJUSTE') {
+        ajustes += monto;
+      }
+    }
+
+    for (const key of Object.keys(methods) as Array<keyof typeof methods>) {
+      methods[key].total = methods[key].ingresos - methods[key].egresos;
+    }
+
+    const efectivoEnCaja = Number(register.montoInicial) + methods.efectivo.total + transferenciasCajaNeto;
+
+    return {
+      register,
+      summary: {
+        montoInicial: Number(register.montoInicial),
+        methods,
+        transferencias: {
+          entradas: transferenciasEntradas,
+          salidas: transferenciasSalidas,
+          neto: transferenciasEntradas - transferenciasSalidas,
+        },
+        transferenciasCajaNeto,
+        ajustes,
+        efectivoEnCaja,
+        totalVentas: Number(register.totalVentas),
+        cantidadTransacciones: Number(register.cantidadTransacciones),
+        movementsCount: movements.length,
+      },
+    };
+  }
+
+  private async resolveMethod(
+    movement: FinancialMovement,
+    reciboCache: Map<string, ReciboCajaPago[]>,
+    paymentCache: Map<string, Payment | Payment[]>,
+  ): Promise<'efectivo' | 'transferencia' | 'tarjeta' | 'otros'> {
+    if (movement.referenciaTipo === 'payment' && movement.referenciaId) {
+      const key = `payment:${movement.referenciaId}`;
+      let payment = paymentCache.get(key) as Payment | null | undefined;
+      if (!payment) {
+        payment = await this.paymentRepo.findOne({
+          where: { id: movement.referenciaId },
+          relations: ['metodoPago'],
+        });
+        if (payment) paymentCache.set(key, payment);
+      }
+      if (payment?.metodoPago?.tipo) return payment.metodoPago.tipo;
+    }
+
+    if (movement.reciboId) {
+      let pagos = reciboCache.get(movement.reciboId);
+      if (!pagos) {
+        pagos = await this.reciboPagoRepo.find({
+          where: { reciboId: movement.reciboId },
+          relations: ['metodoPago'],
+        });
+        reciboCache.set(movement.reciboId, pagos);
+      }
+      if (pagos.length === 1) return pagos[0].metodoPago?.tipo || 'otros';
+      if (movement.referenciaId) {
+        const match = pagos.find((p) => p.referenciaId === movement.referenciaId);
+        if (match?.metodoPago?.tipo) return match.metodoPago.tipo;
+      }
+      if (pagos.length > 1 && movement.referenciaId) {
+        const match = pagos.find((p) => Number(p.monto) === Number(movement.monto));
+        if (match?.metodoPago?.tipo) return match.metodoPago.tipo;
+      }
+    }
+
+    if (movement.referenciaTipo === 'expense' && movement.referenciaId) {
+      const expense = await this.expenseRepo.findOne({
+        where: { id: movement.referenciaId },
+        relations: ['metodoPago'],
+      });
+      if (expense?.metodoPago?.tipo) return expense.metodoPago.tipo;
+    }
+
+    if (movement.referenciaId) {
+      const key = `order:${movement.referenciaId}`;
+      let payments = paymentCache.get(key) as Payment[] | undefined;
+      if (!payments) {
+        payments = await this.paymentRepo.find({
+          where: { orderId: movement.referenciaId },
+          relations: ['metodoPago'],
+        });
+        paymentCache.set(key, payments);
+      }
+      if (payments.length === 1) return payments[0].metodoPago?.tipo || 'otros';
+      if (payments.length > 1) {
+        const match = payments.find((p) => Number(p.monto) === Number(movement.monto));
+        if (match?.metodoPago?.tipo) return match.metodoPago.tipo;
+      }
+    }
+
+    return movement.account?.tipo === 'caja_menor' ? 'efectivo' : 'transferencia';
   }
 }

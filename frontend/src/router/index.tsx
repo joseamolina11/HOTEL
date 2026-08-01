@@ -1,6 +1,6 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/main-layout';
-import { ProtectedRoute, RoleGuard } from './protected-route';
+import { ProtectedRoute, RoleGuard, HomeRedirect } from './protected-route';
 import { LoginPage } from '@/pages/auth/login.page';
 import { DashboardPage } from '@/pages/dashboard/dashboard.page';
 import { ReservationsListPage } from '@/pages/reservations/reservations-list.page';
@@ -37,9 +37,12 @@ import { ReciboCajaListPage } from '@/pages/recibo-caja/recibo-caja-list.page';
 import { PermissionsPage } from '@/pages/permissions/permissions.page';
 import { SurchargeTypesPage } from '@/pages/surcharges/surcharge-types.page';
 import { BitacorasListPage } from '@/pages/bitacoras/bitacoras-list.page';
+import { NotificationsPage } from '@/pages/notifications/notifications.page';
 import { TercerosPage } from '@/pages/terceros/terceros.page';
 import { ReportsPage } from '@/pages/reports/reports.page';
 import { GerencialPage } from '@/pages/statistics/gerencial.page';
+import { GerencialDashboardPage } from '@/pages/dashboard-gerencial/dashboard.page';
+import { CalendarGerencialPage } from '@/pages/dashboard-gerencial/calendar.page';
 import {
   DeletedReservationsPage,
   DeletedSurchargesPage,
@@ -60,7 +63,7 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Navigate to="/dashboard" replace /> },
+      { index: true, element: <HomeRedirect /> },
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'reservations', element: <ReservationsListPage /> },
       { path: 'rooms', element: <RoomsListPage /> },
@@ -95,11 +98,14 @@ export const router = createBrowserRouter([
       { path: 'terceros', element: <TercerosPage /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'statistics/gerencial', element: <GerencialPage /> },
+      { path: 'dashboard-gerencial', element: <GerencialDashboardPage /> },
+      { path: 'calendar-gerencial', element: <CalendarGerencialPage /> },
       { path: 'record-control/deleted-reservations', element: <DeletedReservationsPage /> },
       { path: 'record-control/deleted-surcharges', element: <DeletedSurchargesPage /> },
       { path: 'record-control/discounts', element: <DiscountsPage /> },
       { path: 'record-control/unpaid-reservations', element: <UnpaidReservationsPage /> },
       { path: 'bitacoras', element: <BitacorasListPage /> },
+      { path: 'notifications', element: <NotificationsPage /> },
       { path: 'permissions', element: <RoleGuard roles={['admin']}><PermissionsPage /></RoleGuard> },
       { path: 'users', element: <RoleGuard roles={['admin']}><UsersListPage /></RoleGuard> },
       { path: 'housekeeping', element: <HousekeepingPage /> },
@@ -107,6 +113,6 @@ export const router = createBrowserRouter([
   },
   {
     path: '*',
-    element: <Navigate to="/dashboard" replace />,
+    element: <HomeRedirect />,
   },
 ]);

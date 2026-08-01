@@ -14,3 +14,9 @@ export function RoleGuard({ children, roles }: { children: React.ReactNode; role
   }
   return <>{children}</>;
 }
+
+export function HomeRedirect() {
+  const user = useAuthStore((s) => s.user);
+  if (user?.role === 'gerencia') return <Navigate to="/dashboard-gerencial" replace />;
+  return <Navigate to="/dashboard" replace />;
+}

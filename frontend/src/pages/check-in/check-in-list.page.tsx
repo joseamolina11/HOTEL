@@ -123,7 +123,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   const [open, setOpen] = useState(false);
   const [changeRoomOpen, setChangeRoomOpen] = useState(false);
   const [companions, setCompanions] = useState<{
-    nombres: string; apellidos: string; documento: string;
+    nombres: string; apellidos: string; documento: string; tipoIdentificacion: string;
     nacionalidad: string; telefono: string; email: string;
   }[]>([]);
   const [observaciones, setObservaciones] = useState('');
@@ -268,7 +268,7 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   });
 
   const addCompanion = () => {
-    setCompanions([...companions, { nombres: '', apellidos: '', documento: '', nacionalidad: '', telefono: '', email: '' }]);
+    setCompanions([...companions, { nombres: '', apellidos: '', documento: '', tipoIdentificacion: 'CC', nacionalidad: '', telefono: '', email: '' }]);
   };
 
   const updateCompanion = (index: number, field: string, value: string) => {
@@ -666,12 +666,13 @@ function CompanionCard({
     if (!doc || doc.length < 3) return;
     setSearching(true);
     try {
-      const existing = (await guestsApi.findAll(doc))?.data?.data || [];
+        const existing = (await guestsApi.findAll(doc))?.data?.data || [];
       if (existing.length > 0) {
         const g = existing[0];
         onChange(index, 'nombres', g.nombres);
         onChange(index, 'apellidos', g.apellidos);
         onChange(index, 'nacionalidad', g.nacionalidad);
+        if (g.tipoIdentificacion) onChange(index, 'tipoIdentificacion', g.tipoIdentificacion);
         if (g.telefono) onChange(index, 'telefono', g.telefono);
         if (g.email) onChange(index, 'email', g.email || '');
       }
@@ -699,9 +700,21 @@ function CompanionCard({
         </div>
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Documento</label>
-          <div className="relative">
-            <Input placeholder="Cédula / Pasaporte" value={companion.documento} onChange={(e) => onChange(index, 'documento', e.target.value)} onBlur={handleDocBlur} />
-            {searching && <Loader2 className="absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin text-muted-foreground" />}
+          <div className="relative flex gap-2">
+            <div className="relative flex-1">
+              <Input placeholder="Cédula / Pasaporte" value={companion.documento} onChange={(e) => onChange(index, 'documento', e.target.value)} onBlur={handleDocBlur} />
+              {searching && <Loader2 className="absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin text-muted-foreground" />}
+            </div>
+            <select
+              className="w-24 rounded-md border border-input bg-transparent px-2 py-2 text-sm"
+              value={companion.tipoIdentificacion || 'CC'}
+              onChange={(e) => onChange(index, 'tipoIdentificacion', e.target.value)}
+            >
+              <option value="CC">CC</option>
+              <option value="C.E">C.E</option>
+              <option value="P.E.P">P.E.P</option>
+              <option value="D.N.I">D.N.I</option>
+            </select>
           </div>
         </div>
         <div className="space-y-1">

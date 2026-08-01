@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { statisticsApi } from '@/api/statistics.api';
+import { GerenciaNav } from '@/components/gerencia/gerencia-nav';
 import { StatCard } from '@/components/shared/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,6 +81,8 @@ export function GerencialPage() {
           </p>
         </div>
       </div>
+
+      <GerenciaNav />
 
       <Card>
         <CardContent className="py-3 px-4">

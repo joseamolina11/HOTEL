@@ -33,6 +33,7 @@ export function GuestDetailDialog({ guestId, open, onClose: onCloseProp }: Props
       nombres: res?.nombres || '',
       apellidos: res?.apellidos || '',
       documento: res?.documento || '',
+      tipoIdentificacion: res?.tipoIdentificacion || 'CC',
       nacionalidad: res?.nacionalidad || '',
       telefono: res?.telefono || '',
       email: res?.email || '',
@@ -116,7 +117,19 @@ export function GuestDetailDialog({ guestId, open, onClose: onCloseProp }: Props
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Documento</label>
-                    <Input value={form.documento} onChange={(e) => setForm((p: any) => ({ ...p, documento: e.target.value }))} />
+                    <div className="flex gap-2">
+                      <Input value={form.documento} onChange={(e) => setForm((p: any) => ({ ...p, documento: e.target.value }))} />
+                      <select
+                        className="w-24 rounded-md border border-input bg-transparent px-2 py-2 text-sm"
+                        value={form.tipoIdentificacion || 'CC'}
+                        onChange={(e) => setForm((p: any) => ({ ...p, tipoIdentificacion: e.target.value }))}
+                      >
+                        <option value="CC">CC</option>
+                        <option value="C.E">C.E</option>
+                        <option value="P.E.P">P.E.P</option>
+                        <option value="D.N.I">D.N.I</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Nacionalidad</label>
@@ -149,6 +162,10 @@ export function GuestDetailDialog({ guestId, open, onClose: onCloseProp }: Props
                 <div>
                   <span className="text-muted-foreground text-xs block">Documento</span>
                   <span>{res.documento}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs block">Tipo documento</span>
+                  <span>{res.tipoIdentificacion || 'CC'}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground text-xs block">Nacionalidad</span>

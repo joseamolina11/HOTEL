@@ -39,3 +39,11 @@ export function useCashRegisterMovements(id: string | null, page?: number) {
     enabled: !!id,
   });
 }
+
+export function useCashRegisterSummary(id: string | null) {
+  return useQuery({
+    queryKey: ['cash-register', id, 'summary'],
+    queryFn: () => cashRegisterApi.findSummary(id!),
+    enabled: !!id,
+  });
+}

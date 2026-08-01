@@ -17,9 +17,10 @@ import { ReciboCajaModule } from '../recibo-caja/recibo-caja.module';
 import { FinancialMovementsModule } from '../financial-movements/financial-movements.module';
 import { SurchargesModule } from '../surcharges/surcharges.module';
 import { ReservationsModule } from '../reservations/reservations.module';
+import { MincitModule } from '../mincit/mincit.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CheckIn, Reservation, ReservationGuest, Room, Guest, Payment, CashRegister, HotelConfig, PaymentMethod, Surcharge]),PaymentMethodsModule,ReciboCajaModule,FinancialMovementsModule,SurchargesModule,ReservationsModule],
+  imports: [TypeOrmModule.forFeature([CheckIn, Reservation, ReservationGuest, Room, Guest, Payment, CashRegister, HotelConfig, PaymentMethod, Surcharge]),PaymentMethodsModule,ReciboCajaModule,FinancialMovementsModule,SurchargesModule,ReservationsModule,MincitModule],
   controllers: [CheckInController],
   providers: [CheckInService],
   exports: [CheckInService],

@@ -14,6 +14,10 @@ export function useLogin() {
     onSuccess: (response) => {
       login(response.user, response.tokens.accessToken, response.tokens.refreshToken);
       toastSuccess(`Bienvenido, ${response.user.nombres}`);
+      if(response.user.role === 'gerencia') {
+        navigate('/dashboard-gerencial');
+        return;
+      }
       if(response.user.role === 'admin' || response.user.role === 'reception') {
         navigate('/dashboard');
         return;

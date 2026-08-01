@@ -3,12 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { Bitacora } from './entities/bitacora.entity';
 import { CreateBitacoraDto, BitacoraFilterDto } from './dto/bitacora.dto';
+import { NotificationsService } from 'src/modules/notifications/notifications.service';
 
 @Injectable()
 export class BitacorasService {
   constructor(
     @InjectRepository(Bitacora)
     private readonly bitacoraRepository: Repository<Bitacora>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateBitacoraDto, userId: string): Promise<Bitacora> {
@@ -16,7 +18,19 @@ export class BitacorasService {
       contenido: dto.contenido,
       createdById: userId,
     });
-    return this.bitacoraRepository.save(bitacora);
+    const saved = await this.bitacoraRepository.save(bitacora);
+
+    const contenido =
+      saved.contenido.length > 140 ? `${saved.contenido.slice(0, 140)}…` : saved.contenido;
+    await this.notificationsService.notifyAll({
+      tipo: 'bitacora',
+      titulo: 'Nueva bitácora',
+      mensaje: contenido,
+      entidadId: saved.id,
+      actorId: userId,
+    });
+
+    return saved;
   }
 
   async findAll(filters: BitacoraFilterDto) {

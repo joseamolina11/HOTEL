@@ -15,6 +15,11 @@ class CompanionRegisterDto {
   @IsString()
   documento: string;
 
+  @ApiPropertyOptional({ example: 'CC', description: 'Tipo de identificación: CC, C.E, P.E.P, D.N.I' })
+  @IsOptional()
+  @IsString()
+  tipoIdentificacion?: string;
+
   @ApiProperty({ example: 'Mexicana' })
   @IsString()
   nacionalidad: string;
@@ -102,6 +107,16 @@ export class CheckInDto {
   @IsOptional()
   @IsString()
   huespedDocumento?: string;
+
+  @ApiPropertyOptional({ example: 'CC', description: 'Tipo de identificación del huésped: CC, C.E, P.E.P, D.N.I' })
+  @IsOptional()
+  @IsString()
+  tipoIdentificacion?: string;
+
+  @ApiPropertyOptional({ example: 'multiple', description: 'Tipo de acomodación: individual o multiple' })
+  @IsOptional()
+  @IsString()
+  tipoAcomodacion?: string;
 
   @ApiPropertyOptional({ example: '+584141234567' })
   @IsOptional()

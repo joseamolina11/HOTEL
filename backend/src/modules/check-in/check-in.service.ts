@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { CheckIn } from './entities/check-in.entity';
@@ -16,9 +16,12 @@ import { CheckInDto } from './dto/check-in.dto';
 import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
 import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
+import { MincitService } from '../mincit/mincit.service';
 
 @Injectable()
 export class CheckInService {
+  private readonly logger = new Logger(CheckInService.name);
+
   constructor(
     @InjectRepository(CheckIn)
     private readonly checkInRepository: Repository<CheckIn>,
@@ -43,6 +46,7 @@ export class CheckInService {
     private readonly financialMovementsService: FinancialMovementsService,
     private readonly surchargesService: SurchargesService,
     private readonly reservationsService: ReservationsService,
+    private readonly mincitService: MincitService,
   ) {}
 
   async findPendingCheckIns() {
@@ -100,6 +104,7 @@ export class CheckInService {
           nombres: checkInDto.huespedNombres || reservation.guest?.nombres || '',
           apellidos: checkInDto.huespedApellidos || reservation.guest?.apellidos || '',
           documento,
+          tipoIdentificacion: checkInDto.tipoIdentificacion || 'CC',
           nacionalidad: reservation.guest?.nacionalidad || '',
           telefono: checkInDto.huespedCelular || reservation.guest?.telefono || '',
           email: reservation.guest?.email || '',
@@ -109,6 +114,7 @@ export class CheckInService {
         if (checkInDto.huespedNombres) guest.nombres = checkInDto.huespedNombres;
         if (checkInDto.huespedApellidos) guest.apellidos = checkInDto.huespedApellidos;
         if (checkInDto.huespedCelular) guest.telefono = checkInDto.huespedCelular;
+        if (checkInDto.tipoIdentificacion) guest.tipoIdentificacion = checkInDto.tipoIdentificacion;
         guest = await this.guestRepository.save(guest);
       }
 
@@ -134,6 +140,7 @@ export class CheckInService {
             nombres: c.nombres,
             apellidos: c.apellidos,
             documento: c.documento,
+            tipoIdentificacion: c.tipoIdentificacion || 'CC',
             nacionalidad: c.nacionalidad,
             telefono: c.telefono || '',
             email: c.email || '',
@@ -146,6 +153,7 @@ export class CheckInService {
               nombres: c.nombres,
               apellidos: c.apellidos,
               documento: c.documento,
+              tipoIdentificacion: c.tipoIdentificacion || 'CC',
               nacionalidad: c.nacionalidad,
               telefono: c.telefono,
               email: c.email,
@@ -187,6 +195,7 @@ export class CheckInService {
       destino: checkInDto.destino,
       motivoViaje: checkInDto.motivoViaje,
       numeroPlaca: checkInDto.numeroPlaca,
+      tipoAcomodacion: checkInDto.tipoAcomodacion || reservation.tipoAcomodacion || 'multiple',
       ...(descuento > 0 ? { descuento } : {}),
     });
     await this.roomRepository.update(reservation.roomId, { estado: 'ocupada' });
@@ -232,10 +241,59 @@ export class CheckInService {
       }], userId, descuento, checkInSurcharges);
     }
 
+    // Enviar al sistema MinCIT (Colombia): si falla queda pendiente para el cron de reintentos
+    try {
+      const hotelConfig = await this.hotelConfigRepository.findOne({});
+      await this.mincitService.registrarCheckIn(
+        reservation.id,
+        this.buildMincitPayload(checkInDto, reservation, hotelConfig, descuento),
+      );
+    } catch (error) {
+      this.logger.error(
+        `No se pudo encolar envío MinCIT (reserva ${reservation.id}): ${(error as Error).message}`,
+      );
+    }
+
     return this.checkInRepository.findOne({
       where: { id: checkIn.id },
       relations: ['reservation', 'reservation.room', 'reservation.guest', 'user'],
     });
+  }
+
+  private buildMincitPayload(
+    checkInDto: CheckInDto,
+    reservation: Reservation,
+    hotelConfig: HotelConfig | null,
+    descuento: number,
+  ): any {
+    const formatDate = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
+    const noches = Math.max(
+      1,
+      Math.ceil(
+        (new Date(reservation.fechaSalida).getTime() - new Date(reservation.fechaEntrada).getTime()) /
+          (1000 * 60 * 60 * 24),
+      ),
+    );
+    const precioNoche = Number(reservation.precioBase ?? reservation.room?.roomType?.precioBase ?? 0);
+    const costo = Math.max(0, noches * precioNoche - (descuento || 0));
+
+    return {
+      tipo_identificacion: checkInDto.tipoIdentificacion || reservation.guest?.tipoIdentificacion || 'CC',
+      numero_identificacion: (checkInDto.huespedDocumento || reservation.guest?.documento || '').trim(),
+      nombres: (checkInDto.huespedNombres || reservation.guest?.nombres || '').trim().toUpperCase(),
+      apellidos: (checkInDto.huespedApellidos || reservation.guest?.apellidos || '').trim().toUpperCase(),
+      cuidad_residencia: checkInDto.ciudad || reservation.ciudad || '',
+      cuidad_procedencia: checkInDto.procedencia || reservation.procedencia || '',
+      numero_habitacion: reservation.room?.numero || '',
+      motivo: checkInDto.motivoViaje || reservation.motivoViaje || 'Turismo',
+      numero_acompanantes: (checkInDto.companions || []).filter((c) => c.documento).length,
+      check_in: formatDate(reservation.fechaEntrada),
+      check_out: formatDate(reservation.fechaSalida),
+      tipo_acomodacion: checkInDto.tipoAcomodacion || reservation.tipoAcomodacion || 'multiple',
+      costo,
+      nombre_establecimiento: hotelConfig?.nombre || 'Hotel',
+      rnt_establecimiento: process.env.MINCIT_RNT || '278690',
+    };
   }
 
   private async processCheckInPayments(

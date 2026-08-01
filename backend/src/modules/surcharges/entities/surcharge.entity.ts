@@ -45,7 +45,7 @@ export class Surcharge {
   @Column({ name: 'user_id', nullable: true })
   userId?: string;
 
-  @Column({ type: 'varchar', default: 'borrador' })
+  @Column({ type: 'varchar', default: 'cargado' })
   estado: 'borrador' | 'cargado' | 'pendiente' | 'facturado';
 
   @Column({ type: 'boolean', default: false })

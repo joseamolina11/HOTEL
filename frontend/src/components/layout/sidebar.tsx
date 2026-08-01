@@ -43,6 +43,7 @@ import {
   FileX,
   Wallet,
   PieChart,
+  Bell,
 } from "lucide-react";
 
 interface GroupItem {
@@ -151,6 +152,7 @@ export function Sidebar() {
         { to: '/surcharge-types', label: 'Recargos', icon: Zap, show: hasPerm('surcharges:view') },
         { to: '/terceros', label: 'Terceros', icon: Building2, show: hasPerm('terceros:view') },
         { to: '/bitacoras', label: 'Bitácoras', icon: ClipboardList, show: hasPerm('bitacoras:view') },
+        { to: '/notifications', label: 'Notificaciones', icon: Bell, show: true },
       ],
     },
     {
@@ -159,7 +161,7 @@ export function Sidebar() {
       icon: LogIn,
       visible: hasPerm('check-in:view') || hasPerm('check-out:view'),
       children: [
-        { to: '/check-in', label: 'Check-In', icon: LogIn, show: hasPerm('check-in:view') },
+        { to: '/check-in', label: 'Check-In Reserva', icon: LogIn, show: hasPerm('check-in:view') },
         { to: '/check-out', label: 'Check-Out', icon: LogOut, show: hasPerm('check-out:view') },
       ],
     },
@@ -224,9 +226,11 @@ export function Sidebar() {
       id: 'estadisticas',
       label: 'Estadísticas',
       icon: BarChart3,
-      visible: hasPerm('statistics:view'),
+      visible: hasPerm('statistics:view') || hasPerm('dashboard-gerencial:view'),
       children: [
         { to: '/statistics/gerencial', label: 'Gerencial', icon: PieChart, show: hasPerm('statistics:view') },
+        { to: '/dashboard-gerencial', label: 'Dashboard Gerencial', icon: BarChart3, show: hasPerm('dashboard-gerencial:view') },
+        { to: '/calendar-gerencial', label: 'Calendario Gerencial', icon: CalendarRange, show: hasPerm('dashboard-gerencial:view') },
       ],
     },
   ];

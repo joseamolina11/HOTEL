@@ -19,13 +19,13 @@ const toDateKey = (d: Date) =>
 
 const STATUS_ACTIONS: Record<string, { label: string; icon: any; status: string; roles: string[] }[]> = {
   disponible: [
-    { label: 'Check-In', icon: LogIn, status: 'ocupada', roles: ['disponible'] },
+    { label: 'Check-In Directo', icon: LogIn, status: 'ocupada', roles: ['disponible'] },
     // { label: 'Reservar', icon: CalendarCheck, status: 'reservada', roles: ['disponible'] },
     { label: 'Mantenimiento', icon: Wrench, status: 'mantenimiento', roles: ['disponible', 'reservada', 'ocupada', 'limpieza'] },
     { label: 'Limpieza', icon: Sparkles, status: 'limpieza', roles: ['disponible', 'reservada', 'ocupada', 'mantenimiento'] },
   ],
   reservada: [
-    { label: 'Check-In', icon: LogIn, status: 'ocupada', roles: ['reservada'] },
+    { label: 'Check-In Directo', icon: LogIn, status: 'ocupada', roles: ['reservada'] },
     { label: 'Mantenimiento', icon: Wrench, status: 'mantenimiento', roles: ['disponible', 'reservada', 'ocupada', 'limpieza'] },
     { label: 'Limpieza', icon: Sparkles, status: 'limpieza', roles: ['disponible', 'reservada', 'ocupada', 'mantenimiento'] },
   ],

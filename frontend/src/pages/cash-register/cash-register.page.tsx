@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useOpenCashRegister, useCashRegisters, useOpenNewCashRegister, useCloseCashRegister, useCashRegisterMovements } from '@/hooks/useCashRegister';
+import { useEffect, useState } from 'react';
+import { useOpenCashRegister, useCashRegisters, useOpenNewCashRegister, useCloseCashRegister, useCashRegisterMovements, useCashRegisterSummary } from '@/hooks/useCashRegister';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,11 @@ const MOVEMENT_TYPE_INFO: Record<string, { label: string; icon: any; color: stri
 
 export function CashRegisterPage() {
   const { data: openRegister, isLoading: openLoading } = useOpenCashRegister();
+  const { data: summaryData, isLoading: summaryLoading } = useCashRegisterSummary(openRegister?.id ?? null);
+  const summary = (summaryData as any)?.summary;
+  const methods = summary?.methods || {};
+  const transferenciasCajaNeto = Number(summary?.transferenciasCajaNeto || 0);
+  const transferencias = summary?.transferencias;
   const [page, setPage] = useState(1);
   const [movPage, setMovPage] = useState(1);
   const { data: history, isLoading: historyLoading } = useCashRegisters(page);
@@ -37,16 +42,22 @@ export function CashRegisterPage() {
   const [expenseDetailId, setExpenseDetailId] = useState<string | null>(null);
   const [reciboDetailId, setReciboDetailId] = useState<string | null>(null);
 
-  // Calculate totals from movements
-  const totalIngresos = movements
-    .filter((m: any) => ['INGRESO', 'TRANSFERENCIA_ENTRADA', 'APERTURA_CAJA'].includes(m.tipo))
-    .reduce((sum: number, m: any) => sum + Number(m.monto), 0);
-  const totalEgresos = movements
-    .filter((m: any) => ['EGRESO', 'TRANSFERENCIA_SALIDA'].includes(m.tipo))
-    .reduce((sum: number, m: any) => sum + Number(m.monto), 0);
-  const expectedAmount = openRegister
-    ? Number(openRegister.montoInicial) + totalIngresos - totalEgresos
-    : 0;
+  const efectivoEnCaja = Number(summary?.efectivoEnCaja || 0);
+  const efectivoIngresos = Number(methods?.efectivo?.ingresos || 0);
+  const efectivoEgresos = Number(methods?.efectivo?.egresos || 0);
+  const expectedTotal = Number(
+    (summary?.efectivoEnCaja || 0) +
+      (methods?.transferencia?.ingresos || 0) +
+      (methods?.tarjeta?.ingresos || 0) +
+      (methods?.otros?.ingresos || 0),
+  );
+
+  const methodLabels: Record<string, string> = {
+    efectivo: 'Efectivo',
+    transferencia: 'Transferencia',
+    tarjeta: 'Tarjeta',
+    otros: 'Otros',
+  };
 
   return (
     <div className="space-y-6">
@@ -72,27 +83,59 @@ export function CashRegisterPage() {
               <Badge variant="success" className="text-sm">Abierta</Badge>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="text-xs text-muted-foreground">Monto Inicial</p>
-                  <p className="text-lg font-bold">{formatCurrency(openRegister.montoInicial)}</p>
+              {summaryLoading ? (
+                <div className="flex items-center gap-2 py-6 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Calculando resumen del turno...
                 </div>
-                <div className="rounded-lg bg-green-50 p-3 border border-green-200">
-                  <p className="text-xs text-green-700 font-medium">Total Ingresos</p>
-                  <p className="text-lg font-bold text-green-700">+{formatCurrency(totalIngresos)}</p>
-                </div>
-                <div className="rounded-lg bg-red-50 p-3 border border-red-200">
-                  <p className="text-xs text-red-700 font-medium">Total Egresos</p>
-                  <p className="text-lg font-bold text-red-700">-{formatCurrency(totalEgresos)}</p>
-                </div>
-                <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
-                  <p className="text-xs text-blue-700 font-medium">Lo que debe haber</p>
-                  <p className="text-lg font-bold text-blue-700">{formatCurrency(expectedAmount)}</p>
-                </div>
-              </div>
-              <Button variant="destructive" onClick={() => setShowClose(true)}>
-                Cerrar Caja
-              </Button>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="rounded-lg bg-muted p-3">
+                      <p className="text-xs text-muted-foreground">Monto Inicial</p>
+                      <p className="text-lg font-bold">{formatCurrency(openRegister.montoInicial)}</p>
+                    </div>
+                    <div className="rounded-lg bg-green-50 p-3 border border-green-200">
+                      <p className="text-xs text-green-700 font-medium">Ingresos en efectivo</p>
+                      <p className="text-lg font-bold text-green-700">+{formatCurrency(efectivoIngresos)}</p>
+                    </div>
+                    <div className="rounded-lg bg-red-50 p-3 border border-red-200">
+                      <p className="text-xs text-red-700 font-medium">Egresos en efectivo</p>
+                      <p className="text-lg font-bold text-red-700">-{formatCurrency(efectivoEgresos)}</p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 p-3 border border-amber-200">
+                      <p className="text-xs text-amber-700 font-medium">Transferencias (caja)</p>
+                      <p className={`text-lg font-bold ${transferenciasCajaNeto >= 0 ? 'text-amber-700' : 'text-red-700'}`}>
+                        {transferenciasCajaNeto >= 0 ? '+' : ''}{formatCurrency(transferenciasCajaNeto)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
+                      <p className="text-xs text-blue-700 font-medium">Lo que hay en caja (efectivo)</p>
+                      <p className="text-lg font-bold text-blue-700">{formatCurrency(efectivoEnCaja)}</p>
+                    </div>
+                    {['transferencia', 'tarjeta', 'otros'].map((m) => (
+                      <div key={m} className="rounded-lg bg-muted p-3">
+                        <p className="text-xs text-muted-foreground">Ingresos {methodLabels[m]}</p>
+                        <p className="text-lg font-bold">{formatCurrency(methods?.[m]?.ingresos || 0)}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {transferencias && (Number(transferencias.entradas) > 0 || Number(transferencias.salidas) > 0) && (
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Transferencias entre cuentas: entradas {formatCurrency(transferencias.entradas)} · salidas {formatCurrency(transferencias.salidas)} · neto {formatCurrency(transferencias.neto)}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <Button variant="destructive" onClick={() => setShowClose(true)}>
+                      Cerrar Caja
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -183,7 +226,7 @@ export function CashRegisterPage() {
       <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
 
       <OpenDialog open={showOpen} onClose={() => setShowOpen(false)} />
-      <CloseDialog open={showClose} onClose={() => setShowClose(false)} register={openRegister} totalIngresos={totalIngresos} totalEgresos={totalEgresos} expectedAmount={expectedAmount} />
+      <CloseDialog open={showClose} onClose={() => setShowClose(false)} register={openRegister} summary={summary} expectedTotal={expectedTotal} />
       <DetailDialog
         register={showDetail}
         onClose={() => setShowDetail(null)}
@@ -311,13 +354,12 @@ function OpenDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
-function CloseDialog({ open, onClose, register, totalIngresos, totalEgresos, expectedAmount }: {
+function CloseDialog({ open, onClose, register, summary, expectedTotal }: {
   open: boolean;
   onClose: () => void;
   register: any;
-  totalIngresos: number;
-  totalEgresos: number;
-  expectedAmount: number;
+  summary: any;
+  expectedTotal: number;
 }) {
   const [totalEfectivo, setTotalEfectivo] = useState('');
   const [totalTransferencia, setTotalTransferencia] = useState('');
@@ -330,16 +372,41 @@ function CloseDialog({ open, onClose, register, totalIngresos, totalEgresos, exp
 
   const closeMut = useCloseCashRegister();
 
+  useEffect(() => {
+    if (open && summary) {
+      const round = (v: number) => Number(v.toFixed(2));
+      setTotalEfectivo(String(round(Number(summary.efectivoEnCaja || 0))));
+      setTotalTransferencia(String(round(Number(summary.methods?.transferencia?.total || 0))));
+      setTotalTarjeta(String(round(Number(summary.methods?.tarjeta?.total || 0))));
+      setTotalOtros(String(round(Number(summary.methods?.otros?.total || 0))));
+      setCantidadTransacciones(String(Number(summary.cantidadTransacciones || 0)));
+      setDiferencia('');
+    }
+  }, [open, summary]);
+
   if (!register) return null;
 
+  const methods = summary?.methods || {};
+  const efectivoEnCaja = Number(summary?.efectivoEnCaja || 0);
+  const transferenciasCajaNeto = Number(summary?.transferenciasCajaNeto || 0);
+  const transferencias = summary?.transferencias;
+  const methodLabels: Record<string, string> = {
+    efectivo: 'Efectivo',
+    transferencia: 'Transferencia',
+    tarjeta: 'Tarjeta',
+    otros: 'Otros',
+  };
+
   const totalDeclarado = (Number(totalEfectivo) || 0) + (Number(totalTransferencia) || 0) + (Number(totalTarjeta) || 0) + (Number(totalOtros) || 0);
-  const diff = autoCalc ? totalDeclarado - expectedAmount : (Number(diferencia) || 0);
+  const diff = autoCalc ? totalDeclarado - expectedTotal : (Number(diferencia) || 0);
 
   const handleSubmit = async () => {
-    await closeMut.mutateAsync({
-      id: register.id,
-      dto: {
-        totalEfectivo: Number(totalEfectivo) || 0,
+    try {
+
+      await closeMut.mutateAsync({
+        id: register.id,
+        dto: {
+          totalEfectivo: Number(totalEfectivo) || 0,
         totalTransferencia: Number(totalTransferencia) || 0,
         totalTarjeta: Number(totalTarjeta) || 0,
         totalOtros: Number(totalOtros) || 0,
@@ -357,6 +424,12 @@ function CloseDialog({ open, onClose, register, totalIngresos, totalEgresos, exp
     setDiferencia('');
     setObservaciones('');
     onClose();
+    setTimeout(() => {
+      window.location.href = '/login';
+    }, 2000);
+    } catch (error) {
+      console.error('Error closing cash register:', error);
+    }
   };
 
   return (
@@ -370,20 +443,51 @@ function CloseDialog({ open, onClose, register, totalIngresos, totalEgresos, exp
           <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Monto inicial</span>
-              <span className="font-medium">{formatCurrency(register.montoInicial)}</span>
+              <span className="font-medium">{formatCurrency(summary?.montoInicial ?? register.montoInicial)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-green-700 font-medium">+ Total que entró</span>
-              <span className="font-medium text-green-700">+{formatCurrency(totalIngresos)}</span>
+              <span className="text-green-700 font-medium">+ Ingresos en efectivo</span>
+              <span className="font-medium text-green-700">+{formatCurrency(methods.efectivo?.ingresos || 0)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-red-700 font-medium">- Total que salió</span>
-              <span className="font-medium text-red-700">-{formatCurrency(totalEgresos)}</span>
+              <span className="text-red-700 font-medium">- Egresos en efectivo</span>
+              <span className="font-medium text-red-700">-{formatCurrency(methods.efectivo?.egresos || 0)}</span>
             </div>
+            {transferenciasCajaNeto !== 0 && (
+              <div className="flex justify-between">
+                <span className="text-amber-700 font-medium">± Transferencias desde/hacia caja</span>
+                <span className="font-medium text-amber-700">
+                  {transferenciasCajaNeto >= 0 ? '+' : '-'}{formatCurrency(Math.abs(transferenciasCajaNeto))}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between border-t pt-1">
-              <span className="font-bold">= Lo que debe haber en caja</span>
-              <span className="font-bold text-lg">{formatCurrency(expectedAmount)}</span>
+              <span className="font-bold">= Lo que hay en caja (efectivo)</span>
+              <span className="font-bold text-lg">{formatCurrency(efectivoEnCaja)}</span>
             </div>
+            <div className="border-t pt-1 space-y-1">
+              <p className="text-xs text-muted-foreground pt-1">Por otros métodos de pago</p>
+              {['transferencia', 'tarjeta', 'otros'].map((m) => {
+                const total = Number(methods[m]?.ingresos || 0);
+                return (
+                  <div className="flex justify-between" key={m}>
+                    <span className="text-muted-foreground">Ingresos {methodLabels[m]}</span>
+                    <span className={total >= 0 ? 'font-medium text-green-700' : 'font-medium text-red-700'}>
+                      {total >= 0 ? '+' : ''}{formatCurrency(total)}
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="flex justify-between border-t pt-1">
+                <span className="font-bold">= Total esperado (todos los métodos)</span>
+                <span className="font-bold">{formatCurrency(expectedTotal)}</span>
+              </div>
+            </div>
+            {transferencias && (Number(transferencias.entradas) > 0 || Number(transferencias.salidas) > 0) && (
+              <div className="text-xs text-muted-foreground pt-1">
+                Transferencias entre cuentas: entradas {formatCurrency(transferencias.entradas)} · salidas {formatCurrency(transferencias.salidas)} · neto {formatCurrency(transferencias.neto)}
+              </div>
+            )}
           </div>
 
           <div className="border-t pt-2">
@@ -420,7 +524,7 @@ function CloseDialog({ open, onClose, register, totalIngresos, totalEgresos, exp
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Debe haber</span>
-              <span className="font-bold">{formatCurrency(expectedAmount)}</span>
+              <span className="font-bold">{formatCurrency(expectedTotal)}</span>
             </div>
             <div className="flex justify-between border-t pt-1">
               <span className={diff !== 0 ? 'text-destructive font-bold' : 'font-bold'}>Diferencia</span>

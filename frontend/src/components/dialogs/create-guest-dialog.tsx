@@ -12,6 +12,7 @@ const guestSchema = z.object({
   nombres: z.string().min(1, 'Nombre requerido'),
   apellidos: z.string().min(1, 'Apellidos requeridos'),
   documento: z.string().min(1, 'Documento requerido'),
+  tipoIdentificacion: z.string().default('CC'),
   nacionalidad: z.string().min(1, 'Nacionalidad requerida'),
   telefono: z.string().min(7, 'Teléfono inválido'),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
@@ -31,14 +32,14 @@ export function CreateGuestDialog({ open, onClose, onSuccess }: Props) {
   const qc = useQueryClient();
   const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>({
     resolver: zodResolver(guestSchema),
-    defaultValues: { nacionalidad: 'Colombiano(a)' },
+    defaultValues: { nacionalidad: 'Colombiano(a)', tipoIdentificacion: 'CC' },
   });
 
   const createMut = useMutation({
     mutationFn: (dto: FormData) => guestsApi.create(dto),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['guests'] });
-      reset({ nacionalidad: 'Colombiano(a)' });
+      reset({ nacionalidad: 'Colombiano(a)', tipoIdentificacion: 'CC' });
       onSuccess(data);
       onClose();
     },
@@ -50,7 +51,7 @@ export function CreateGuestDialog({ open, onClose, onSuccess }: Props) {
 
   const handleClose = () => {
     if (createMut.isPending) return;
-    reset({ nacionalidad: 'Colombiano(a)' });
+    reset({ nacionalidad: 'Colombiano(a)', tipoIdentificacion: 'CC' });
     onClose();
   };
 
@@ -91,9 +92,17 @@ export function CreateGuestDialog({ open, onClose, onSuccess }: Props) {
               <label className="text-xs font-medium flex items-center gap-1">
                 <FileText className="h-3 w-3 text-muted-foreground" /> Documento <span className="text-destructive">*</span>
               </label>
-              <div className="relative">
-                <FileText className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input className="pl-9" {...register('documento')} placeholder="C.C. / Pasaporte" />
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <FileText className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input className="pl-9" {...register('documento')} placeholder="C.C. / Pasaporte" />
+                </div>
+                <select className="w-24 rounded-md border border-input bg-transparent px-2 py-2 text-sm" {...register('tipoIdentificacion')}>
+                  <option value="CC">CC</option>
+                  <option value="C.E">C.E</option>
+                  <option value="P.E.P">P.E.P</option>
+                  <option value="D.N.I">D.N.I</option>
+                </select>
               </div>
               {errors.documento && <p className="text-xs text-destructive">{errors.documento.message}</p>}
             </div>

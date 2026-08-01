@@ -30,6 +30,7 @@ const companionSchema = z.object({
   nombres: z.string().min(1, 'Requerido'),
   apellidos: z.string().min(1, 'Requerido'),
   documento: z.string().min(1, 'Requerido'),
+  tipoIdentificacion: z.string().default('CC'),
   nacionalidad: z.string().min(1, 'Requerido'),
   telefono: z.string().optional(),
   email: z.string().optional(),
@@ -352,7 +353,7 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">Acompañantes</label>
-                  <Button type="button" variant="outline" size="sm" onClick={() => append({ nombres: '', apellidos: '', documento: '', nacionalidad: '', telefono: '', email: '' })}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => append({ nombres: '', apellidos: '', documento: '', tipoIdentificacion: 'CC', nacionalidad: '', telefono: '', email: '' })}>
                     <Plus className="mr-1 h-3 w-3" /> Agregar
                   </Button>
                 </div>
@@ -604,6 +605,7 @@ function CompanionRow({
         setValue(`companions.${index}.nombres`, g.nombres);
         setValue(`companions.${index}.apellidos`, g.apellidos);
         setValue(`companions.${index}.nacionalidad`, g.nacionalidad);
+        if (g.tipoIdentificacion) setValue(`companions.${index}.tipoIdentificacion`, g.tipoIdentificacion);
         if (g.telefono) setValue(`companions.${index}.telefono`, g.telefono);
         if (g.email) setValue(`companions.${index}.email`, g.email || '');
       }
@@ -633,13 +635,21 @@ function CompanionRow({
         </div>
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Documento</label>
-          <div className="relative">
-            <Input
-              {...register(`companions.${index}.documento`)}
-              placeholder="Cédula / Pasaporte"
-              onBlur={handleDocBlur}
-            />
-            {searching && <Loader2 className="absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin text-muted-foreground" />}
+          <div className="relative flex gap-2">
+            <div className="relative flex-1">
+              <Input
+                {...register(`companions.${index}.documento`)}
+                placeholder="Cédula / Pasaporte"
+                onBlur={handleDocBlur}
+              />
+              {searching && <Loader2 className="absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin text-muted-foreground" />}
+            </div>
+            <select className="w-24 rounded-md border border-input bg-transparent px-2 py-2 text-sm" {...register(`companions.${index}.tipoIdentificacion`)}>
+              <option value="CC">CC</option>
+              <option value="C.E">C.E</option>
+              <option value="P.E.P">P.E.P</option>
+              <option value="D.N.I">D.N.I</option>
+            </select>
           </div>
           {errors.companions?.[index]?.documento && <p className="text-xs text-destructive">{errors.companions[index].documento.message}</p>}
         </div>

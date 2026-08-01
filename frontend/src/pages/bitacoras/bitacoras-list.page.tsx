@@ -28,6 +28,7 @@ export function BitacorasListPage() {
     mutationFn: (contenido: string) => bitacorasApi.create(contenido),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bitacoras'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
       toastSuccess('Bitácora creada');
       setShowCreate(false);
       setNuevoContenido('');

@@ -9,6 +9,9 @@ export const ALL_PERMISSIONS: PermissionSeed[] = [
   // Dashboard
   { module: 'dashboard', action: 'view', nombre: 'Ver dashboard', moduloNombre: 'Dashboard' },
 
+  // Dashboard Gerencial
+  { module: 'dashboard-gerencial', action: 'view', nombre: 'Ver dashboard gerencial', moduloNombre: 'Dashboard Gerencial' },
+
   // Reservations
   { module: 'reservations', action: 'view', nombre: 'Ver reservaciones', moduloNombre: 'Reservaciones' },
   { module: 'reservations', action: 'create', nombre: 'Crear reservaciones', moduloNombre: 'Reservaciones' },
@@ -226,6 +229,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
 
   reception: [
     'dashboard:view',
+    'dashboard-gerencial:view',
     'bitacoras:view', 'bitacoras:create',
     'reservations:view', 'reservations:create', 'reservations:edit', 'reservations:annul',
     'rooms:view', 'rooms:change-status',
@@ -268,5 +272,43 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   mantenimiento: [
     'housekeeping:view', 'housekeeping:change-status',
     'rooms:view', 'rooms:change-status',
+  ],
+
+  gerencia: [
+    'dashboard:view',
+    'dashboard-gerencial:view',
+    'statistics:view',
+    'reports:view', 'reports:disperse',
+    'record-control:view',
+    'reservations:view',
+    'rooms:view', 'rooms:change-status',
+    'room-types:view',
+    'guests:view',
+    'check-in:view',
+    'check-out:view',
+    'housekeeping:view',
+    'payments:view',
+    'cash-register:view',
+    'orders:view',
+    'inventory:view', 'inventory:movements-view',
+    'supplies:view', 'supplies:movements-view',
+    'consumptions:view',
+    'services:view',
+    'amenities:view',
+    'surcharges:view',
+    'terceros:view',
+    'bitacoras:view',
+    'files:view',
+    'hotel-config:view',
+    'expense-categories:view',
+    'suppliers:view',
+    'purchase-orders:view',
+    'expenses:view', 'expenses:report',
+    'accounts-payable:view',
+    'payment-methods:view',
+    'financial-accounts:view',
+    'financial-movements:view',
+    'recibo-caja:view',
+    'tax-config:view',
   ],
 };

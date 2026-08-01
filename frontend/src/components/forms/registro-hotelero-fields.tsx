@@ -7,6 +7,7 @@ interface GuestDefault {
   nombres?: string;
   apellidos?: string;
   documento?: string;
+  tipoIdentificacion?: string;
   telefono?: string;
 }
 
@@ -16,7 +17,7 @@ interface RegistroHoteleroFieldsProps {
   guestDefault?: GuestDefault | null;
 }
 
-const GUEST_FIELDS = ['huespedNombres', 'huespedApellidos', 'huespedDocumento', 'huespedCelular'] as const;
+const GUEST_FIELDS = ['huespedNombres', 'huespedApellidos', 'huespedDocumento', 'huespedCelular', 'tipoIdentificacion'] as const;
 
 export function RegistroHoteleroFields({ data, onChange, guestDefault }: RegistroHoteleroFieldsProps) {
   const [esOtro, setEsOtro] = useState(false);
@@ -26,6 +27,7 @@ export function RegistroHoteleroFields({ data, onChange, guestDefault }: Registr
     onChange('huespedApellidos', guestDefault?.apellidos || '');
     onChange('huespedDocumento', guestDefault?.documento || '');
     onChange('huespedCelular', guestDefault?.telefono || '');
+    onChange('tipoIdentificacion', guestDefault?.tipoIdentificacion || 'CC');
   };
 
   useEffect(() => {
@@ -82,12 +84,25 @@ export function RegistroHoteleroFields({ data, onChange, guestDefault }: Registr
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Cédula</label>
-            <Input
-              placeholder="Cédula / Pasaporte"
-              value={esOtro ? data.huespedDocumento || '' : guestDefault?.documento || ''}
-              onChange={(e) => onChange('huespedDocumento', e.target.value)}
-              disabled={isHolder}
-            />
+            <div className="flex gap-2">
+              <Input
+                className="flex-1"
+                placeholder="Cédula / Pasaporte"
+                value={esOtro ? data.huespedDocumento || '' : guestDefault?.documento || ''}
+                onChange={(e) => onChange('huespedDocumento', e.target.value)}
+                disabled={isHolder}
+              />
+              <select
+                className="w-24 rounded-md border border-input bg-transparent px-2 py-2 text-sm"
+                value={esOtro ? data.tipoIdentificacion || 'CC' : guestDefault?.tipoIdentificacion || 'CC'}
+                onChange={(e) => onChange('tipoIdentificacion', e.target.value)}
+              >
+                <option value="CC">CC</option>
+                <option value="C.E">C.E</option>
+                <option value="P.E.P">P.E.P</option>
+                <option value="D.N.I">D.N.I</option>
+              </select>
+            </div>
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Celular</label>
@@ -157,6 +172,17 @@ export function RegistroHoteleroFields({ data, onChange, guestDefault }: Registr
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Motivo de viaje</label>
           <Input placeholder="Ej: Negocios, Turismo" value={data.motivoViaje || ''} onChange={(e) => onChange('motivoViaje', e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">Tipo de acomodación</label>
+          <select
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+            value={data.tipoAcomodacion || 'multiple'}
+            onChange={(e) => onChange('tipoAcomodacion', e.target.value)}
+          >
+            <option value="individual">Individual</option>
+            <option value="multiple">Múltiple</option>
+          </select>
         </div>
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Número de placa</label>

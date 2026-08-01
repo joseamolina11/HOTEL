@@ -18,6 +18,9 @@ export class ReservationGuest {
   @Column()
   documento: string;
 
+  @Column({ type: 'varchar', length: 10, default: 'CC', name: 'tipo_identificacion' })
+  tipoIdentificacion: string;
+
   @Column()
   nacionalidad: string;
 

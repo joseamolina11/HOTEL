@@ -21,6 +21,7 @@ const companionSchema = z.object({
   nombres: z.string().min(1, 'Nombre requerido'),
   apellidos: z.string().min(1, 'Apellidos requerido'),
   documento: z.string().min(1, 'Doc. requerido'),
+  tipoIdentificacion: z.string().default('CC'),
   nacionalidad: z.string().min(1, 'Nac. requerida'),
   telefono: z.string().optional(),
   email: z.string().optional(),
@@ -209,7 +210,7 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-sm font-medium">Acompañantes</label>
-          <Button type="button" variant="outline" size="sm" onClick={() => append({ nombres: '', apellidos: '', documento: '', nacionalidad: '', telefono: '', email: '' })}>
+          <Button type="button" variant="outline" size="sm" onClick={() => append({ nombres: '', apellidos: '', documento: '', tipoIdentificacion: 'CC', nacionalidad: '', telefono: '', email: '' })}>
             <Plus className="mr-1 h-3 w-3" /> Agregar
           </Button>
         </div>
@@ -219,6 +220,12 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
               <Input {...register(`companions.${index}.nombres`)} placeholder="Nombres" />
               <Input {...register(`companions.${index}.apellidos`)} placeholder="Apellidos" />
               <Input {...register(`companions.${index}.documento`)} placeholder="Documento" />
+              <select className="rounded-md border border-input bg-transparent px-2 py-2 text-sm" {...register(`companions.${index}.tipoIdentificacion`)}>
+                <option value="CC">CC</option>
+                <option value="C.E">C.E</option>
+                <option value="P.E.P">P.E.P</option>
+                <option value="D.N.I">D.N.I</option>
+              </select>
               <Input {...register(`companions.${index}.nacionalidad`)} placeholder="Nacionalidad" />
               <Input {...register(`companions.${index}.telefono`)} placeholder="Teléfono" />
               <div className="flex gap-1">

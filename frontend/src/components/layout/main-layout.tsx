@@ -2,20 +2,23 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { useUIStore } from '@/stores/ui.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { useOpenCashRegister } from '@/hooks/useCashRegister';
 import { OpenCashRegisterDialog } from '@/components/dialogs/open-cash-register-dialog';
 import { cn } from '@/lib/utils';
 
 export function MainLayout() {
   const { sidebarOpen } = useUIStore();
+  const user = useAuthStore((s) => s.user);
+  const isGerencia = user?.role === 'gerencia';
   const { data: openRegister, isLoading } = useOpenCashRegister();
 
   return (
     <>
-      <Sidebar />
+      {!isGerencia && <Sidebar />}
       <main className={cn(
         'flex flex-col min-h-screen transition-all duration-300',
-        sidebarOpen ? 'ml-64' : 'ml-16',
+        isGerencia ? '' : sidebarOpen ? 'ml-64' : 'ml-16',
       )}>
         <Topbar />
         <div className="flex-1">
@@ -35,11 +38,13 @@ export function MainLayout() {
           </div>
         </footer>
       </main>
-      <OpenCashRegisterDialog
-        open={!isLoading && !openRegister}
-        onClose={() => {}}
-        dismissible={false}
-      />
+      {!isGerencia && (
+        <OpenCashRegisterDialog
+          open={!isLoading && !openRegister}
+          onClose={() => {}}
+          dismissible={false}
+        />
+      )}
     </>
   );
 }
