@@ -92,6 +92,7 @@ export class ReservationsService {
         where: [
           { reservationId: In(ids), estado: 'borrador' },
           { reservationId: In(ids), estado: 'pendiente' },
+          { reservationId: In(ids), estado: 'cargado' }
         ],
       });
     }
