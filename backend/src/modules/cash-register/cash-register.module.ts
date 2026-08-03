@@ -9,9 +9,10 @@ import { FinancialMovement } from '../financial-movements/entities/financial-mov
 import { ReciboCajaPago } from '../recibo-caja/entities/recibo-caja-pago.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { Expense } from '../expenses/entities/expense.entity';
+import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CashRegister, FinancialMovement, ReciboCajaPago, Payment, Expense]),FinancialMovementsModule, FinancialAccountsModule],
+  imports: [TypeOrmModule.forFeature([CashRegister, FinancialMovement, ReciboCajaPago, Payment, Expense, PaymentMethod]),FinancialMovementsModule, FinancialAccountsModule],
   controllers: [CashRegisterController],
   providers: [CashRegisterService],
   exports: [CashRegisterService],

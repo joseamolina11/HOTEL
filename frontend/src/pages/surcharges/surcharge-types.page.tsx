@@ -164,13 +164,13 @@ export function SurchargeTypesPage() {
               <Input placeholder="Ej: Persona extra" value={nombre} onChange={(e) => setNombre(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium">Tercero *</label>
+              <label className="text-xs font-medium">Tercero (opcional)</label>
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
                 value={terceroId}
                 onChange={(e) => setTerceroId(e.target.value)}
               >
-                <option value="">Seleccionar tercero...</option>
+                <option value="">Sin tercero</option>
                 {(terceros || []).map((t: any) => (
                   <option key={t.id} value={t.id}>{t.nombre}{t.tipo === 'empresa' ? ' (Empresa)' : ''}</option>
                 ))}
@@ -198,7 +198,7 @@ export function SurchargeTypesPage() {
               <DialogClose asChild>
                 <Button variant="outline" onClick={resetForm}>Cancelar</Button>
               </DialogClose>
-              <Button onClick={handleSubmit} disabled={!nombre || !terceroId || montoDefault <= 0 || createMut.isPending || updateMut.isPending}>
+              <Button onClick={handleSubmit} disabled={!nombre || montoDefault <= 0 || createMut.isPending || updateMut.isPending}>
                 {(createMut.isPending || updateMut.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editing ? 'Actualizar' : 'Crear'}
               </Button>

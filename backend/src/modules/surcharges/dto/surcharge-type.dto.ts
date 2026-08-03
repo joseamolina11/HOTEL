@@ -6,9 +6,9 @@ export class CreateSurchargeTypeDto {
   @IsString()
   nombre: string;
 
-  @ApiProperty({ example: 'uuid-tercero' })
-  @IsUUID()
-  terceroId: string;
+  @ApiPropertyOptional({ example: 'uuid-tercero' })
+  @IsOptional()
+  terceroId?: string;
 
   @ApiPropertyOptional({ example: 'Cargo por huésped adicional' })
   @IsOptional()

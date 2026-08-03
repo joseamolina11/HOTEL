@@ -35,7 +35,11 @@ export class SurchargeTypesService {
   }
 
   async create(dto: CreateSurchargeTypeDto): Promise<SurchargeType> {
-    await this.validateTercero(dto.terceroId);
+    if(dto.terceroId && dto.terceroId.trim() !== '') {
+      await this.validateTercero(dto.terceroId);
+    } else{
+      dto.terceroId = undefined;
+    }
     const st = this.surchargeTypeRepository.create(dto);
     return this.surchargeTypeRepository.save(st);
   }

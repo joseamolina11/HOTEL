@@ -9,6 +9,7 @@ import { FinancialMovement } from '../financial-movements/entities/financial-mov
 import { ReciboCajaPago } from '../recibo-caja/entities/recibo-caja-pago.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { Expense } from '../expenses/entities/expense.entity';
+import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 
 @Injectable()
 export class CashRegisterService {
@@ -23,6 +24,8 @@ export class CashRegisterService {
     private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(Expense)
     private readonly expenseRepo: Repository<Expense>,
+    @InjectRepository(PaymentMethod)
+    private readonly paymentMethodRepo: Repository<PaymentMethod>,
     private readonly financialMovementsService: FinancialMovementsService,
     private readonly financialAccountsService: FinancialAccountsService,
   ) {}
@@ -79,13 +82,16 @@ export class CashRegisterService {
     return this.repo.save(register);
   }
 
-  async close(id: string, dto: CloseCashRegisterDto) {
+  async close(id: string, dto: CloseCashRegisterDto, userId?: string) {
     const register = await this.repo.findOne({ where: { id } });
     if (!register) throw new NotFoundException('Caja no encontrada');
     if (register.estado === 'cerrada') throw new BadRequestException('La caja ya está cerrada');
 
     const totalDeclarado = dto.totalEfectivo + dto.totalTransferencia + dto.totalTarjeta + dto.totalOtros;
-    const diferencia = dto.diferencia ?? (totalDeclarado - Number(register.totalVentas));
+    const totalVentas = userId
+      ? await this.sumIngresosByUser(id, userId)
+      : Number(register.totalVentas);
+    const diferencia = dto.diferencia ?? (totalDeclarado - totalVentas);
 
     Object.assign(register, {
       fechaCierre: new Date(),
@@ -93,6 +99,7 @@ export class CashRegisterService {
       totalTransferencia: dto.totalTransferencia,
       totalTarjeta: dto.totalTarjeta,
       totalOtros: dto.totalOtros,
+      totalVentas,
       cantidadTransacciones: dto.cantidadTransacciones,
       diferencia,
       observaciones: dto.observaciones,
@@ -100,6 +107,13 @@ export class CashRegisterService {
     });
 
     return this.repo.save(register);
+  }
+
+  private async sumIngresosByUser(id: string, userId: string): Promise<number> {
+    const movements = await this.movementRepo.find({
+      where: { cashRegisterId: id, userId, tipo: 'INGRESO' },
+    });
+    return movements.reduce((s, m) => s + (Number(m.monto) || 0), 0);
   }
 
   async findOne(id: string) {
@@ -127,10 +141,10 @@ export class CashRegisterService {
    * - transferencias entre cuentas: mostradas aparte (solo las que tocan la
    *   cuenta de caja afectan al efectivo en caja)
    */
-  async getSummary(id: string) {
+  async getSummary(id: string, userId?: string) {
     const register = await this.findOne(id);
     const movements = await this.movementRepo.find({
-      where: { cashRegisterId: id },
+      where: userId ? { cashRegisterId: id, userId } : { cashRegisterId: id },
       relations: ['account', 'user', 'reciboCaja'],
       order: { fechaMovimiento: 'ASC', createdAt: 'ASC' },
     });
@@ -175,6 +189,14 @@ export class CashRegisterService {
 
     const efectivoEnCaja = Number(register.montoInicial) + methods.efectivo.total + transferenciasCajaNeto;
 
+    const ingresosMovimientos = movements.filter((m) => m.tipo === 'INGRESO');
+    const totalVentas = userId
+      ? ingresosMovimientos.reduce((s, m) => s + (Number(m.monto) || 0), 0)
+      : Number(register.totalVentas);
+    const cantidadTransacciones = userId
+      ? ingresosMovimientos.length
+      : Number(register.cantidadTransacciones);
+
     return {
       register,
       summary: {
@@ -188,8 +210,8 @@ export class CashRegisterService {
         transferenciasCajaNeto,
         ajustes,
         efectivoEnCaja,
-        totalVentas: Number(register.totalVentas),
-        cantidadTransacciones: Number(register.cantidadTransacciones),
+        totalVentas,
+        cantidadTransacciones,
         movementsCount: movements.length,
       },
     };
@@ -200,6 +222,14 @@ export class CashRegisterService {
     reciboCache: Map<string, ReciboCajaPago[]>,
     paymentCache: Map<string, Payment | Payment[]>,
   ): Promise<'efectivo' | 'transferencia' | 'tarjeta' | 'otros'> {
+    // La cuenta financiera del movimiento identifica el método de pago usado
+    if (movement.accountId) {
+      const pm = await this.paymentMethodRepo.findOne({
+        where: { financialAccountId: movement.accountId },
+      });
+      if (pm?.tipo) return pm.tipo;
+    }
+
     if (movement.referenciaTipo === 'payment' && movement.referenciaId) {
       const key = `payment:${movement.referenciaId}`;
       let payment = paymentCache.get(key) as Payment | null | undefined;

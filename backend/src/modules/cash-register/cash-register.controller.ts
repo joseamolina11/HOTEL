@@ -55,8 +55,9 @@ export class CashRegisterController {
   @Get(':id/summary')
   @Permissions('cash-register:view')
   @ApiOperation({ summary: 'Resumen del turno de caja por método de pago' })
-  async getSummary(@Param('id') id: string) {
-    return this.cashRegisterService.getSummary(id);
+  async getSummary(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const userId = user.role === 'admin' ? undefined : user.sub;
+    return this.cashRegisterService.getSummary(id, userId);
   }
 
   @Post('open')
@@ -69,7 +70,8 @@ export class CashRegisterController {
   @Put(':id/close')
   @Permissions('cash-register:close')
   @ApiOperation({ summary: 'Cerrar caja' })
-  async close(@Param('id') id: string, @Body() dto: CloseCashRegisterDto) {
-    return this.cashRegisterService.close(id, dto);
+  async close(@Param('id') id: string, @Body() dto: CloseCashRegisterDto, @CurrentUser() user: JwtPayload) {
+    const userId = user.role === 'admin' ? undefined : user.sub;
+    return this.cashRegisterService.close(id, dto, userId);
   }
 }

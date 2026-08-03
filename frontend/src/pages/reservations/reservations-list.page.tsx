@@ -109,6 +109,8 @@ export function ReservationsListPage() {
     await updateMut.mutateAsync({
       id: detailRes.id,
       dto: {
+        fechaEntrada: formData.fechaEntrada || undefined,
+        fechaSalida: formData.fechaSalida || undefined,
         observaciones: formData.observaciones || undefined,
       },
     });
@@ -366,14 +368,13 @@ export function ReservationsListPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Fecha Entrada</label>
-                  <Input type="date" {...register('fechaEntrada', { required: true })} disabled />
+                  <Input type="date" {...register('fechaEntrada', { required: true })} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Fecha Salida</label>
-                  <Input type="date" {...register('fechaSalida', { required: true })} disabled />
+                  <Input type="date" {...register('fechaSalida', { required: true })} />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground -mt-1">Las fechas no se pueden modificar. Si necesita cambiar la fecha, cancele la reserva y cree una nueva.</p>
 
               <div className="space-y-1">
                 <label className="text-xs font-medium">Observaciones</label>

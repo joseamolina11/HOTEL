@@ -51,9 +51,7 @@ export class SurchargesService {
   async create(dto: CreateSurchargeDto, userId?: string): Promise<Surcharge> {
     const reservation = await this.reservationRepository.findOne({ where: { id: dto.reservationId } });
     if (!reservation) throw new NotFoundException('Reserva no encontrada');
-    if (!['checkin', 'confirmada'].includes(reservation.estado)) {
-      throw new BadRequestException('Solo se pueden agregar recargos en reservas activas o confirmadas');
-    }
+
 
     const cantidad = dto.cantidad || 1;
     const subtotal = dto.monto * cantidad;
