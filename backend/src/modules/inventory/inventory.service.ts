@@ -46,6 +46,38 @@ export class InventoryService {
     });
   }
 
+  async getStockReport() {
+    const items = await this.inventoryItemRepository.find({
+      relations: ['category'],
+      order: { nombre: 'ASC' },
+    });
+
+    const movements = await this.inventoryMovementRepository.find({
+      order: { createdAt: 'ASC' },
+    });
+
+    const firstByItem = new Map<string, InventoryMovement>();
+    for (const m of movements) {
+      if (!firstByItem.has(m.inventoryItemId)) {
+        firstByItem.set(m.inventoryItemId, m);
+      }
+    }
+
+    return items.map((item) => {
+      const first = firstByItem.get(item.id);
+      return {
+        id: item.id,
+        nombre: item.nombre,
+        categoria: item.category?.nombre || item.categoria,
+        stockInicial: first ? Number(first.stockPosterior) : Number(item.stockActual),
+        stockActual: Number(item.stockActual),
+        stockMinimo: Number(item.stockMinimo),
+        costoUnitario: Number(item.costoUnitario),
+        precioVenta: Number(item.precioVenta),
+      };
+    });
+  }
+
   async findCategories(): Promise<string[]> {
     const result = await this.inventoryItemRepository
       .createQueryBuilder('item')

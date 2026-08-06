@@ -93,32 +93,42 @@ export class CheckInService {
       );
     }
 
-    // Actualizar / crear huésped real si es distinto al que reservó
-    if (checkInDto.huespedDocumento && checkInDto.huespedDocumento.trim()) {
-      const documento = checkInDto.huespedDocumento.trim();
-      const esOtro = documento !== reservation.guest?.documento;
+    // Actualizar / crear el huésped real con los datos capturados en el check-in
+    const guestFieldsProvided = Boolean(
+      checkInDto.huespedDocumento?.trim() ||
+      checkInDto.huespedNombres ||
+      checkInDto.huespedApellidos ||
+      checkInDto.huespedCelular ||
+      checkInDto.tipoIdentificacion,
+    );
+    if (guestFieldsProvided) {
+      const documento = (checkInDto.huespedDocumento || reservation.guest?.documento || '').trim();
 
-      let guest = await this.guestRepository.findOne({ where: { documento } });
+      let guest = documento
+        ? await this.guestRepository.findOne({ where: { documento } })
+        : undefined;
+
       if (!guest) {
         guest = this.guestRepository.create({
           nombres: checkInDto.huespedNombres || reservation.guest?.nombres || '',
           apellidos: checkInDto.huespedApellidos || reservation.guest?.apellidos || '',
           documento,
-          tipoIdentificacion: checkInDto.tipoIdentificacion || 'CC',
+          tipoIdentificacion: checkInDto.tipoIdentificacion || reservation.guest?.tipoIdentificacion || 'CC',
           nacionalidad: reservation.guest?.nacionalidad || '',
           telefono: checkInDto.huespedCelular || reservation.guest?.telefono || '',
           email: reservation.guest?.email || '',
         });
         guest = await this.guestRepository.save(guest);
-      } else if (esOtro) {
-        if (checkInDto.huespedNombres) guest.nombres = checkInDto.huespedNombres;
-        if (checkInDto.huespedApellidos) guest.apellidos = checkInDto.huespedApellidos;
-        if (checkInDto.huespedCelular) guest.telefono = checkInDto.huespedCelular;
-        if (checkInDto.tipoIdentificacion) guest.tipoIdentificacion = checkInDto.tipoIdentificacion;
-        guest = await this.guestRepository.save(guest);
+      } else {
+        let changed = false;
+        if (checkInDto.huespedNombres) { guest.nombres = checkInDto.huespedNombres; changed = true; }
+        if (checkInDto.huespedApellidos) { guest.apellidos = checkInDto.huespedApellidos; changed = true; }
+        if (checkInDto.huespedCelular) { guest.telefono = checkInDto.huespedCelular; changed = true; }
+        if (checkInDto.tipoIdentificacion) { guest.tipoIdentificacion = checkInDto.tipoIdentificacion; changed = true; }
+        if (changed) guest = await this.guestRepository.save(guest);
       }
 
-      if (esOtro && guest.id !== reservation.guestId) {
+      if (guest && guest.id !== reservation.guestId) {
         await this.reservationRepository.update(reservation.id, { guestId: guest.id });
         reservation.guestId = guest.id;
         reservation.guest = guest;

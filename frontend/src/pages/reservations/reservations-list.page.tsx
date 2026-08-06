@@ -5,6 +5,7 @@ import { checkoutApi } from '@/api/checkout.api';
 import { filesApi } from '@/api/files.api';
 import { reciboCajaApi } from '@/api/recibo-caja.api';
 import { paymentMethodsApi } from '@/api/payment-methods.api';
+import { guestsApi } from '@/api/guests.api';
 import apiClient from '@/api/client';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,27 @@ import { confirmAction, toastSuccess } from '@/lib/notifications';
 import { useForm } from 'react-hook-form';
 import { printReceipt } from '@/components/checkout/receipt-ticket';
 
+interface EditReservationForm {
+  fechaEntrada: string;
+  fechaSalida: string;
+  observaciones: string;
+  direccion: string;
+  ciudad: string;
+  pais: string;
+  oficio: string;
+  empresa: string;
+  telefonoContacto: string;
+  emailContacto: string;
+  transporteLlegada: string;
+  transporteSalida: string;
+  reservacionOrigen: string;
+  procedencia: string;
+  destino: string;
+  motivoViaje: string;
+  tipoAcomodacion: string;
+  numeroPlaca: string;
+}
+
 export function ReservationsListPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -35,6 +57,9 @@ export function ReservationsListPage() {
   const [page, setPage] = useState(1);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [uploadingContract, setUploadingContract] = useState(false);
+  const [guestSearch, setGuestSearch] = useState('');
+  const [guestResults, setGuestResults] = useState<any[]>([]);
+  const [selectedGuestId, setSelectedGuestId] = useState<string>('');
   const qc = useQueryClient();
 
   const contractMut = useMutation({
@@ -91,28 +116,85 @@ export function ReservationsListPage() {
     queryFn: () => paymentMethodsApi.findAllActive(),
   });
 
-  const { register, handleSubmit, reset } = useForm({
-    defaultValues: { fechaEntrada: '', fechaSalida: '', observaciones: '' },
+  const { register, handleSubmit, reset } = useForm<EditReservationForm>({
+    defaultValues: {
+      fechaEntrada: '',
+      fechaSalida: '',
+      observaciones: '',
+      direccion: '',
+      ciudad: '',
+      pais: '',
+      oficio: '',
+      empresa: '',
+      telefonoContacto: '',
+      emailContacto: '',
+      transporteLlegada: '',
+      transporteSalida: '',
+      reservacionOrigen: '',
+      procedencia: '',
+      destino: '',
+      motivoViaje: '',
+      tipoAcomodacion: 'multiple',
+      numeroPlaca: '',
+    },
   });
 
   const openDetail = (res: any) => {
     setDetailRes(res);
+    setSelectedGuestId(res.guestId || '');
+    setGuestSearch('');
+    setGuestResults([]);
     reset({
       fechaEntrada: res.fechaEntrada?.slice(0, 10) || '',
       fechaSalida: res.fechaSalida?.slice(0, 10) || '',
       observaciones: res.observaciones || '',
+      direccion: res.direccion || '',
+      ciudad: res.ciudad || '',
+      pais: res.pais || '',
+      oficio: res.oficio || '',
+      empresa: res.empresa || '',
+      telefonoContacto: res.telefonoContacto || '',
+      emailContacto: res.emailContacto || '',
+      transporteLlegada: res.transporteLlegada || '',
+      transporteSalida: res.transporteSalida || '',
+      reservacionOrigen: res.reservacionOrigen || '',
+      procedencia: res.procedencia || '',
+      destino: res.destino || '',
+      motivoViaje: res.motivoViaje || '',
+      tipoAcomodacion: res.tipoAcomodacion || 'multiple',
+      numeroPlaca: res.numeroPlaca || '',
     });
   };
 
-  const onSubmitEdit = async (formData: any) => {
+  const searchGuests = async (q: string) => {
+    if (!q.trim()) {
+      setGuestResults([]);
+      return;
+    }
+    const res = await guestsApi.findAll(q, 1);
+    setGuestResults(res?.data?.data || []);
+  };
+
+  const onSubmitEdit = async (formData: EditReservationForm) => {
     if (!detailRes) return;
+    const dto: any = {
+      fechaEntrada: formData.fechaEntrada || undefined,
+      fechaSalida: formData.fechaSalida || undefined,
+      observaciones: formData.observaciones || undefined,
+    };
+    if (selectedGuestId && selectedGuestId !== detailRes.guestId) {
+      dto.guestId = selectedGuestId;
+    }
+    [
+      'direccion', 'ciudad', 'pais', 'oficio', 'empresa', 'telefonoContacto',
+      'emailContacto', 'transporteLlegada', 'transporteSalida', 'reservacionOrigen',
+      'procedencia', 'destino', 'motivoViaje', 'tipoAcomodacion', 'numeroPlaca',
+    ].forEach((field) => {
+      if ((formData as any)[field]) dto[field] = (formData as any)[field];
+    });
     await updateMut.mutateAsync({
       id: detailRes.id,
-      dto: {
-        fechaEntrada: formData.fechaEntrada || undefined,
-        fechaSalida: formData.fechaSalida || undefined,
-        observaciones: formData.observaciones || undefined,
-      },
+      dto,
     });
     qc.invalidateQueries({ queryKey: ['reservations'] });
     setDetailRes(null);
@@ -345,7 +427,6 @@ export function ReservationsListPage() {
           {detailRes && (
             <form onSubmit={handleSubmit(onSubmitEdit)} className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Huésped:</span> <span className="font-medium">{detailRes.guest?.nombres} {detailRes.guest?.apellidos}</span></div>
                 <div><span className="text-muted-foreground">Habitación:</span> <span className="font-medium">{detailRes.room?.nombre}</span></div>
                 <div><span className="text-muted-foreground">Código:</span> <span className="font-medium">{detailRes.codigo}</span></div>
                 <div><span className="text-muted-foreground">Check-in:</span> <span className="font-medium text-violet-600">{detailRes.checkinConsecutivo || '—'}</span></div>
@@ -365,6 +446,57 @@ export function ReservationsListPage() {
                 )}
               </div>
 
+              <div className="rounded-lg border p-3 space-y-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Huésped</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative flex-1 min-w-52">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      className="pl-10"
+                      placeholder="Buscar por nombre o documento..."
+                      value={guestSearch}
+                      onChange={(e) => setGuestSearch(e.target.value)}
+                    />
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => searchGuests(guestSearch)}>
+                    Buscar
+                  </Button>
+                </div>
+                {guestResults.length > 0 && (
+                  <div className="max-h-44 overflow-y-auto rounded-md border">
+                    {guestResults.map((g: any) => (
+                      <button
+                        type="button"
+                        key={g.id}
+                        className={`block w-full px-3 py-2 text-left text-sm hover:bg-muted/50 ${selectedGuestId === g.id ? 'bg-primary/10 font-medium' : ''}`}
+                        onClick={() => {
+                          setSelectedGuestId(g.id);
+                          setDetailRes((prev: any) => ({ ...prev, guest: g }));
+                          setGuestResults([]);
+                          setGuestSearch('');
+                        }}
+                      >
+                        {g.nombres} {g.apellidos} · {g.documento}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Huésped actual:</span>{' '}
+                  <span className="font-medium">
+                    {detailRes.guest?.nombres} {detailRes.guest?.apellidos}
+                  </span>
+                  {detailRes.guest?.documento && (
+                    <span className="text-muted-foreground"> · {detailRes.guest.documento}</span>
+                  )}
+                  {selectedGuestId !== detailRes.guestId && detailRes.guestId && (
+                    <span className="ml-2 text-xs font-medium text-primary">
+                      Se actualizará al huésped seleccionado
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Fecha Entrada</label>
@@ -379,6 +511,78 @@ export function ReservationsListPage() {
               <div className="space-y-1">
                 <label className="text-xs font-medium">Observaciones</label>
                 <Input {...register('observaciones')} placeholder="Opcional" />
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Registro Hotelero</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Dirección</label>
+                    <Input {...register('direccion')} placeholder="Dirección" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Ciudad</label>
+                    <Input {...register('ciudad')} placeholder="Ciudad" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">País</label>
+                    <Input {...register('pais')} placeholder="País" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Oficio / Ocupación</label>
+                    <Input {...register('oficio')} placeholder="Ej: Ingeniero" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Empresa</label>
+                    <Input {...register('empresa')} placeholder="Empresa" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Teléfono contacto</label>
+                    <Input {...register('telefonoContacto')} placeholder="Teléfono" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Email contacto</label>
+                    <Input {...register('emailContacto')} placeholder="Email" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Transporte de llegada</label>
+                    <Input {...register('transporteLlegada')} placeholder="Ej: Vehículo propio" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Transporte de salida</label>
+                    <Input {...register('transporteSalida')} placeholder="Ej: Vehículo propio" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Reservación origen</label>
+                    <Input {...register('reservacionOrigen')} placeholder="Ej: Directo, Booking" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Procedencia</label>
+                    <Input {...register('procedencia')} placeholder="Ciudad de procedencia" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Destino</label>
+                    <Input {...register('destino')} placeholder="Ciudad de destino" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Motivo de viaje</label>
+                    <Input {...register('motivoViaje')} placeholder="Ej: Negocios, Turismo" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Tipo de acomodación</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                      {...register('tipoAcomodacion')}
+                    >
+                      <option value="individual">Individual</option>
+                      <option value="multiple">Múltiple</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Número de placa</label>
+                    <Input {...register('numeroPlaca')} placeholder="Placa del vehículo" />
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -446,7 +650,7 @@ export function ReservationsListPage() {
                     Recibo
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => setDetailRes(null)}>Cerrar</Button>
-                  {(detailRes.estado === 'pendiente' || detailRes.estado === 'confirmada') && (
+                  {(detailRes.estado === 'pendiente' || detailRes.estado === 'confirmada' || detailRes.estado === 'checkin') && (
                     <Button type="submit" size="sm" disabled={updateMut.isPending}>
                       {updateMut.isPending ? 'Guardando...' : 'Guardar Cambios'}
                     </Button>

@@ -43,6 +43,39 @@ export class SuppliesService {
     });
   }
 
+  async getStockReport() {
+    const items = await this.supplyItemRepository.find({
+      relations: ['category'],
+      order: { nombre: 'ASC' },
+    });
+
+    const movements = await this.supplyMovementRepository.find({
+      order: { createdAt: 'ASC' },
+    });
+
+    const firstByItem = new Map<string, SupplyMovement>();
+    for (const m of movements) {
+      if (!firstByItem.has(m.supplyItemId)) {
+        firstByItem.set(m.supplyItemId, m);
+      }
+    }
+
+    return items.map((item) => {
+      const first = firstByItem.get(item.id);
+      return {
+        id: item.id,
+        nombre: item.nombre,
+        categoria: item.category?.nombre || item.categoriaSuministro,
+        unidadMedida: item.unidadMedida,
+        proveedor: item.proveedor,
+        stockInicial: first ? Number(first.stockPosterior) : Number(item.stockActual),
+        stockActual: Number(item.stockActual),
+        stockMinimo: Number(item.stockMinimo),
+        costoUnitario: Number(item.costoUnitario),
+      };
+    });
+  }
+
   async findCategories(): Promise<string[]> {
     const result = await this.supplyItemRepository
       .createQueryBuilder('item')

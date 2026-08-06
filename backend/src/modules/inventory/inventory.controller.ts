@@ -33,6 +33,13 @@ export class InventoryController {
     return this.inventoryService.findAll({ search, categoria, bajoStock: bajoStock === 'true' }, +page, +limit);
   }
 
+  @Get('stock-report')
+  @Permissions('inventory:view')
+  @ApiOperation({ summary: 'Reporte de stock de inventario' })
+  async stockReport() {
+    return this.inventoryService.getStockReport();
+  }
+
   @Get('low-stock')
   @Permissions('inventory:view')
   @ApiOperation({ summary: 'Productos con stock bajo' })

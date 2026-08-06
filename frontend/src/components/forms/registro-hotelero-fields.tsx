@@ -1,7 +1,4 @@
-import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { UserRound } from 'lucide-react';
 
 interface GuestDefault {
   nombres?: string;
@@ -17,69 +14,40 @@ interface RegistroHoteleroFieldsProps {
   guestDefault?: GuestDefault | null;
 }
 
-const GUEST_FIELDS = ['huespedNombres', 'huespedApellidos', 'huespedDocumento', 'huespedCelular', 'tipoIdentificacion'] as const;
-
 export function RegistroHoteleroFields({ data, onChange, guestDefault }: RegistroHoteleroFieldsProps) {
-  const [esOtro, setEsOtro] = useState(false);
-
-  const fillFromDefault = () => {
-    onChange('huespedNombres', guestDefault?.nombres || '');
-    onChange('huespedApellidos', guestDefault?.apellidos || '');
-    onChange('huespedDocumento', guestDefault?.documento || '');
-    onChange('huespedCelular', guestDefault?.telefono || '');
-    onChange('tipoIdentificacion', guestDefault?.tipoIdentificacion || 'CC');
-  };
-
-  useEffect(() => {
-    if (!esOtro) fillFromDefault();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [esOtro, guestDefault]);
-
-  const handleToggle = () => {
-    const next = !esOtro;
-    if (next) {
-      GUEST_FIELDS.forEach((f) => onChange(f, ''));
-    } else {
-      fillFromDefault();
-    }
-    setEsOtro(next);
-  };
-
-  const isHolder = !esOtro;
   const holderName = [guestDefault?.nombres, guestDefault?.apellidos].filter(Boolean).join(' ') || '—';
+
+  const guestValue = (field: keyof GuestDefault, fallback = '') => {
+    const key = field === 'telefono' ? 'huespedCelular' : field === 'nombres' ? 'huespedNombres' : field === 'apellidos' ? 'huespedApellidos' : field === 'documento' ? 'huespedDocumento' : 'tipoIdentificacion';
+    return data[key] ?? guestDefault?.[field] ?? fallback;
+  };
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="space-y-1">
         <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Datos del Huésped</p>
-        <Button type="button" variant={esOtro ? 'default' : 'outline'} size="sm" onClick={handleToggle}>
-          <UserRound className="mr-1 h-3 w-3" /> {esOtro ? 'Datos de otro huésped' : '¿Es otro?'}
-        </Button>
+        <p className="text-xs text-muted-foreground">
+          Huésped de la reserva: <span className="font-medium text-foreground">{holderName}</span>
+          <span className="ml-1">(puedes modificar los datos si el huésped es otro)</span>
+        </p>
       </div>
 
       <div className="rounded-lg border p-3 space-y-3">
-        {isHolder && (
-          <p className="text-xs text-muted-foreground">
-            Huésped de la reserva: <span className="font-medium text-foreground">{holderName}</span>
-          </p>
-        )}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Nombre</label>
             <Input
               placeholder="Nombre"
-              value={esOtro ? data.huespedNombres || '' : guestDefault?.nombres || ''}
+              value={guestValue('nombres')}
               onChange={(e) => onChange('huespedNombres', e.target.value)}
-              disabled={isHolder}
             />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Apellido</label>
             <Input
               placeholder="Apellido"
-              value={esOtro ? data.huespedApellidos || '' : guestDefault?.apellidos || ''}
+              value={guestValue('apellidos')}
               onChange={(e) => onChange('huespedApellidos', e.target.value)}
-              disabled={isHolder}
             />
           </div>
           <div className="space-y-1">
@@ -88,13 +56,12 @@ export function RegistroHoteleroFields({ data, onChange, guestDefault }: Registr
               <Input
                 className="flex-1"
                 placeholder="Cédula / Pasaporte"
-                value={esOtro ? data.huespedDocumento || '' : guestDefault?.documento || ''}
+                value={guestValue('documento')}
                 onChange={(e) => onChange('huespedDocumento', e.target.value)}
-                disabled={isHolder}
               />
               <select
                 className="w-24 rounded-md border border-input bg-transparent px-2 py-2 text-sm"
-                value={esOtro ? data.tipoIdentificacion || 'CC' : guestDefault?.tipoIdentificacion || 'CC'}
+                value={guestValue('tipoIdentificacion', 'CC')}
                 onChange={(e) => onChange('tipoIdentificacion', e.target.value)}
               >
                 <option value="CC">CC</option>
@@ -108,9 +75,8 @@ export function RegistroHoteleroFields({ data, onChange, guestDefault }: Registr
             <label className="text-xs text-muted-foreground">Celular</label>
             <Input
               placeholder="Celular"
-              value={esOtro ? data.huespedCelular || '' : guestDefault?.telefono || ''}
+              value={guestValue('telefono')}
               onChange={(e) => onChange('huespedCelular', e.target.value)}
-              disabled={isHolder}
             />
           </div>
         </div>

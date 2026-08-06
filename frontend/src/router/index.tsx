@@ -40,6 +40,8 @@ import { BitacorasListPage } from '@/pages/bitacoras/bitacoras-list.page';
 import { NotificationsPage } from '@/pages/notifications/notifications.page';
 import { TercerosPage } from '@/pages/terceros/terceros.page';
 import { ReportsPage } from '@/pages/reports/reports.page';
+import { InventoryReportPage } from '@/pages/reports/inventory-report.page';
+import { SuppliesReportPage } from '@/pages/reports/supplies-report.page';
 import { GerencialPage } from '@/pages/statistics/gerencial.page';
 import { GerencialDashboardPage } from '@/pages/dashboard-gerencial/dashboard.page';
 import { CalendarGerencialPage } from '@/pages/dashboard-gerencial/calendar.page';
@@ -97,6 +99,8 @@ export const router = createBrowserRouter([
       { path: 'surcharge-types', element: <SurchargeTypesPage /> },
       { path: 'terceros', element: <TercerosPage /> },
       { path: 'reports', element: <ReportsPage /> },
+      { path: 'reports/inventory', element: <InventoryReportPage /> },
+      { path: 'reports/supplies', element: <SuppliesReportPage /> },
       { path: 'statistics/gerencial', element: <GerencialPage /> },
       { path: 'dashboard-gerencial', element: <GerencialDashboardPage /> },
       { path: 'calendar-gerencial', element: <CalendarGerencialPage /> },

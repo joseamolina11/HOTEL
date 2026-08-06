@@ -218,6 +218,8 @@ export function Sidebar() {
       visible: hasPerm('reports:view'),
       children: [
         { to: '/reports', label: 'Terceros', icon: BarChart3, show: hasPerm('reports:view') },
+        { to: '/reports/inventory', label: 'Inventario', icon: Package, show: hasPerm('reports:view') },
+        { to: '/reports/supplies', label: 'Suministros', icon: Boxes, show: hasPerm('reports:view') },
       ],
     },
     {

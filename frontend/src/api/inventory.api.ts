@@ -17,6 +17,11 @@ export const inventoryApi = {
     return data.data;
   },
 
+  getStockReport: async (): Promise<any[]> => {
+    const { data } = await apiClient.get('/inventory/stock-report');
+    return data.data;
+  },
+
   findCategories: async (): Promise<InventoryCategory[]> => {
     const { data } = await apiClient.get('/inventory/categories');
     return data.data?.data || [];

@@ -58,6 +58,11 @@ export const suppliesApi = {
     return data.data;
   },
 
+  getStockReport: async (): Promise<any[]> => {
+    const { data } = await apiClient.get('/supplies/stock-report');
+    return data.data;
+  },
+
   findCategories: async (): Promise<SupplyCategory[]> => {
     const { data } = await apiClient.get('/supplies/categories');
     return data.data?.data || [];

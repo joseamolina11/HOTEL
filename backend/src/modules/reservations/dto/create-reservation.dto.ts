@@ -97,6 +97,11 @@ export class CreateReservationDto {
 }
 
 export class UpdateReservationDto {
+  @ApiPropertyOptional({ example: 'uuid-guest' })
+  @IsOptional()
+  @IsString()
+  guestId?: string;
+
   @ApiPropertyOptional({ example: 'uuid-room' })
   @IsOptional()
   @IsString()
@@ -192,6 +197,16 @@ export class UpdateReservationDto {
   @IsOptional()
   @IsString()
   motivoViaje?: string;
+
+  @ApiPropertyOptional({ example: 'multiple', description: 'Tipo de acomodación: individual o multiple' })
+  @IsOptional()
+  @IsString()
+  tipoAcomodacion?: string;
+
+  @ApiPropertyOptional({ example: 'ABC123', description: 'Número de placa del vehículo' })
+  @IsOptional()
+  @IsString()
+  numeroPlaca?: string;
 }
 
 export class CancelReservationDto {

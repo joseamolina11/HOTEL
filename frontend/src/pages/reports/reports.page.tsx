@@ -174,7 +174,7 @@ export function ReportsPage() {
   return (
     <div className="space-y-6 print-area">
       <div className="flex items-center justify-between print:hidden">
-        <h1 className="text-2xl font-bold">Reportes</h1>
+        <h1 className="text-2xl font-bold">Reporte de Recargos</h1>
       </div>
 
       <Card className="print:hidden">

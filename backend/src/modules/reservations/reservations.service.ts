@@ -401,12 +401,21 @@ export class ReservationsService {
   async update(id: string, updateDto: UpdateReservationDto): Promise<Reservation> {
     const reservation = await this.findOne(id);
 
-    if (!['pendiente', 'confirmada'].includes(reservation.estado)) {
+    if (!['pendiente', 'confirmada', 'checkin'].includes(reservation.estado)) {
       throw new BadRequestException('No se puede modificar una reserva en este estado');
     }
 
     if (reservation.origen !== 'directo') {
       throw new BadRequestException('No se puede modificar una reserva de OTA');
+    }
+
+    if (updateDto.guestId && updateDto.guestId !== reservation.guestId) {
+      const guest = await this.guestRepository.findOne({
+        where: { id: updateDto.guestId },
+      });
+      if (!guest) {
+        throw new NotFoundException('Huésped no encontrado');
+      }
     }
 
     if (updateDto.roomId) {

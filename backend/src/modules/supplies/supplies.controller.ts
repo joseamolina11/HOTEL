@@ -31,6 +31,13 @@ export class SuppliesController {
     return this.suppliesService.findAll({ categoria, bajoStock: bajoStock === 'true' }, +page, +limit);
   }
 
+  @Get('stock-report')
+  @Permissions('supplies:view')
+  @ApiOperation({ summary: 'Reporte de stock de suministros' })
+  async stockReport() {
+    return this.suppliesService.getStockReport();
+  }
+
   @Get('low-stock')
   @Permissions('supplies:view')
   @ApiOperation({ summary: 'Insumos con stock bajo' })

@@ -1,4 +1,6 @@
 import { formatCurrency, formatDateTime, formatDateShort } from '@/lib/utils';
+import html2pdf from 'html2pdf.js';
+import Swal from 'sweetalert2';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL_BACKEND || 'https://intranet.cytech.net.co:4000';
 
@@ -121,6 +123,19 @@ table.compact-table thead th { background: #333; color: #fff; padding: 3px 5px; 
 table.compact-table tbody td { padding: 3px 5px; border-bottom: 1px solid #eee; font-size: 8px; }
 table.compact-table tbody tr:nth-child(even) { background: #fafafa; }
 
+/* === OCCUPANCY TABLE (landscape) === */
+table.occupancy-table { table-layout: fixed; min-width: 1240px; }
+table.occupancy-table thead th:nth-child(1) { width: 110px; }
+table.occupancy-table thead th:nth-child(2) { width: 110px; }
+table.occupancy-table thead th:nth-child(3) { width: 80px; }
+table.occupancy-table thead th:nth-child(4) { width: 150px; }
+table.occupancy-table thead th:nth-child(5) { width: 190px; }
+table.occupancy-table thead th:nth-child(6) { width: 140px; }
+table.occupancy-table thead th:nth-child(7) { width: 95px; }
+table.occupancy-table thead th:nth-child(8) { width: 95px; }
+table.occupancy-table thead th:nth-child(9) { width: 120px; }
+table.occupancy-table thead th:nth-child(10) { width: 150px; }
+
 .footer-note { margin-top: 10px; text-align: center; font-size: 7px; color: #aaa; border-top: 1px solid #eee; padding-top: 5px; }
 
 .diff-positive { color: #22543d; font-weight: 700; }
@@ -162,6 +177,59 @@ function openPrintWindow(title: string, bodyHtml: string) {
 </html>`);
   w.document.close();
   setTimeout(() => { w.print(); w.close(); }, 600);
+}
+async function downloadPdf(title: string, filename: string, bodyHtml: string, landscape = false) {
+  const pageWidth = landscape ? 1300 : 800;
+
+  const el = document.createElement('div');
+  el.style.position = 'fixed';
+  el.style.left = '0';
+  el.style.top = '0';
+  el.style.width = `${pageWidth}px`;
+  el.style.background = '#fff';
+  el.style.zIndex = '-1';
+  el.innerHTML = `<style>
+    html, body { width: ${pageWidth}px; margin: 0; padding: 0; }
+    ${STYLES}
+  </style>
+  ${bodyHtml}
+  <div class="footer-note">Documento generado el ${new Date().toLocaleString('es-MX')} &mdash; ${title}</div>`;
+  document.body.appendChild(el);
+
+  Swal.fire({
+    title: 'Descargando PDF',
+    text: 'Generando documento...',
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  try {
+    await html2pdf()
+      .set({
+        margin: [8, 8, 10, 8],
+        filename,
+        image: { type: 'jpeg', quality: 0.96 },
+        enableLinks: false,
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          windowWidth: pageWidth,
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: landscape ? 'landscape' : 'portrait',
+        },
+      })
+      .from(el)
+      .save();
+  } finally {
+    Swal.close();
+    el.remove();
+  }
 }
 
 export async function printPurchaseOrder(id: string) {
@@ -836,9 +904,11 @@ export async function printReservation(id: string) {
 }
 
 export async function printOccupancyControl(params?: { desde?: string; hasta?: string }) {
-  const [roomsModule, configModule] = await Promise.all([
+  const [roomsModule, configModule, jsPDFModule, autoTableModule] = await Promise.all([
     import('@/api/rooms.api'),
     import('@/api/hotel-config.api'),
+    import('jspdf'),
+    import('jspdf-autotable'),
   ]);
   const [result, config] = await Promise.all([
     roomsModule.roomsApi.getOccupancyControl(params as Record<string, string>),
@@ -846,58 +916,117 @@ export async function printOccupancyControl(params?: { desde?: string; hasta?: s
   ]);
 
   const rows = result?.data || [];
-  const totals = result?.totals || { ocupadas: 0, checkouts: 0, valorHabitaciones: 0, cargos: 0, debe: 0 };
+  const ocupadas = rows.filter((r: any) => r.estado === 'ocupada').length;
 
-  const rowHtml = rows.map((r: any) => `
-    <tr>
-      <td>${r.room?.numero || '—'} ${r.room?.nombre || ''}</td>
-      <td>${r.guest?.nombres || ''} ${r.guest?.apellidos || ''}${r.guest?.documento ? `<br><span style="font-size:8px;color:#718096">${r.guest.documento}</span>` : ''}</td>
-      <td>${r.codigo || '—'}</td>
-      <td class="text-center">${r.noches}</td>
-      <td class="text-center" style="text-transform:capitalize">${r.estado}</td>
-      <td>${new Date(r.horaEntrada || r.fechaEntrada).toLocaleString('es-MX')}</td>
-      <td>${r.horaSalida ? new Date(r.horaSalida).toLocaleString('es-MX') : '—'}</td>
-      <td class="text-right">${formatCurrency(r.precioPorNoche)}</td>
-      <td class="text-right">${formatCurrency(r.valorHabitaciones)}</td>
-      <td class="text-right">${formatCurrency(r.cargos)}</td>
-      <td class="text-right">${formatCurrency(r.descuento)}</td>
-      <td class="text-right">${formatCurrency(r.totalPagado)}</td>
-      <td class="text-right" style="color:${r.debe > 0 ? '#9b2c2c' : '#22543d'};font-weight:700">${formatCurrency(r.debe)}</td>
-    </tr>`).join('');
+  const jsPDF = jsPDFModule.default || jsPDFModule;
+  const autoTable = autoTableModule.default || autoTableModule;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 8;
+  let y = 10;
 
-  const fromLabel = params?.desde ? new Date(params.desde).toLocaleDateString('es-MX') : '—';
-  const toLabel = params?.hasta ? new Date(params.hasta).toLocaleDateString('es-MX') : '—';
+  const h = config || {};
+  const addr = [h?.direccion, h?.ciudad, h?.pais].filter(Boolean).join(', ');
 
-  openPrintWindow('Control de Ocupaci\u00f3n', `
-    ${getHeader(config)}
-    <div class="doc-title">
-      <h2>Control de Ocupaci\u00f3n</h2>
-      <div class="doc-ref">Del ${fromLabel} al ${toLabel} &mdash; ${rows.length} reserva(s)</div>
-    </div>
+  doc.setFillColor(26, 54, 93);
+  doc.rect(0, 0, pageW, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(h?.nombre || 'Hotel', margin, 9);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text([addr ? `${addr}  |  ` : '', `Tel: ${h?.telefono || ''}${h?.telefono && h?.email ? '  |  ' : ''}${h?.email || ''}`].join(''), margin, 16);
+  y = 28;
 
-    <div class="summary-cards">
-      <div class="summary-card total"><div class="card-label">Ocupadas</div><div class="card-value">${totals.ocupadas || 0}</div></div>
-      <div class="summary-card initial"><div class="card-label">Check-Outs</div><div class="card-value">${totals.checkouts || 0}</div></div>
-      <div class="summary-card positive"><div class="card-label">Valor Habitaciones</div><div class="card-value">${formatCurrency(totals.valorHabitaciones || 0)}</div></div>
-      <div class="summary-card negative"><div class="card-label">Cargos</div><div class="card-value">${formatCurrency(totals.cargos || 0)}</div></div>
-      <div class="summary-card"><div class="card-label" style="color:#9b2c2c">Por Cobrar</div><div class="card-value" style="color:${totals.debe > 0 ? '#9b2c2c' : '#22543d'}">${formatCurrency(totals.debe || 0)}</div></div>
-    </div>
+  doc.setTextColor(26, 54, 93);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('CONTROL DE OCUPACI\u00d3N', pageW / 2, y, { align: 'center' });
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(110, 110, 110);
+  const fromLabel = params?.desde ? new Date(params.desde).toLocaleDateString('es-MX') : '\u2014';
+  const toLabel = params?.hasta ? new Date(params.hasta).toLocaleDateString('es-MX') : '\u2014';
+  doc.text(`Del ${fromLabel} al ${toLabel}  \u2022  ${rows.length} habitacion(es)  \u2022  ${ocupadas} ocupada(s)`, pageW / 2, y + 1, { align: 'center' });
+  y += 7;
+  doc.setDrawColor(26, 54, 93);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y, pageW - margin, y);
+  y += 3;
 
-    <div style="overflow-x:auto">
-    <table class="compact-table" style="min-width:1100px">
-      <thead>
-        <tr><th>Habitaci\u00f3n</th><th>Hu\u00e9sped</th><th>Reserva</th><th class="text-center">Noches</th><th class="text-center">Estado</th><th>Entrada</th><th>Salida</th><th class="text-right">Precio/Noche</th><th class="text-right">Valor Hab.</th><th class="text-right">Cargos</th><th class="text-right">Descuento</th><th class="text-right">Pagado</th><th class="text-right">Por Cobrar</th></tr>
-      </thead>
-      <tbody>
-        ${rowHtml || '<tr><td colspan="13" class="text-center" style="color:#a0aec0">Sin reservas en el periodo</td></tr>'}
-      </tbody>
-    </table>
-    </div>
+  const tableData = rows.map((r: any) => {
+    const occ = r.reservation;
+    const guestName = occ?.guest ? `${occ.guest.nombres} ${occ.guest.apellidos}` : '';
+    return [
+      `${r.room?.numero || '\u2014'}\n${r.room?.nombre || ''}`,
+      r.room?.tipo || '\u2014',
+      r.estado === 'ocupada' ? 'OCUPADA' : 'VAC\u00cdA',
+      r.lastCheckout ? `${formatDateTime(r.lastCheckout)}${r.lastCheckoutCodigo ? `\n${r.lastCheckoutCodigo}` : ''}` : '\u2014',
+      guestName || '\u2014',
+      occ?.codigo || '\u2014',
+      occ ? formatDateShort(occ.fechaEntrada) : '\u2014',
+      occ ? formatDateShort(occ.fechaSalida) : '\u2014',
+      occ ? formatCurrency(occ.totalPagado) : '\u2014',
+      occ ? formatCurrency(occ.saldoPendiente) : '\u2014',
+    ];
+  });
 
-    <div class="signatures">
-      <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Elaborado por</div><div class="sig-name">________________</div></div>
-      <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Revisado por</div><div class="sig-name">________________</div></div>
-      <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Autorizado por</div><div class="sig-name">________________</div></div>
-    </div>
-  `);
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [['Habitaci\u00f3n', 'Tipo', 'Estado', '\u00daltimo Check-Out', 'Hu\u00e9sped', 'Reserva', 'Entrada', 'Salida', 'Total Pagado', 'Saldo Pendiente']],
+    body: tableData,
+    styles: { fontSize: 7, cellPadding: 1.8, valign: 'middle', overflow: 'linebreak' },
+    headStyles: { fillColor: [26, 54, 93], textColor: 255, fontSize: 6.8, fontStyle: 'bold', halign: 'center' },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+    columnStyles: {
+      0: { cellWidth: 24 },
+      1: { cellWidth: 22 },
+      2: { cellWidth: 17, halign: 'center' },
+      3: { cellWidth: 34 },
+      4: { cellWidth: 40 },
+      5: { cellWidth: 24 },
+      6: { cellWidth: 18, halign: 'center' },
+      7: { cellWidth: 18, halign: 'center' },
+      8: { cellWidth: 24, halign: 'right' },
+      9: { cellWidth: 24, halign: 'right' },
+    },
+    theme: 'striped',
+  });
+
+  const finalY = (doc as any).lastAutoTable?.finalY ?? y + 20;
+  if (finalY + 16 < doc.internal.pageSize.getHeight() - margin) {
+    const sigY = Math.max(finalY + 14, doc.internal.pageSize.getHeight() - 24);
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    const sigW = (pageW - margin * 2) / 3;
+    doc.setFontSize(7);
+    doc.setTextColor(110, 110, 110);
+    const sigLabels = ['ELABORADO POR', 'REVISADO POR', 'AUTORIZADO POR'];
+    for (let i = 0; i < 3; i++) {
+      const x = margin + sigW * i + sigW / 2 - 30;
+      doc.line(x, sigY, x + 60, sigY);
+      doc.text(sigLabels[i], x + 30, sigY + 4, { align: 'center' });
+    }
+  }
+
+  doc.setFontSize(6.5);
+  doc.setTextColor(150, 150, 150);
+  doc.text(`Documento generado el ${new Date().toLocaleString('es-MX')}  \u2014  Control de Ocupaci\u00f3n`, pageW / 2, doc.internal.pageSize.getHeight() - 5, { align: 'center' });
+
+  Swal.fire({
+    title: 'Descargando PDF',
+    text: 'Generando documento...',
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: false,
+    didOpen: () => Swal.showLoading(),
+  });
+  try {
+    doc.save(`control-ocupacion-${params?.desde || 'inicio'}-${params?.hasta || 'hoy'}.pdf`);
+  } finally {
+    Swal.close();
+  }
 }
