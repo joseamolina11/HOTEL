@@ -13,6 +13,7 @@ import { BedDouble, Loader2, CalendarDays, DollarSign, Zap, Plus, X } from 'luci
 import { formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
 import { GuestSearch } from '@/components/forms/guest-search';
+import Swal from 'sweetalert2';
 
 interface CalendarReserveDialogProps {
   room: any;
@@ -96,9 +97,33 @@ export function CalendarReserveDialog({ room, date, open, onClose }: CalendarRes
   const handleSubmit = async () => {
     if (!guestId || !fechaEntrada || !fechaSalida) return;
     if (pagoMonto && pagoMonto > 0 && !pagoMetodoPagoId) {
-      alert('Debe seleccionar un método de pago para el anticipo');
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Falta el método de pago',
+        text: 'Debe seleccionar un método de pago para el anticipo',
+        confirmButtonColor: '#ef4444',
+      });
       return;
     }
+
+    const result = await Swal.fire({
+      title: '¿Crear la reserva?',
+      html: `
+        <div style="text-align:left;font-size:14px;line-height:1.8">
+          <div><strong>Habitación:</strong> ${room.numero} — ${room.nombre}</div>
+          <div><strong>Fechas:</strong> ${fechaEntrada} al ${fechaSalida}</div>
+          <div><strong>Total a pagar:</strong> ${formatCurrency(totalToPay)}</div>
+          ${pagoMonto > 0 ? `<div><strong>Pago ahora:</strong> ${formatCurrency(pagoMonto)}</div>` : ''}
+          <div style="margin-top:6px;color:#6b7280">Esta acción no se puede revertir.</div>
+        </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, crear reserva',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#16a34a',
+    });
+    if (!result.isConfirmed) return;
+
     const payload: any = {
       roomId: room.id,
       guestId,

@@ -41,3 +41,31 @@ export class CreatePaymentDto {
   @IsString()
   observaciones?: string;
 }
+
+export class UpdatePaymentDto {
+  @ApiPropertyOptional({ example: 50000 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  monto?: number;
+
+  @ApiPropertyOptional({ example: 'uuid-payment-method', nullable: true })
+  @IsOptional()
+  @IsString()
+  metodoPagoId?: string | null;
+
+  @ApiPropertyOptional({ example: 'uuid-reservation', nullable: true })
+  @IsOptional()
+  @IsString()
+  reservationId?: string | null;
+
+  @ApiPropertyOptional({ example: 'Recibo #001' })
+  @IsOptional()
+  @IsString()
+  comprobante?: string;
+
+  @ApiPropertyOptional({ example: 'Pago en efectivo' })
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}

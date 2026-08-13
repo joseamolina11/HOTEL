@@ -27,4 +27,15 @@ export const paymentsApi = {
     const { data } = await apiClient.put(`/payments/${paymentId}/metodo-pago`, dto);
     return data.data;
   },
+
+  update: async (paymentId: string, dto: {
+    monto?: number;
+    metodoPagoId?: string;
+    reservationId?: string;
+    comprobante?: string;
+    observaciones?: string;
+  }) => {
+    const { data } = await apiClient.put(`/payments/${paymentId}`, dto);
+    return data.data;
+  },
 };

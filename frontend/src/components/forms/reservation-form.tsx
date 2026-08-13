@@ -16,6 +16,7 @@ import { useCreateReservation } from '@/hooks/useReservations';
 import { Plus, X, BedDouble, DollarSign, Zap } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { GuestSearch } from '@/components/forms/guest-search';
+import Swal from 'sweetalert2';
 
 const companionSchema = z.object({
   nombres: z.string().min(1, 'Nombre requerido'),
@@ -96,9 +97,32 @@ export function ReservationForm({ onSuccess, defaultRoomId, defaultDate }: Reser
 
   const onSubmit = async (data: ReservationFormData) => {
     if (data.pagoMonto && data.pagoMonto > 0 && !data.pagoMetodoPagoId) {
-      alert('Debe seleccionar un método de pago para el anticipo');
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Falta el método de pago',
+        text: 'Debe seleccionar un método de pago para el anticipo',
+        confirmButtonColor: '#ef4444',
+      });
       return;
     }
+
+    const result = await Swal.fire({
+      title: '¿Crear la reserva?',
+      html: `
+        <div style="text-align:left;font-size:14px;line-height:1.8">
+          <div><strong>Fechas:</strong> ${data.fechaEntrada} al ${data.fechaSalida}</div>
+          <div><strong>Huéspedes:</strong> ${data.cantidadHuespedes}</div>
+          ${data.pagoMonto && data.pagoMonto > 0 ? `<div><strong>Anticipo:</strong> ${formatCurrency(data.pagoMonto)}</div>` : ''}
+          <div style="margin-top:6px;color:#6b7280">Esta acción no se puede revertir.</div>
+        </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, crear reserva',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#16a34a',
+    });
+    if (!result.isConfirmed) return;
+
     const payload: any = { ...data, estado: 'confirmada' };
     if (data.pagoMonto && data.pagoMonto > 0) {
       payload.pagoMonto = data.pagoMonto;

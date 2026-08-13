@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* SweetAlert2 debe capturar clics aunque haya un modal de Radix abierto:
+   Radix aplica pointer-events:none sobre body, lo que haría que la alerta
+   (hija de body) no sea clickeable y los clics pasen al contenido de atrás. */
+.swal2-container {
+  pointer-events: auto;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

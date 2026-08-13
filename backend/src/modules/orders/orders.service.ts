@@ -409,6 +409,14 @@ export class OrdersService {
     if (order.estado === 'cancelado') throw new BadRequestException('El pedido ya está cancelado');
     if (order.estado === 'cargado') throw new BadRequestException('No se puede cancelar un pedido que ya fue cargado');
 
+    const horasDesdeCreacion =
+      (Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60);
+    if (horasDesdeCreacion > 24) {
+      throw new BadRequestException(
+        'Solo se pueden anular pedidos con menos de 24 horas de creados',
+      );
+    }
+
     // Reverse inventory
     for (const item of order.items) {
       const product = await this.inventoryRepo.findOne({ where: { id: item.inventoryItemId } });

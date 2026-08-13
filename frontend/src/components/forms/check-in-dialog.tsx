@@ -18,6 +18,7 @@ import { RegistroHoteleroFields } from '@/components/forms/registro-hotelero-fie
 import { toastSuccess } from '@/lib/notifications';
 import { formatCurrency } from '@/lib/utils';
 import { renderContract, generateDefaultContract, printContract } from '@/lib/print-contract';
+import Swal from 'sweetalert2';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const tomorrow = () => {
@@ -193,6 +194,36 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
   const onSubmit = async (data: FormData) => {
     let guestId = selectedGuest?.id;
     if (!guestId) return;
+    const pagoSinMetodo = pagos.find((p) => p.monto > 0 && !p.metodoPagoId);
+    if (pagoSinMetodo) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Falta el método de pago',
+        text: 'Debe seleccionar un método de pago para cada pago con monto mayor a 0',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+    const result = await Swal.fire({
+      title: '¿Confirmar el Check-In?',
+      html: `
+        <div style="text-align:left;font-size:14px;line-height:1.8">
+          <div><strong>Huésped:</strong> ${selectedGuest?.nombres || ''} ${selectedGuest?.apellidos || ''}</div>
+          <div><strong>Habitación:</strong> ${room.numero} — ${room.nombre}</div>
+          <div><strong>Período:</strong> ${data.fechaEntrada} al ${data.fechaSalida}</div>
+          <div><strong>Valor a pagar:</strong> ${formatCurrency(pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0))}</div>
+          <div><strong>Descuento:</strong> ${formatCurrency(descuento)}</div>
+          <div><strong>Recargos:</strong> ${formatCurrency(totalRecargos)}</div>
+          <div><strong>Total a pagar:</strong> ${formatCurrency(pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0) + totalRecargos - descuento)}</div>
+          <div style="margin-top:6px;color:#6b7280">Esta acción no se puede revertir.</div>
+        </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, hacer check-in',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#16a34a',
+    });
+    if (!result.isConfirmed) return;
 
     const companionsList = data.companions.filter((c) => c.documento);
 
@@ -207,11 +238,7 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       companions: companionsList.length > 0 ? companionsList : undefined,
     });
 
-    const pagoSinMetodo = pagos.find((p) => p.monto > 0 && !p.metodoPagoId);
-    if (pagoSinMetodo) {
-      alert('Debe seleccionar un método de pago para cada pago con monto mayor a 0');
-      return;
-    }
+
     const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);
     const paymentData: any = {
       observaciones: data.observaciones,
@@ -242,8 +269,7 @@ export function CheckInDialog({ room, open, onClose }: CheckInDialogProps) {
       data: paymentData,
     });
 
-    toastSuccess('Check-In realizado correctamente');
-    qc.invalidateQueries({ queryKey: ['rooms'] });
+    toastSuccess('Check-In realizado correctamente');    qc.invalidateQueries({ queryKey: ['rooms'] });
     qc.invalidateQueries({ queryKey: ['reservations'] });
     qc.invalidateQueries({ queryKey: ['guests'] });
     setDescuento(0);

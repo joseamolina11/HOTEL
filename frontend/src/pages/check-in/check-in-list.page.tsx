@@ -19,6 +19,7 @@ import { ChangeRoomDialog } from '@/components/forms/change-room-dialog';
 import { surchargeTypesApi } from '@/api/surcharge-types.api';
 import { surchargesApi } from '@/api/surcharges.api';
 import { tercerosApi } from '@/api/terceros.api';
+import Swal from 'sweetalert2';
 
 export function CheckInListPage() {
   const qc = useQueryClient();
@@ -297,11 +298,33 @@ function ProcessCheckInRow({ reservation, onSuccess }: { reservation: any; onSuc
   };
 
   const handleConfirm = async () => {
+    const result = await Swal.fire({
+      title: '¿Confirmar el Check-In?',
+      html: `
+        <div style="text-align:left;font-size:14px;line-height:1.8">
+          <div><strong>Reserva:</strong> ${reservation.codigo}</div>
+          <div><strong>Huésped:</strong> ${reservation.guest?.nombres || ''} ${reservation.guest?.apellidos || ''}</div>
+          <div><strong>Habitación:</strong> ${reservation.room?.nombre || ''}</div>
+          <div style="margin-top:6px;color:#6b7280">Esta acción no se puede revertir.</div>
+        </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, hacer check-in',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#16a34a',
+    });
+    if (!result.isConfirmed) return;
+
     const companionsList = companions.filter((c) => c.documento);
 
     const pagoSinMetodo = pagos.find((p) => p.monto > 0 && !p.metodoPagoId);
     if (pagoSinMetodo) {
-      alert('Debe seleccionar un método de pago para cada pago con monto mayor a 0');
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Falta el método de pago',
+        text: 'Debe seleccionar un método de pago para cada pago con monto mayor a 0',
+        confirmButtonColor: '#ef4444',
+      });
       return;
     }
     const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);

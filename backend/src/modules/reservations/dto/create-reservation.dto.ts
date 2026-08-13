@@ -207,6 +207,11 @@ export class UpdateReservationDto {
   @IsOptional()
   @IsString()
   numeroPlaca?: string;
+
+  @ApiPropertyOptional({ enum: ['pendiente', 'confirmada', 'checkin', 'checkout', 'cancelada'], description: 'Estado de la reserva (solo administrador)' })
+  @IsOptional()
+  @IsEnum(['pendiente', 'confirmada', 'checkin', 'checkout', 'cancelada'])
+  estado?: string;
 }
 
 export class CancelReservationDto {

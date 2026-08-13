@@ -67,3 +67,15 @@ export function useRemoveSurcharge() {
     },
   });
 }
+
+export function useUpdateSurcharge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: any }) => surchargesApi.update(id, dto),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['surcharges'] });
+      qc.invalidateQueries({ queryKey: ['reservation', variables.id] });
+      qc.invalidateQueries({ queryKey: ['stay-summary'] });
+    },
+  });
+}

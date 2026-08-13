@@ -20,17 +20,23 @@ export class SurchargesController {
   }
 
   @Post()
-  // @Permissions('surcharges:create')
+  @Permissions('surcharges:create')
   create(@Body() dto: CreateSurchargeDto, @Req() req: Request) {
     const userId = (req.user as any)?.sub;
     return this.service.create(dto, userId);
   }
 
   @Put(':id')
-  // @Permissions('surcharges:update')
-  update(@Param('id') id: string, @Body() dto: CreateSurchargeDto) { return this.service.update(id, dto); }
+  @Permissions('surcharges:edit')
+  update(@Param('id') id: string, @Body() dto: CreateSurchargeDto, @Req() req: Request) {
+    const user = req.user as any;
+    return this.service.update(id, dto, user);
+  }
 
   @Delete(':id')
-  // @Permissions('surcharges:delete')
-  remove(@Param('id') id: string) { return this.service.remove(id); }
+  @Permissions('surcharges:delete')
+  remove(@Param('id') id: string, @Req() req: Request) {
+    const user = req.user as any;
+    return this.service.remove(id, user);
+  }
 }

@@ -23,11 +23,14 @@ import { useUpdateReservation, useCancelReservation, useConfirmReservation } fro
 import { confirmAction, toastSuccess } from '@/lib/notifications';
 import { useForm } from 'react-hook-form';
 import { printReceipt } from '@/components/checkout/receipt-ticket';
+import { useAuthStore } from '@/stores/auth.store';
+import Swal from 'sweetalert2';
 
 interface EditReservationForm {
   fechaEntrada: string;
   fechaSalida: string;
   observaciones: string;
+  estado: string;
   direccion: string;
   ciudad: string;
   pais: string;
@@ -61,6 +64,8 @@ export function ReservationsListPage() {
   const [guestResults, setGuestResults] = useState<any[]>([]);
   const [selectedGuestId, setSelectedGuestId] = useState<string>('');
   const qc = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === 'admin';
 
   const contractMut = useMutation({
     mutationFn: ({ id, contratoFileId }: { id: string; contratoFileId: string }) =>
@@ -121,6 +126,7 @@ export function ReservationsListPage() {
       fechaEntrada: '',
       fechaSalida: '',
       observaciones: '',
+      estado: '',
       direccion: '',
       ciudad: '',
       pais: '',
@@ -148,6 +154,7 @@ export function ReservationsListPage() {
       fechaEntrada: res.fechaEntrada?.slice(0, 10) || '',
       fechaSalida: res.fechaSalida?.slice(0, 10) || '',
       observaciones: res.observaciones || '',
+      estado: res.estado || '',
       direccion: res.direccion || '',
       ciudad: res.ciudad || '',
       pais: res.pais || '',
@@ -182,6 +189,27 @@ export function ReservationsListPage() {
       fechaSalida: formData.fechaSalida || undefined,
       observaciones: formData.observaciones || undefined,
     };
+
+    const estadoChanged = isAdmin && formData.estado && formData.estado !== detailRes.estado;
+    const result = await Swal.fire({
+      title: '¿Guardar los cambios de la reserva?',
+      html: `
+        <div style="text-align:left;font-size:14px;line-height:1.8">
+          <div><strong>Reserva:</strong> ${detailRes.codigo}</div>
+          ${estadoChanged ? `<div><strong>Estado:</strong> ${detailRes.estado} → ${formData.estado}</div>` : ''}
+          <div style="margin-top:6px;color:#6b7280">Esta acción no se puede revertir.</div>
+        </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, guardar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#ef4444',
+    });
+    if (!result.isConfirmed) return;
+
+    if (estadoChanged) {
+      dto.estado = formData.estado;
+    }
     if (selectedGuestId && selectedGuestId !== detailRes.guestId) {
       dto.guestId = selectedGuestId;
     }
@@ -508,6 +536,23 @@ export function ReservationsListPage() {
                 </div>
               </div>
 
+              {isAdmin && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-primary">Estado (solo administrador)</label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    {...register('estado')}
+                  >
+                    <option value="pendiente">Pendiente</option>
+                    <option value="confirmada">Confirmada</option>
+                    <option value="checkin">Check-In</option>
+                    <option value="checkout">Check-Out</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">Al cambiar de estado se actualiza automáticamente el estado de la habitación.</p>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="text-xs font-medium">Observaciones</label>
                 <Input {...register('observaciones')} placeholder="Opcional" />
@@ -650,7 +695,7 @@ export function ReservationsListPage() {
                     Recibo
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => setDetailRes(null)}>Cerrar</Button>
-                  {(detailRes.estado === 'pendiente' || detailRes.estado === 'confirmada' || detailRes.estado === 'checkin') && (
+                  {(detailRes.estado === 'pendiente' || detailRes.estado === 'confirmada' || detailRes.estado === 'checkin' || isAdmin) && (
                     <Button type="submit" size="sm" disabled={updateMut.isPending}>
                       {updateMut.isPending ? 'Guardando...' : 'Guardar Cambios'}
                     </Button>

@@ -16,6 +16,8 @@ import { CashRegister } from '../cash-register/entities/cash-register.entity';
 import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
 import { ReciboCajaService } from '../recibo-caja/recibo-caja.service';
 import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
+import { JwtPayload } from '../auth/interfaces/auth.interface';
+import { ROLES } from '../../common/constants';
 
 @Injectable()
 export class ReservationsService {
@@ -398,15 +400,20 @@ export class ReservationsService {
     return savedPayment;
   }
 
-  async update(id: string, updateDto: UpdateReservationDto): Promise<Reservation> {
+  async update(id: string, updateDto: UpdateReservationDto, user?: JwtPayload): Promise<Reservation> {
     const reservation = await this.findOne(id);
+    const isAdmin = user?.role === ROLES.ADMIN;
 
-    if (!['pendiente', 'confirmada', 'checkin'].includes(reservation.estado)) {
+    if (!isAdmin && !['pendiente', 'confirmada', 'checkin'].includes(reservation.estado)) {
       throw new BadRequestException('No se puede modificar una reserva en este estado');
     }
 
-    if (reservation.origen !== 'directo') {
+    if (!isAdmin && reservation.origen !== 'directo') {
       throw new BadRequestException('No se puede modificar una reserva de OTA');
+    }
+
+    if (updateDto.estado && updateDto.estado !== reservation.estado && !isAdmin) {
+      throw new BadRequestException('Solo el administrador puede cambiar el estado de la reserva');
     }
 
     if (updateDto.guestId && updateDto.guestId !== reservation.guestId) {
@@ -449,11 +456,49 @@ export class ReservationsService {
       throw new ConflictException('La habitación ya está reservada en esas fechas');
     }
 
+    const oldRoomId = reservation.roomId;
+    const oldEstado = reservation.estado;
+
     Object.assign(reservation, updateDto);
     if (updateDto.fechaEntrada) reservation.fechaEntrada = fechaEntrada;
     if (updateDto.fechaSalida) reservation.fechaSalida = fechaSalida;
 
-    return this.reservationRepository.save(reservation);
+    const saved = await this.reservationRepository.save(reservation);
+
+    if (isAdmin) {
+      await this.syncRoomForEstado(saved, oldEstado, oldRoomId);
+    }
+
+    return saved;
+  }
+
+  private async syncRoomForEstado(reservation: Reservation, oldEstado: string, oldRoomId: string) {
+    const roomTarget: Record<string, Room['estado']> = {
+      checkin: 'ocupada',
+      checkout: 'disponible',
+      cancelada: 'disponible',
+      confirmada: 'reservada',
+      pendiente: 'disponible',
+    };
+    const target = roomTarget[reservation.estado];
+    if (!target) return;
+
+    if (oldRoomId !== reservation.roomId) {
+      const otherActive = await this.reservationRepository.count({
+        where: {
+          roomId: oldRoomId,
+          id: Not(reservation.id),
+          estado: In(['confirmada', 'checkin']),
+        },
+      });
+      if (!otherActive) {
+        await this.roomRepository.update(oldRoomId, { estado: 'disponible' });
+      }
+    }
+
+    if (oldEstado !== reservation.estado || oldRoomId !== reservation.roomId) {
+      await this.roomRepository.update(reservation.roomId, { estado: target });
+    }
   }
 
   async changeRoom(id: string, newRoomId: string, userId?: string): Promise<Reservation> {
@@ -640,5 +685,40 @@ export class ReservationsService {
 
     const updated = await this.findOne(id);
     return this.withBalance(updated);
+  }
+
+  async autoExtendOverdueCheckins(): Promise<number> {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const overdue = await this.reservationRepository.find({
+      where: {
+        estado: 'checkin',
+      },
+      relations: ['guest'],
+    });
+
+    const pending = overdue.filter((r) => {
+      const salida = new Date(r.fechaSalida);
+      salida.setHours(0, 0, 0, 0);
+      return salida.getTime() < hoy.getTime();
+    });
+
+    let count = 0;
+    for (const r of pending) {
+      const nightsToAdd = Math.max(
+        1,
+        Math.ceil((hoy.getTime() - new Date(r.fechaSalida).getTime()) / (1000 * 60 * 60 * 24)),
+      );
+      r.fechaSalida = new Date(hoy);
+      r.observaciones = [
+        r.observaciones,
+        `[Auto] Fecha de salida vencida: se añadió ${nightsToAdd} noche(s), nueva salida ${hoy.toLocaleDateString('es-CO')}`,
+      ].filter(Boolean).join(' | ');
+      await this.reservationRepository.save(r);
+      count++;
+    }
+
+    return count;
   }
 }

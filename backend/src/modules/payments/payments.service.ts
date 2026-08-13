@@ -1,14 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { Payment } from './entities/payment.entity';
 import { Order } from '../orders/entities/order.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
+import { ReciboCaja } from '../recibo-caja/entities/recibo-caja.entity';
 import { ReciboCajaPago } from '../recibo-caja/entities/recibo-caja-pago.entity';
 import { CashRegister } from '../cash-register/entities/cash-register.entity';
-import { CreatePaymentDto, ChangeMetodoPagoDto } from './dto/create-payment.dto';
+import { CreatePaymentDto, ChangeMetodoPagoDto, UpdatePaymentDto } from './dto/create-payment.dto';
 import { FinancialMovementsService } from '../financial-movements/financial-movements.service';
 import { FinancialAccountsService } from '../financial-accounts/financial-accounts.service';
 import { PaymentMethodsService } from '../payment-methods/payment-methods.service';
+import { JwtPayload } from '../auth/interfaces/auth.interface';
+import { ROLES } from '../../common/constants';
 
 @Injectable()
 export class PaymentsService {
@@ -17,6 +21,10 @@ export class PaymentsService {
     private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(Order)
     private readonly orderRepo: Repository<Order>,
+    @InjectRepository(Reservation)
+    private readonly reservationRepo: Repository<Reservation>,
+    @InjectRepository(ReciboCaja)
+    private readonly reciboRepo: Repository<ReciboCaja>,
     @InjectRepository(ReciboCajaPago)
     private readonly reciboPagoRepo: Repository<ReciboCajaPago>,
     @InjectRepository(CashRegister)
@@ -189,6 +197,133 @@ export class PaymentsService {
     return this.paymentRepo.findOne({
       where: { id: saved.id },
       relations: ['metodoPago', 'metodoPago.financialAccount'],
+    });
+  }
+
+  async update(paymentId: string, dto: UpdatePaymentDto, user: JwtPayload) {
+    if (user.role !== ROLES.ADMIN) {
+      throw new ForbiddenException('Solo el administrador puede editar un pago');
+    }
+
+    const payment = await this.paymentRepo.findOne({
+      where: { id: paymentId },
+      relations: ['reservation', 'metodoPago', 'metodoPago.financialAccount', 'order'],
+    });
+    if (!payment) {
+      throw new NotFoundException('Pago no encontrado');
+    }
+
+    const oldMonto = Number(payment.monto);
+    const oldMetodoPagoId = payment.metodoPagoId;
+    const oldReservationId = payment.reservationId;
+
+    let newMetodoPagoId: string | null = dto.metodoPagoId === undefined ? oldMetodoPagoId : (dto.metodoPagoId || null);
+    let newReservationId: string | null = dto.reservationId === undefined ? oldReservationId : (dto.reservationId || null);
+
+    const newMonto = dto.monto !== undefined ? Number(dto.monto) : oldMonto;
+    if (newMonto < 0) {
+      throw new BadRequestException('El monto no puede ser negativo');
+    }
+
+    let newMethod = null;
+    if (newMetodoPagoId) {
+      newMethod = newMetodoPagoId !== oldMetodoPagoId
+        ? await this.paymentMethodsService.findOne(newMetodoPagoId)
+        : payment.metodoPago;
+    }
+
+    let newReservation = null;
+    if (newReservationId && newReservationId !== oldReservationId) {
+      newReservation = await this.reservationRepo.findOne({
+        where: { id: newReservationId },
+        relations: ['room'],
+      });
+      if (!newReservation) {
+        throw new NotFoundException('Reserva no encontrada');
+      }
+    }
+
+    const oldAccountId = payment.metodoPago?.financialAccountId || null;
+    const newAccountId = newMethod?.financialAccountId || null;
+    const oldTipo = payment.metodoPago?.tipo || 'otros';
+    const newTipo = newMethod?.tipo || 'otros';
+
+    const cashRegister = await this.cashRegisterRepository.findOne({ where: { estado: 'abierta' } });
+    if (cashRegister) {
+      if (oldTipo !== newTipo || oldMonto !== newMonto) {
+        this.applyCajaBucket(cashRegister, oldTipo, oldMonto, -1);
+        cashRegister.totalVentas = Math.max(0, Number(cashRegister.totalVentas) - oldMonto);
+        this.applyCajaBucket(cashRegister, newTipo, newMonto, 1);
+        cashRegister.totalVentas = Number(cashRegister.totalVentas) + newMonto;
+        await this.cashRegisterRepository.save(cashRegister);
+      }
+    }
+
+    const reciboPagos = await this.reciboPagoRepo.find({
+      where: { referenciaTipo: 'payment', referenciaId: payment.id },
+    });
+
+    const codigo = payment.reservation?.codigo || 'Pago';
+    const newNombre = newMethod?.nombre || 'Pago';
+    await this.financialMovementsService.replaceIngresoByReferencia(
+      'payment',
+      payment.id,
+      {
+        accountId: newAccountId,
+        monto: newMonto,
+        reservationId: newReservationId,
+        concepto: `${payment.observaciones?.split(' - ')[0] || 'Pago'} ${codigo} - ${newNombre}`,
+        reciboId: reciboPagos[0]?.reciboId || null,
+        cashRegisterId: cashRegister?.id || null,
+      },
+      user.sub,
+    );
+
+    if (reciboPagos.length > 0) {
+      for (const rp of reciboPagos) {
+        rp.monto = newMonto;
+        rp.metodoPagoId = newMetodoPagoId as string;
+        rp.cuentaId = newAccountId || '';
+        await this.reciboPagoRepo.save(rp);
+      }
+
+      const recibo = await this.reciboRepo.findOne({ where: { id: reciboPagos[0].reciboId } });
+      if (recibo) {
+        const allPagos = await this.reciboPagoRepo.find({ where: { reciboId: recibo.id } });
+        const subtotal = allPagos.reduce((s, p) => s + Number(p.monto), 0);
+        recibo.subtotal = subtotal;
+        recibo.total = Math.max(0, subtotal - Number(recibo.descuento || 0));
+        if (newReservationId !== undefined) {
+          recibo.reservationId = newReservationId as string;
+        }
+        await this.reciboRepo.save(recibo);
+      }
+    }
+
+    payment.monto = newMonto;
+    payment.metodoPagoId = newMetodoPagoId as string;
+    if (newReservationId !== undefined) {
+      payment.reservationId = newReservationId as string;
+      payment.roomId = (newReservation?.roomId ?? null) as string;
+    }
+    if (dto.comprobante !== undefined) payment.comprobante = dto.comprobante;
+    if (dto.observaciones !== undefined) payment.observaciones = dto.observaciones;
+
+    const saved = await this.paymentRepo.save(payment);
+
+    if (payment.orderId) {
+      const order = await this.orderRepo.findOne({ where: { id: payment.orderId } });
+      if (order) {
+        const existingPayments = await this.paymentRepo.find({ where: { orderId: payment.orderId } });
+        const paidTotal = existingPayments.reduce((sum, p) => sum + Number(p.monto), 0);
+        order.estado = paidTotal >= Number(order.total) ? 'pagado' : 'pendiente';
+        await this.orderRepo.save(order);
+      }
+    }
+
+    return this.paymentRepo.findOne({
+      where: { id: saved.id },
+      relations: ['reservation', 'metodoPago', 'metodoPago.financialAccount'],
     });
   }
 

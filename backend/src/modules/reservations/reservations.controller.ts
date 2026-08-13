@@ -5,6 +5,7 @@ import { ReservationsService } from './reservations.service';
 import { CreateReservationDto, UpdateReservationDto, CancelReservationDto, ReservationFilterDto, ChangeRoomDto, AddAbonoDto } from './dto/create-reservation.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
+import { JwtPayload } from '../auth/interfaces/auth.interface';
 
 class UpdateContractDto {
   @ApiProperty()
@@ -59,8 +60,8 @@ export class ReservationsController {
   @Put(':id')
   @Permissions('reservations:edit')
   @ApiOperation({ summary: 'Modificar reserva' })
-  async update(@Param('id') id: string, @Body() updateDto: UpdateReservationDto) {
-    return this.reservationsService.update(id, updateDto);
+  async update(@Param('id') id: string, @Body() updateDto: UpdateReservationDto, @CurrentUser() user: JwtPayload) {
+    return this.reservationsService.update(id, updateDto, user);
   }
 
   @Put(':id/cancel')

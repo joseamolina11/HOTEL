@@ -21,6 +21,11 @@ export const surchargesApi = {
     return data?.data ?? data;
   },
 
+  update: async (id: string, dto: any) => {
+    const { data } = await apiClient.put(`/surcharges/${id}`, dto);
+    return data?.data ?? data;
+  },
+
   remove: async (id: string) => {
     await apiClient.delete(`/surcharges/${id}`);
   },

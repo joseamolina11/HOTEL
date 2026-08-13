@@ -12,8 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@
 import { Badge } from '@/components/ui/badge';
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { Plus, X, ShoppingCart, Search, Loader2, Minus, Package, Ban, CreditCard, Pencil } from 'lucide-react';
-import { toastSuccess } from '@/lib/notifications';
+import { toastSuccess, toastError } from '@/lib/notifications';
 import { formatDateTime, formatCurrency } from '@/lib/utils';
+import Swal from 'sweetalert2';
 
 const ALL_ROOMS = '__all__';
 
@@ -192,11 +193,30 @@ function OrderDetailDialog({ order, onClose, onEdit }: { order: any; onClose: ()
 
   if (!order) return null;
 
+  const hoursSinceCreation = order.createdAt
+    ? (Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60)
+    : 0;
+  const canAnnul = hoursSinceCreation <= 24;
+
   const handleCancel = async () => {
-    if (!confirm('¿Anular este pedido? Se revertirá el inventario y los movimientos contables.')) return;
-    await cancelMut.mutateAsync(order.id);
-    toastSuccess('Pedido anulado');
-    onClose();
+    const result = await Swal.fire({
+      title: '¿Anular este pedido?',
+      text: 'Se revertirá el inventario y los movimientos contables. Esta acción no se puede revertir.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, anular',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#ef4444',
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await cancelMut.mutateAsync(order.id);
+      toastSuccess('Pedido anulado');
+      onClose();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'No se pudo anular el pedido';
+      toastError(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
   };
 
   return (
@@ -290,10 +310,16 @@ function OrderDetailDialog({ order, onClose, onEdit }: { order: any; onClose: ()
               </Button>
             )}
             {(order.estado === 'borrador' || order.estado === 'pendiente' || order.estado === 'pagado') && (
-              <Button variant="destructive" onClick={handleCancel} disabled={cancelMut.isPending}>
-                {cancelMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Ban className="h-4 w-4 mr-1" />}
-                {order.estado === 'pagado' ? 'Anular Pedido' : 'Cancelar Pedido'}
-              </Button>
+              canAnnul ? (
+                <Button variant="destructive" onClick={handleCancel} disabled={cancelMut.isPending}>
+                  {cancelMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Ban className="h-4 w-4 mr-1" />}
+                  {order.estado === 'pagado' ? 'Anular Pedido' : 'Cancelar Pedido'}
+                </Button>
+              ) : (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Ban className="h-4 w-4" /> No se puede anular: el pedido tiene más de 24 horas de creado
+                </span>
+              )
             )}
             <DialogClose asChild>
               <Button variant="outline">Cerrar</Button>
@@ -317,6 +343,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
   const [activeCategory, setActiveCategory] = useState('');
   const [pagos, setPagos] = useState<{ metodoPagoId: string; monto: number }[]>([]);
   const [editRoomId, setEditRoomId] = useState('');
+  const [pagoDirty, setPagoDirty] = useState(false);
   const createMut = useCreateOrder();
   const updateMut = useUpdateOrder();
 
@@ -376,6 +403,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
       setEditRoomId('');
     }
     setPagos([]);
+    setPagoDirty(false);
   }, [open, editOrder]);
 
   const currentProducts = categoryMap.get(activeCategory) || [];
@@ -414,6 +442,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
   };
 
   const updatePago = (index: number, field: string, value: any) => {
+    if (field === 'monto') setPagoDirty(true);
     const updated = [...pagos];
     (updated[index] as any)[field] = field === 'monto' ? Number(value) || 0 : value;
     setPagos(updated);
@@ -424,18 +453,71 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
   };
 
   useEffect(() => {
-    if (!isDirectSale) return;
+    if (!isDirectSale || pagoDirty) return;
     if (total > 0 && pagos.length === 0) {
       setPagos([{ monto: total, metodoPagoId: '' }]);
+    } else if (total > 0 && pagos.length === 1) {
+      setPagos([{ ...pagos[0], monto: total }]);
     }
-  }, [total, isDirectSale]);
+  }, [total, isDirectSale, pagoDirty, pagos.length]);
 
   const handleSubmit = async () => {
     if (items.length === 0) return;
     const itemsDto = items.map((i) => ({ inventoryItemId: i.inventoryItemId, cantidad: i.cantidad, precioUnitario: i.precioUnitario }));
     const pagosValidos = pagos.filter((p) => p.monto > 0 && p.metodoPagoId);
+    const metodoNombre = (id: string) => paymentMethods.find((pm: any) => pm.id === id)?.nombre || id;
 
-    if (isEditMode && editOrder) {
+    if (isDirectSale) {
+      const totalPagadoValido = pagosValidos.reduce((sum, p) => sum + (p.monto || 0), 0);
+      if (totalPagadoValido <= 0) {
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Falta el método de pago',
+          text: 'Para vender debe seleccionar el método de pago de cada pago. Verifique que los productos y los pagos estén completos.',
+          confirmButtonColor: '#ef4444',
+          showCancelButton: true,
+        });
+        return;
+      }
+
+      const metodoPagoTexto = pagosValidos.length === 1
+        ? metodoNombre(pagosValidos[0].metodoPagoId)
+        : pagosValidos.map((p) => `${metodoNombre(p.metodoPagoId)} (${formatCurrency(p.monto)})`).join(', ');
+
+      const result = await Swal.fire({
+        title: '¿Confirmar la venta?',
+        html: `
+          <div style="text-align:left;font-size:14px;line-height:1.8">
+            <div><strong>Productos:</strong> ${items.length} ítem(s) — <strong>${formatCurrency(total)}</strong></div>
+            <div><strong>Método de pago:</strong> ${metodoPagoTexto}</div>
+            <div style="margin-top:6px;color:#6b7280">Verifique que los pedidos y el método de pago estén seleccionados. Esta acción no se puede revertir.</div>
+          </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, vender',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#16a34a',
+      });
+      if (!result.isConfirmed) return;
+
+      await createMut.mutateAsync({
+        ventaDirecta: true,
+        items: itemsDto,
+        pagos: pagosValidos,
+      });
+      toastSuccess('Venta directa creada');
+    } else if (isEditMode && editOrder) {
+      const result = await Swal.fire({
+        title: '¿Guardar los cambios del pedido?',
+        text: `Se actualizará el pedido ${editOrder.codigo} por ${formatCurrency(total)}. Esta acción no se puede revertir.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, guardar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#ef4444',
+      });
+      if (!result.isConfirmed) return;
+
       await updateMut.mutateAsync({
         id: editOrder.id,
         dto: {
@@ -444,14 +526,18 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
         },
       });
       toastSuccess('Pedido actualizado');
-    } else if (isDirectSale) {
-      await createMut.mutateAsync({
-        ventaDirecta: true,
-        items: itemsDto,
-        ...(pagosValidos.length > 0 ? { pagos: pagosValidos } : {}),
-      });
-      toastSuccess('Venta directa creada');
     } else {
+      const result = await Swal.fire({
+        title: '¿Agregar el pedido a la habitación?',
+        text: `Se registrará el pedido por ${formatCurrency(total)} en la habitación. Esta acción no se puede revertir.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, agregar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#ef4444',
+      });
+      if (!result.isConfirmed) return;
+
       await createMut.mutateAsync({
         roomId,
         reservationId: reservationId || undefined,
@@ -463,6 +549,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
     setItems([]);
     setActiveCategory('');
     setPagos([]);
+    setPagoDirty(false);
     setEditRoomId('');
     onSuccess();
   };
@@ -470,7 +557,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
   const isLoading = createMut.isPending || updateMut.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setItems([]); setActiveCategory(''); setPagos([]); setEditRoomId(''); } }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setItems([]); setActiveCategory(''); setPagos([]); setPagoDirty(false); setEditRoomId(''); } }}>
       <DialogContent className="max-w-6xl max-h-[95vh] p-0 gap-0 overflow-hidden">
         <div className="flex flex-col h-[calc(95vh-2rem)]">
           <div className="flex items-center justify-between border-b px-6 py-3">
@@ -478,7 +565,7 @@ function CreateOrderDialog({ open, onClose, roomId, reservationId, editOrder, on
               <Package className="h-5 w-5" />
               {isEditMode ? `Editar Pedido ${editOrder?.codigo}` : isDirectSale ? 'Venta Directa — POS' : 'Nuevo Pedido — POS'}
             </DialogTitle>
-            <button type="button" onClick={() => { onClose(); setItems([]); setActiveCategory(''); setPagos([]); setEditRoomId(''); }} className="text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={() => { onClose(); setItems([]); setActiveCategory(''); setPagos([]); setPagoDirty(false); setEditRoomId(''); }} className="text-muted-foreground hover:text-foreground">
               <X className="h-5 w-5" />
             </button>
           </div>

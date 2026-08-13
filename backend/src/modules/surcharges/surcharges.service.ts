@@ -80,23 +80,31 @@ export class SurchargesService {
     return this.surchargeRepository.save(surcharge);
   }
 
-  async update(id: string, dto: Partial<CreateSurchargeDto>): Promise<Surcharge> {
+  async update(id: string, dto: Partial<CreateSurchargeDto>, user?: { sub?: string; role?: string }): Promise<Surcharge> {
     const s = await this.surchargeRepository.findOne({ where: { id } });
     if (!s) throw new NotFoundException('Recargo no encontrado');
-    if (s.estado === 'cargado') throw new BadRequestException('No se puede modificar un recargo que ya fue cargado');
-    if (dto.monto) s.monto = dto.monto;
-    if (dto.descripcion) s.descripcion = dto.descripcion;
-    if (dto.cantidad) s.cantidad = dto.cantidad;
+    const isAdmin = user?.role === 'admin';
+    if (s.estado === 'cargado' && !isAdmin) {
+      throw new BadRequestException('No se puede modificar un recargo que ya fue cargado');
+    }
+    if (dto.monto !== undefined) s.monto = dto.monto;
+    if (dto.descripcion !== undefined) s.descripcion = dto.descripcion;
+    if (dto.cantidad !== undefined) s.cantidad = dto.cantidad;
     if (dto.terceroId !== undefined) s.terceroId = dto.terceroId;
     if (dto.referencia !== undefined) s.referencia = dto.referencia;
-    s.subtotal = s.monto * s.cantidad;
+    if (dto.surchargeTypeId !== undefined) s.surchargeTypeId = dto.surchargeTypeId;
+    if (dto.fecha !== undefined) s.fecha = new Date(dto.fecha);
+    s.subtotal = Number(s.monto) * Number(s.cantidad || 1);
     return this.surchargeRepository.save(s);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, user?: { sub?: string; role?: string }): Promise<void> {
     const s = await this.surchargeRepository.findOne({ where: { id } });
     if (!s) throw new NotFoundException('Recargo no encontrado');
-    if (s.estado === 'cargado') throw new BadRequestException('No se puede eliminar un recargo que ya fue cargado');
+    const isAdmin = user?.role === 'admin';
+    if (s.estado === 'cargado' && !isAdmin) {
+      throw new BadRequestException('No se puede eliminar un recargo que ya fue cargado');
+    }
     s.deletedAt = new Date();
     await this.surchargeRepository.save(s);
   }

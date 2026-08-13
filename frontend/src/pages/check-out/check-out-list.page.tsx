@@ -11,6 +11,7 @@ import { toastSuccess } from '@/lib/notifications';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { useSearchParams } from 'react-router-dom';
 import { printReceipt } from '@/components/checkout/receipt-ticket';
+import Swal from 'sweetalert2';
 
 export function CheckOutListPage() {
   const qc = useQueryClient();
@@ -250,7 +251,27 @@ function StaySummaryContent({
   const totalPayments = payments.reduce((sum, p) => sum + Number(p.monto || 0), 0);
   const saldoRestante = s.saldoPendiente - totalPayments;
 
-  const handleCheckOut = () => {
+  const handleCheckOut = async () => {
+    const result = await Swal.fire({
+      title: '¿Confirmar el Check-Out?',
+      html: `
+        <div style="text-align:left;font-size:14px;line-height:1.8">
+          <div><strong>Reserva:</strong> ${data.reservation.codigo}</div>
+          <div><strong>Huésped:</strong> ${data.reservation.guest?.nombres || ''} ${data.reservation.guest?.apellidos || ''}</div>
+          ${totalPayments > 0 ? `<div><strong>A cobrar ahora:</strong> ${formatCurrency(totalPayments)}</div>` : ''}
+          ${saldoRestante > 0 ? `<div><strong>Saldo PENDIENTE:</strong> ${formatCurrency(saldoRestante)}</div>` : ''}
+          ${totalPayments > 0 ? `<div><strong>Métodos de pago:</strong> ${payments.map((p) => paymentMethods?.find((pm: any) => pm.id === p.metodoPagoId)?.nombre || 'Método no encontrado').join(', ')}</div>` : ''}
+          ${saldoRestante > 0 ? `<div style="color:#ef4444"><strong>TIENE SALDO PENDIENTE</strong></div>` : ''}
+          <div style="margin-top:6px;color:#6b7280">Esta acción cierra la estadía y no se puede revertir.</div>
+        </div>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, confirmar check-out',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#ef4444',
+    });
+    if (!result.isConfirmed) return;
+
     checkOutMut.mutate({
       reservationId: data.reservation.id,
       observaciones,

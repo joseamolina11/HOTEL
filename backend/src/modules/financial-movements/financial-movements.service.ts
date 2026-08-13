@@ -49,6 +49,43 @@ export class FinancialMovementsService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
+  async findByReferencia(referenciaTipo: string, referenciaId: string) {
+    return this.repo.find({ where: { referenciaTipo, referenciaId } });
+  }
+
+  async replaceIngresoByReferencia(
+    referenciaTipo: string,
+    referenciaId: string,
+    data: { accountId?: string | null; monto: number; reservationId?: string | null; concepto?: string; reciboId?: string | null; cashRegisterId?: string | null },
+    userId?: string,
+  ) {
+    const movements = await this.repo.find({ where: { referenciaTipo, referenciaId } });
+
+    for (const m of movements) {
+      const amt = Number(m.monto);
+      if (['INGRESO', 'TRANSFERENCIA_ENTRADA', 'APERTURA_CAJA'].includes(m.tipo)) {
+        await this.accountsService.updateBalance(m.accountId, -amt);
+      } else if (['EGRESO', 'TRANSFERENCIA_SALIDA'].includes(m.tipo)) {
+        await this.accountsService.updateBalance(m.accountId, amt);
+      }
+      await this.repo.delete(m.id);
+    }
+
+    if (!data.accountId) return null;
+
+    return this.create({
+      accountId: data.accountId,
+      tipo: 'INGRESO',
+      monto: data.monto,
+      concepto: data.concepto || 'Pago editado',
+      referenciaTipo,
+      referenciaId,
+      reciboId: data.reciboId || undefined,
+      cashRegisterId: data.cashRegisterId || undefined,
+      reservationId: data.reservationId || undefined,
+    }, userId);
+  }
+
   async findOne(id: string) {
     const movement = await this.repo.findOne({
       where: { id },
