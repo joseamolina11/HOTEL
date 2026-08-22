@@ -220,6 +220,7 @@ export function Sidebar() {
         { to: '/reports', label: 'Terceros', icon: BarChart3, show: hasPerm('reports:view') },
         { to: '/reports/inventory', label: 'Inventario', icon: Package, show: hasPerm('reports:view') },
         { to: '/reports/supplies', label: 'Suministros', icon: Boxes, show: hasPerm('reports:view') },
+        { to: '/reports/cash-close', label: 'Cierre de Caja', icon: DollarSign, show: hasPerm('reports:view') },
       ],
     },
     {

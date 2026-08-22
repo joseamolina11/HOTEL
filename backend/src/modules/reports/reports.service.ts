@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Between } from 'typeorm';
 import { Surcharge } from '../surcharges/entities/surcharge.entity';
+import { CashRegister } from '../cash-register/entities/cash-register.entity';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 
 export interface SurchargeReportFilters {
   desde?: string;
@@ -10,15 +12,24 @@ export interface SurchargeReportFilters {
   terceroId?: string;
 }
 
+export interface CashCloseReportFilters {
+  desde?: string;
+  hasta?: string;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
     @InjectRepository(Surcharge)
     private readonly surchargeRepo: Repository<Surcharge>,
+    @InjectRepository(CashRegister)
+    private readonly cashRegisterRepo: Repository<CashRegister>,
+    private readonly cashRegisterService: CashRegisterService,
   ) {}
 
   async getSurchargesReport(filters: SurchargeReportFilters) {
-    const qb = this.surchargeRepo.createQueryBuilder('s')
+    const qb = this.surchargeRepo
+      .createQueryBuilder('s')
       .leftJoinAndSelect('s.surchargeType', 'surchargeType')
       .leftJoinAndSelect('surchargeType.tercero', 'surchargeTypeTercero')
       .leftJoinAndSelect('s.tercero', 'tercero')
@@ -50,7 +61,9 @@ export class ReportsService {
     const data = await qb.getMany();
 
     const total = data.reduce((sum, s) => sum + Number(s.subtotal), 0);
-    const porDispersar = data.filter((s) => !s.dispersado).reduce((sum, s) => sum + Number(s.subtotal), 0);
+    const porDispersar = data
+      .filter((s) => !s.dispersado)
+      .reduce((sum, s) => sum + Number(s.subtotal), 0);
 
     return {
       data,
@@ -69,5 +82,54 @@ export class ReportsService {
         : { dispersado: false, dispersadoAt: undefined as any },
     );
     return { updated: result.affected ?? 0 };
+  }
+
+  async getCashCloseReport(filters: CashCloseReportFilters) {
+    const qb = this.cashRegisterRepo
+      .createQueryBuilder('cr')
+      .leftJoinAndSelect('cr.user', 'user')
+      .leftJoinAndSelect('cr.account', 'account')
+      .where('cr.estado = :estado', { estado: 'cerrada' })
+      .orderBy('cr.fechaCierre', 'DESC');
+
+    if (filters.desde) {
+      qb.andWhere('cr.fechaCierre >= :desde', { desde: new Date(`${filters.desde}T00:00:00`) });
+    }
+    if (filters.hasta) {
+      qb.andWhere('cr.fechaCierre <= :hasta', { hasta: new Date(`${filters.hasta}T23:59:59`) });
+    }
+
+    const data = await qb.getMany();
+
+    const totals = data.reduce(
+      (acc, r) => {
+        acc.efectivo += Number(r.totalEfectivo) || 0;
+        acc.transferencia += Number(r.totalTransferencia) || 0;
+        acc.tarjeta += Number(r.totalTarjeta) || 0;
+        acc.otros += Number(r.totalOtros) || 0;
+        acc.ventas += Number(r.totalVentas) || 0;
+        return acc;
+      },
+      { efectivo: 0, transferencia: 0, tarjeta: 0, otros: 0, ventas: 0 },
+    );
+
+    return {
+      data,
+      totals,
+      total: totals.efectivo + totals.transferencia + totals.tarjeta + totals.otros,
+      count: data.length,
+    };
+  }
+
+  async getCashCloseDetail(id: string) {
+    const register = await this.cashRegisterService.findOne(id);
+    const movementsRes = await this.cashRegisterService.findMovements(id, 1, 1000);
+    const summary = await this.cashRegisterService.getSummary(id);
+
+    return {
+      register,
+      summary: summary.summary,
+      movements: movementsRes.movements.data,
+    };
   }
 }

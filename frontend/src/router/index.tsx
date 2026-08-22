@@ -42,6 +42,7 @@ import { TercerosPage } from '@/pages/terceros/terceros.page';
 import { ReportsPage } from '@/pages/reports/reports.page';
 import { InventoryReportPage } from '@/pages/reports/inventory-report.page';
 import { SuppliesReportPage } from '@/pages/reports/supplies-report.page';
+import { CashCloseReportPage } from '@/pages/reports/cash-close-report.page';
 import { GerencialPage } from '@/pages/statistics/gerencial.page';
 import { GerencialDashboardPage } from '@/pages/dashboard-gerencial/dashboard.page';
 import { CalendarGerencialPage } from '@/pages/dashboard-gerencial/calendar.page';
@@ -101,6 +102,7 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <ReportsPage /> },
       { path: 'reports/inventory', element: <InventoryReportPage /> },
       { path: 'reports/supplies', element: <SuppliesReportPage /> },
+      { path: 'reports/cash-close', element: <CashCloseReportPage /> },
       { path: 'statistics/gerencial', element: <GerencialPage /> },
       { path: 'dashboard-gerencial', element: <GerencialDashboardPage /> },
       { path: 'calendar-gerencial', element: <CalendarGerencialPage /> },
