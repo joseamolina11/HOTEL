@@ -211,17 +211,20 @@ export function Sidebar() {
         { to: '/tax-config', label: 'Impuestos', icon: Percent, show: hasPerm('tax-config:view') },
       ],
     },
-    {
-      id: 'reportes',
-      label: 'Reportes',
-      icon: BarChart3,
-      visible: hasPerm('reports:view'),
-      children: [
-        { to: '/reports', label: 'Terceros', icon: BarChart3, show: hasPerm('reports:view') },
-        { to: '/reports/inventory', label: 'Inventario', icon: Package, show: hasPerm('reports:view') },
-        { to: '/reports/supplies', label: 'Suministros', icon: Boxes, show: hasPerm('reports:view') },
-      ],
-    },
+{
+          id: 'reportes',
+          label: 'Reportes',
+          icon: BarChart3,
+          visible: hasPerm('reports:view'),
+          children: [
+            { to: '/reports', label: 'Terceros', icon: BarChart3, show: hasPerm('reports:view') },
+            { to: '/reports/inventory', label: 'Inventario', icon: Package, show: hasPerm('reports:view') },
+            { to: '/reports/supplies', label: 'Suministros', icon: Boxes, show: hasPerm('reports:view') },
+            { to: '/reports/cash-register', label: 'Caja', icon: DollarSign, show: hasPerm('reports:view') },
+            { to: '/reports/sales', label: 'Ventas', icon: ShoppingCart, show: hasPerm('reports:view') },
+            { to: '/reports/expenses', label: 'Gastos', icon: Receipt, show: hasPerm('reports:view') },
+          ],
+        },
     {
       id: 'control-registros',
       label: 'Control Registros',
