@@ -1,6 +1,6 @@
 import { Controller, Get, Put, Query, Body } from '@nestjs/common';
 import { ReportsService } from './reports.service';
-import { SurchargeReportQueryDto, DisperseSurchargesDto } from './dto/reports.dto';
+import { SurchargeReportQueryDto, DisperseSurchargesDto, CashRegisterReportQueryDto, SalesReportQueryDto, ExpensesReportQueryDto } from './dto/reports.dto';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
 
 @Controller('reports')
@@ -17,5 +17,23 @@ export class ReportsController {
   @Permissions('reports:disperse')
   disperse(@Body() dto: DisperseSurchargesDto) {
     return this.service.disperseSurcharges(dto.ids, dto.disperse !== false);
+  }
+
+  @Get('cash-register')
+  @Permissions('reports:view')
+  getCashRegisterReport(@Query() query: CashRegisterReportQueryDto) {
+    return this.service.getCashRegisterReport(query);
+  }
+
+  @Get('sales')
+  @Permissions('reports:view')
+  getSalesReport(@Query() query: SalesReportQueryDto) {
+    return this.service.getSalesReport(query);
+  }
+
+  @Get('expenses')
+  @Permissions('reports:view')
+  getExpensesReport(@Query() query: ExpensesReportQueryDto) {
+    return this.service.getExpensesReport(query);
   }
 }

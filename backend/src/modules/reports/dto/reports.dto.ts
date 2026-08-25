@@ -33,3 +33,39 @@ export class DisperseSurchargesDto {
   @IsBoolean()
   disperse?: boolean;
 }
+
+export class CashRegisterReportQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  desde?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  hasta?: string;
+}
+
+export class SalesReportQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  desde?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  hasta?: string;
+}
+
+export class ExpensesReportQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  desde?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  hasta?: string;
+}
