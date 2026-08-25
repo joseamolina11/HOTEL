@@ -48,7 +48,8 @@ export class ReportsService {
   ) {}
 
   async getSurchargesReport(filters: SurchargeReportFilters) {
-    const qb = this.surchargeRepo.createQueryBuilder('s')
+    const qb = this.surchargeRepo
+      .createQueryBuilder('s')
       .leftJoinAndSelect('s.surchargeType', 'surchargeType')
       .leftJoinAndSelect('surchargeType.tercero', 'surchargeTypeTercero')
       .leftJoinAndSelect('s.tercero', 'tercero')
@@ -80,7 +81,9 @@ export class ReportsService {
     const data = await qb.getMany();
 
     const total = data.reduce((sum, s) => sum + Number(s.subtotal), 0);
-    const porDispersar = data.filter((s) => !s.dispersado).reduce((sum, s) => sum + Number(s.subtotal), 0);
+    const porDispersar = data
+      .filter((s) => !s.dispersado)
+      .reduce((sum, s) => sum + Number(s.subtotal), 0);
 
     return {
       data,
