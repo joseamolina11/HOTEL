@@ -122,32 +122,106 @@ export class ReportsService {
 
     const data = await qb.getMany();
 
-    // Calculate totals by payment method
-    const totalsByMethod = {
+    // Calculate declared totals (what was written at closing)
+    const declaredTotals = {
       efectivo: 0,
       transferencia: 0,
       tarjeta: 0,
       otros: 0,
     };
+    let declaredTotalGeneral = 0;
+    let declaredTotalTransacciones = 0;
 
-    let totalGeneral = 0;
-    let totalTransacciones = 0;
+    // Calculate real totals from financial movements
+    const realTotals = {
+      efectivo: 0,
+      transferencia: 0,
+      tarjeta: 0,
+      otros: 0,
+    };
+    let realTotalGeneral = 0;
+    let realTotalTransacciones = 0;
 
+    // For each cash register, get its movements and calculate real totals
+    const registersWithMovements = await Promise.all(
+      data.map(async (cr) => {
+        // Get financial movements for this cash register
+        const movements = await this.financialMovementRepo.find({
+          where: { cashRegisterId: cr.id },
+          relations: ['account'],
+        });
+
+        // Calculate real totals from movements by payment method
+        const registerRealTotals = {
+          efectivo: 0,
+          transferencia: 0,
+          tarjeta: 0,
+          otros: 0,
+        };
+        let registerRealTotal = 0;
+        let registerRealCount = 0;
+
+        for (const m of movements) {
+          if (m.tipo === 'INGRESO' || m.tipo === 'EGRESO') {
+            let method = 'otros';
+            
+            // Resolve payment method from account
+            if (m.accountId) {
+              const pm = await this.paymentMethodRepo.findOne({
+                where: { financialAccountId: m.accountId },
+              });
+              if (pm?.tipo) method = pm.tipo;
+            }
+
+            const monto = Number(m.monto) || 0;
+            // @ts-ignore
+            registerRealTotals[method] = (registerRealTotals[method] || 0) + monto;
+            registerRealTotal += monto;
+            registerRealCount++;
+          }
+        }
+
+        return {
+          ...cr,
+          realTotals: registerRealTotals,
+          realTotalGeneral: registerRealTotal,
+          realTotalTransacciones: registerRealCount,
+          movementsCount: movements.length,
+        };
+      })
+    );
+
+    // Sum up declared totals
     for (const cr of data) {
-      totalsByMethod.efectivo += Number(cr.totalEfectivo || 0);
-      totalsByMethod.transferencia += Number(cr.totalTransferencia || 0);
-      totalsByMethod.tarjeta += Number(cr.totalTarjeta || 0);
-      totalsByMethod.otros += Number(cr.totalOtros || 0);
-      totalGeneral += Number(cr.totalVentas || 0);
-      totalTransacciones += Number(cr.cantidadTransacciones || 0);
+      declaredTotals.efectivo += Number(cr.totalEfectivo || 0);
+      declaredTotals.transferencia += Number(cr.totalTransferencia || 0);
+      declaredTotals.tarjeta += Number(cr.totalTarjeta || 0);
+      declaredTotals.otros += Number(cr.totalOtros || 0);
+      declaredTotalGeneral += Number(cr.totalVentas || 0);
+      declaredTotalTransacciones += Number(cr.cantidadTransacciones || 0);
+    }
+
+    // Sum up real totals
+    for (const cr of registersWithMovements) {
+      realTotals.efectivo += cr.realTotals.efectivo || 0;
+      realTotals.transferencia += cr.realTotals.transferencia || 0;
+      realTotals.tarjeta += cr.realTotals.tarjeta || 0;
+      realTotals.otros += cr.realTotals.otros || 0;
+      realTotalGeneral += cr.realTotalGeneral || 0;
+      realTotalTransacciones += cr.realTotalTransacciones || 0;
     }
 
     return {
-      data,
-      totals: {
-        ...totalsByMethod,
-        totalGeneral,
-        totalTransacciones,
+      data: registersWithMovements,
+      declaredTotals: {
+        ...declaredTotals,
+        totalGeneral: declaredTotalGeneral,
+        totalTransacciones: declaredTotalTransacciones,
+      },
+      realTotals: {
+        ...realTotals,
+        totalGeneral: realTotalGeneral,
+        totalTransacciones: realTotalTransacciones,
       },
       count: data.length,
     };
@@ -248,11 +322,18 @@ export class ReportsService {
   }
 
   async getExpensesReport(filters: ExpensesReportFilters) {
-    // Get all EGRESO movements (expenses/egresos)
+    // Get all EGRESO movements (expenses/egresos) - exclude anulación/cancelaciones
     const qb = this.financialMovementRepo.createQueryBuilder('fm')
       .leftJoinAndSelect('fm.account', 'account')
       .leftJoinAndSelect('fm.user', 'user')
       .where('fm.tipo = :tipo', { tipo: 'EGRESO' })
+      // Exclude movements related to anulación/cancelación
+      .andWhere('fm.concepto NOT ILIKE :anulacion', { anulacion: '%anulacion%' })
+      .andWhere('fm.concepto NOT ILIKE :anulada', { anulada: '%anulada%' })
+      .andWhere('fm.concepto NOT ILIKE :anulado', { anulado: '%anulado%' })
+      .andWhere('fm.concepto NOT ILIKE :cancelacion', { cancelacion: '%cancelacion%' })
+      .andWhere('fm.concepto NOT ILIKE :cancelado', { cancelado: '%cancelado%' })
+      .andWhere('fm.concepto NOT ILIKE :void', { void: '%void%' })
       .orderBy('fm.fechaMovimiento', 'DESC');
 
     if (filters.desde) {
@@ -296,12 +377,19 @@ export class ReportsService {
       methodTotals[method].count += 1;
     }
 
-    // Also get expenses directly for a more complete picture
+    // Also get expenses directly for a more complete picture - exclude anulación
     const expenseQb = this.expenseRepo.createQueryBuilder('e')
       .leftJoinAndSelect('e.metodoPago', 'metodoPago')
       .leftJoinAndSelect('e.category', 'category')
       .leftJoinAndSelect('e.createdBy', 'createdBy')
       .leftJoinAndSelect('e.supplier', 'supplier')
+      // Exclude anulación/cancelación
+      .andWhere('e.concepto NOT ILIKE :anulacion', { anulacion: '%anulacion%' })
+      .andWhere('e.concepto NOT ILIKE :anulada', { anulada: '%anulada%' })
+      .andWhere('e.concepto NOT ILIKE :anulado', { anulado: '%anulado%' })
+      .andWhere('e.concepto NOT ILIKE :cancelacion', { cancelacion: '%cancelacion%' })
+      .andWhere('e.concepto NOT ILIKE :cancelado', { cancelado: '%cancelado%' })
+      .andWhere('e.concepto NOT ILIKE :void', { void: '%void%' })
       .orderBy('e.fecha', 'DESC');
 
     if (filters.desde) {

@@ -31,13 +31,13 @@ export function CashCloseReportPage() {
 
   const { data: report, isLoading, refetch } = useQuery({
     queryKey: ['reports', 'cash-close', desde, hasta],
-    queryFn: () => reportsApi.getCashCloseReport(desde || hasta ? { desde: desde || undefined, hasta: hasta || undefined } : undefined),
+    queryFn: () => reportsApi.getCashRegisterReport(desde || hasta ? { desde: desde || undefined, hasta: hasta || undefined } : undefined),
     enabled: false,
   });
 
   const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ['reports', 'cash-close', 'detail', detailId],
-    queryFn: () => reportsApi.getCashCloseDetail(detailId!),
+    queryFn: () => {},
     enabled: !!detailId,
   });
 

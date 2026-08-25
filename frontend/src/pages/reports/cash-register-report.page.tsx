@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Download, Printer, Loader2, Eye, FileSpreadsheet } from 'lucide-react';
+import { Download, Printer, Loader2, Eye, FileSpreadsheet, AlertTriangle } from 'lucide-react';
 import { formatDateShort, formatDateTime, formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
 
@@ -14,6 +14,7 @@ export function CashRegisterReportPage() {
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [selectedRegister, setSelectedRegister] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<'declared' | 'real'>('declared');
 
   const { data: report, isLoading, refetch } = useQuery({
     queryKey: ['reports', 'cash-register', desde, hasta],
@@ -22,7 +23,9 @@ export function CashRegisterReportPage() {
   });
 
   const registers = report?.data || [];
-  const totals = report?.totals || {};
+  const declaredTotals = report?.declaredTotals || {};
+  const realTotals = report?.realTotals || {};
+  const totals = viewMode === 'declared' ? declaredTotals : realTotals;
 
   const runReport = () => {
     if (!desde && !hasta) {
@@ -64,7 +67,7 @@ export function CashRegisterReportPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `reporte-caja-${desde || 'inicio'}-${hasta || 'hoy'}.csv`;
+    a.download = `reporte-caja-${desde || 'inicio'}-${hasta || 'hoy'}-${viewMode}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toastSuccess('Reporte descargado');
@@ -102,7 +105,7 @@ export function CashRegisterReportPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `reporte-caja-${desde || 'inicio'}-${hasta || 'hoy'}.xls`;
+    a.download = `reporte-caja-${desde || 'inicio'}-${hasta || 'hoy'}-${viewMode}.xls`;
     a.click();
     URL.revokeObjectURL(url);
     toastSuccess('Excel descargado');
@@ -153,6 +156,17 @@ export function CashRegisterReportPage() {
               Transacciones: <span className="font-semibold text-foreground">{totals.totalTransacciones}</span>
             </div>
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 border rounded-lg px-3 py-1 bg-muted/50">
+                <span className="text-xs text-muted-foreground">Ver:</span>
+                <select
+                  value={viewMode}
+                  onChange={(e) => setViewMode(e.target.value as 'declared' | 'real')}
+                  className="text-sm bg-transparent border-none focus:outline-none"
+                >
+                  <option value="declared">Declarado (Escrito al cerrar)</option>
+                  <option value="real">Real (Según movimientos)</option>
+                </select>
+              </div>
               <Button variant="outline" size="sm" onClick={downloadCsv} disabled={registers.length === 0}>
                 <Download className="mr-1 h-4 w-4" /> Descargar
               </Button>
@@ -167,7 +181,12 @@ export function CashRegisterReportPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-semibold">Totales por Método de Pago</CardTitle>
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                Totales por Método de Pago
+                <span className={`text-xs px-2 py-0.5 rounded ${viewMode === 'declared' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                  {viewMode === 'declared' ? 'Declarado' : 'Real (Movimientos)'}
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
@@ -192,6 +211,32 @@ export function CashRegisterReportPage() {
                   <p className="text-2xl font-bold text-gray-900">{formatCurrency(totals.totalGeneral)}</p>
                 </div>
               </div>
+              
+              {Object.keys(declaredTotals).length > 0 && Object.keys(realTotals).length > 0 && (
+                <div className="rounded-lg bg-amber-50 p-3 border border-amber-200 mb-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <span className="font-medium text-amber-800">Comparación Declarado vs Real:</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-2 text-xs">
+                    {(['efectivo', 'transferencia', 'tarjeta', 'otros', 'totalGeneral'] as const).map((key) => {
+                      const declared = declaredTotals[key] || 0;
+                      const real = realTotals[key] || 0;
+                      const diff = real - declared;
+                      const diffColor = diff === 0 ? 'text-green-700' : diff > 0 ? 'text-blue-700' : 'text-red-700';
+                      const diffSign = diff > 0 ? '+' : '';
+                      return (
+                        <div key={key} className="text-center p-2 bg-white rounded border">
+                          <p className="font-medium text-muted-foreground capitalize">{key}</p>
+                          <p className="font-bold">Decl: {formatCurrency(declared)}</p>
+                          <p className="font-bold">Real: {formatCurrency(real)}</p>
+                          <p className={`font-bold ${diffColor}`}>Dif: {diffSign}{formatCurrency(diff)}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -221,40 +266,72 @@ export function CashRegisterReportPage() {
                         </td>
                       </tr>
                     ) : (
-                      registers.map((r: any) => (
-                        <tr key={r.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => handleViewDetail(r)}>
-                          <td className="px-4 py-3">{formatDateTime(r.fechaCierre)}</td>
-                          <td className="px-4 py-3 font-medium">
-                            {r.user?.nombres} {r.user?.apellidos}
-                          </td>
-                          <td className="px-4 py-3 text-right font-medium text-green-700">
-                            {formatCurrency(r.totalEfectivo)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-medium text-blue-700">
-                            {formatCurrency(r.totalTransferencia)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-medium text-purple-700">
-                            {formatCurrency(r.totalTarjeta)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-medium text-amber-700">
-                            {formatCurrency(r.totalOtros)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-bold">
-                            {formatCurrency(r.totalVentas)}
-                          </td>
-                          <td className="px-4 py-3 text-center">{r.cantidadTransacciones}</td>
-                          <td className="px-4 py-3 text-center">
-                            <Badge variant={Number(r.diferencia) === 0 ? 'success' : 'destructive'}>
-                              {formatCurrency(r.diferencia || 0)}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleViewDetail(r); }}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
+                      registers.map((r: any) => {
+                        const realEfectivo = r.realTotals?.efectivo ?? 0;
+                        const realTransferencia = r.realTotals?.transferencia ?? 0;
+                        const realTarjeta = r.realTotals?.tarjeta ?? 0;
+                        const realOtros = r.realTotals?.otros ?? 0;
+                        const realTotal = r.realTotalGeneral ?? 0;
+                        const realTrans = r.realTotalTransacciones ?? 0;
+                        
+                        const showReal = viewMode === 'real';
+                        const eff = showReal ? realEfectivo : (r.totalEfectivo || 0);
+                        const trans = showReal ? realTransferencia : (r.totalTransferencia || 0);
+                        const tarj = showReal ? realTarjeta : (r.totalTarjeta || 0);
+                        const oth = showReal ? realOtros : (r.totalOtros || 0);
+                        const tot = showReal ? realTotal : (r.totalVentas || 0);
+                        const trn = showReal ? realTrans : (r.cantidadTransacciones || 0);
+                        
+                        return (
+                          <tr key={r.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => handleViewDetail(r)}>
+                            <td className="px-4 py-3">{formatDateTime(r.fechaCierre)}</td>
+                            <td className="px-4 py-3 font-medium">
+                              {r.user?.nombres} {r.user?.apellidos}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-green-700">
+                              {formatCurrency(eff)}
+                              {showReal && r.totalEfectivo !== undefined && realEfectivo !== r.totalEfectivo && (
+                                <span className="ml-1 text-xs text-amber-600">(Decl: {formatCurrency(r.totalEfectivo)})</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-blue-700">
+                              {formatCurrency(trans)}
+                              {showReal && r.totalTransferencia !== undefined && realTransferencia !== r.totalTransferencia && (
+                                <span className="ml-1 text-xs text-amber-600">(Decl: {formatCurrency(r.totalTransferencia)})</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-purple-700">
+                              {formatCurrency(tarj)}
+                              {showReal && r.totalTarjeta !== undefined && realTarjeta !== r.totalTarjeta && (
+                                <span className="ml-1 text-xs text-amber-600">(Decl: {formatCurrency(r.totalTarjeta)})</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-amber-700">
+                              {formatCurrency(oth)}
+                              {showReal && r.totalOtros !== undefined && realOtros !== r.totalOtros && (
+                                <span className="ml-1 text-xs text-amber-600">(Decl: {formatCurrency(r.totalOtros)})</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold">
+                              {formatCurrency(tot)}
+                              {showReal && r.totalVentas !== undefined && realTotal !== r.totalVentas && (
+                                <span className="ml-1 text-xs text-amber-600">(Decl: {formatCurrency(r.totalVentas)})</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">{trn}</td>
+                            <td className="px-4 py-3 text-center">
+                              <Badge variant={Number(r.diferencia) === 0 ? 'success' : 'destructive'}>
+                                {formatCurrency(r.diferencia || 0)}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleViewDetail(r); }}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                   <tfoot className="bg-muted/50">
@@ -277,7 +354,7 @@ export function CashRegisterReportPage() {
           </Card>
 
           <div className="hidden print:block text-xs mt-4">
-            <p>Generado el {new Date().toLocaleDateString()} · Rango: {desde || 'inicio'} a {hasta || 'hoy'}</p>
+            <p>Generado el {new Date().toLocaleDateString()} · Rango: {desde || 'inicio'} a {hasta || 'hoy'} · Vista: {viewMode === 'declared' ? 'Declarado' : 'Real'}</p>
           </div>
         </>
       )}

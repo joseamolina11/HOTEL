@@ -5,13 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Download, Printer, Loader2, FileSpreadsheet } from 'lucide-react';
+import { Download, Printer, Loader2, FileSpreadsheet, Eye } from 'lucide-react';
 import { formatDateShort, formatDateTime, formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
+import { ExpenseDetailDialog } from '@/components/dialogs/expense-detail-dialog';
 
 export function ExpensesReportPage() {
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
 
   const { data: report, isLoading, refetch } = useQuery({
     queryKey: ['reports', 'expenses', desde, hasta],
@@ -30,6 +32,7 @@ export function ExpensesReportPage() {
       alert('Seleccione un rango de fechas');
       return;
     }
+    setSelectedExpenseId(null);
     refetch();
   };
 
@@ -90,6 +93,15 @@ export function ExpensesReportPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleViewDetail = (item: any) => {
+    // If it's a financial movement with expense reference, use that expense ID
+    // If it's an expense directly, use its ID
+    const expenseId = item.referenciaTipo === 'expense' ? item.referenciaId : (item.fechaMovimiento ? null : item.id);
+    if (expenseId) {
+      setSelectedExpenseId(expenseId);
+    }
   };
 
   return (
@@ -175,12 +187,13 @@ export function ExpensesReportPage() {
                       <th className="px-4 py-3 text-left font-medium">Usuario</th>
                       <th className="px-4 py-3 text-left font-medium">Proveedor</th>
                       <th className="px-4 py-3 text-center font-medium">Origen</th>
+                      <th className="px-4 py-3 text-center font-medium">Detalle</th>
                     </tr>
                   </thead>
                   <tbody>
                     {totalCount === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                        <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                           Sin gastos en el rango seleccionado
                         </td>
                       </tr>
@@ -194,9 +207,10 @@ export function ExpensesReportPage() {
                         const usuario = item.user?.nombres ? `${item.user.nombres} ${item.user.apellidos || ''}` : (item.createdBy?.nombres ? `${item.createdBy.nombres} ${item.createdBy.apellidos || ''}` : '—');
                         const proveedor = item.supplier?.nombre || '—';
                         const origen = item.fechaMovimiento ? 'Movimiento' : 'Gasto';
+                        const hasExpenseDetail = item.referenciaTipo === 'expense' ? !!item.referenciaId : !!item.id;
 
                         return (
-                          <tr key={item.id} className="border-b hover:bg-muted/50">
+                          <tr key={item.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => handleViewDetail(item)}>
                             <td className="px-4 py-3">{fecha}</td>
                             <td className="px-4 py-3 max-w-[200px] truncate">{concepto}</td>
                             <td className="px-4 py-3">{categoria}</td>
@@ -209,6 +223,13 @@ export function ExpensesReportPage() {
                             <td className="px-4 py-3 text-center">
                               <Badge variant="secondary" className="text-xs">{origen}</Badge>
                             </td>
+                            <td className="px-4 py-3 text-center">
+                              {hasExpenseDetail && (
+                                <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleViewDetail(item); }} title="Ver detalle">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </td>
                           </tr>
                         );
                       })
@@ -219,7 +240,7 @@ export function ExpensesReportPage() {
                       <th className="px-4 py-3 text-left font-medium">TOTAL</th>
                       <th className="px-4 py-3" colSpan={3}></th>
                       <th className="px-4 py-3 text-right font-bold text-red-700">{formatCurrency(totalEgresos)}</th>
-                      <th className="px-4 py-3" colSpan={3}></th>
+                      <th className="px-4 py-3" colSpan={4}></th>
                     </tr>
                   </tfoot>
                 </table>
@@ -232,6 +253,8 @@ export function ExpensesReportPage() {
           </div>
         </>
       )}
+
+      <ExpenseDetailDialog expenseId={selectedExpenseId} open={!!selectedExpenseId} onClose={() => setSelectedExpenseId(null)} />
     </div>
   );
 }
