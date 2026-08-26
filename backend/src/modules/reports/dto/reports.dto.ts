@@ -23,18 +23,6 @@ export class SurchargeReportQueryDto {
   terceroId?: string;
 }
 
-export class CashCloseReportQueryDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  desde?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  hasta?: string;
-}
-
 export class DisperseSurchargesDto {
   @ApiPropertyOptional({ type: [String] })
   @IsArray()
@@ -47,18 +35,6 @@ export class DisperseSurchargesDto {
 }
 
 export class CashRegisterReportQueryDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  desde?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  hasta?: string;
-}
-
-export class SalesReportQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()

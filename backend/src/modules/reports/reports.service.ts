@@ -4,7 +4,6 @@ import { Repository, In, Between } from 'typeorm';
 import { Surcharge } from '../surcharges/entities/surcharge.entity';
 import { CashRegister } from '../cash-register/entities/cash-register.entity';
 import { FinancialMovement } from '../financial-movements/entities/financial-movement.entity';
-import { Payment } from '../payments/entities/payment.entity';
 import { Expense } from '../expenses/entities/expense.entity';
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 
@@ -16,11 +15,6 @@ export interface SurchargeReportFilters {
 }
 
 export interface CashRegisterReportFilters {
-  desde?: string;
-  hasta?: string;
-}
-
-export interface SalesReportFilters {
   desde?: string;
   hasta?: string;
 }
@@ -39,8 +33,6 @@ export class ReportsService {
     private readonly cashRegisterRepo: Repository<CashRegister>,
     @InjectRepository(FinancialMovement)
     private readonly financialMovementRepo: Repository<FinancialMovement>,
-    @InjectRepository(Payment)
-    private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(Expense)
     private readonly expenseRepo: Repository<Expense>,
     @InjectRepository(PaymentMethod)
@@ -122,202 +114,112 @@ export class ReportsService {
 
     const data = await qb.getMany();
 
-    // Calculate declared totals (what was written at closing)
-    const declaredTotals = {
+    // Calculate totals from financial movements only
+    // INGRESO adds to the payment method
+    // TRANSFERENCIA_SALIDA subtracts from the source payment method
+    // TRANSFERENCIA_ENTRADA adds to the destination payment method
+    const totalsByMethod = {
       efectivo: 0,
       transferencia: 0,
       tarjeta: 0,
       otros: 0,
     };
-    let declaredTotalGeneral = 0;
-    let declaredTotalTransacciones = 0;
+    let totalGeneral = 0;
+    let totalTransacciones = 0;
 
-    // Calculate real totals from financial movements
-    const realTotals = {
-      efectivo: 0,
-      transferencia: 0,
-      tarjeta: 0,
-      otros: 0,
-    };
-    let realTotalGeneral = 0;
-    let realTotalTransacciones = 0;
-
-    // For each cash register, get its movements and calculate real totals
+    // For each cash register, get its movements and calculate totals
     const registersWithMovements = await Promise.all(
       data.map(async (cr) => {
-        // Get financial movements for this cash register
         const movements = await this.financialMovementRepo.find({
           where: { cashRegisterId: cr.id },
           relations: ['account'],
+          order: { fechaMovimiento: 'ASC' },
         });
 
-        // Calculate real totals from movements by payment method
-        const registerRealTotals = {
+        const registerTotals = {
           efectivo: 0,
           transferencia: 0,
           tarjeta: 0,
           otros: 0,
         };
-        let registerRealTotal = 0;
-        let registerRealCount = 0;
+        let registerTotal = 0;
+        let registerCount = 0;
+        const ingresos: any[] = [];
+        const transferencias: any[] = [];
 
         for (const m of movements) {
-          if (m.tipo === 'INGRESO' || m.tipo === 'EGRESO') {
-            let method = 'otros';
-            
-            // Resolve payment method from account
+          if (m.tipo === 'INGRESO') {
+            let method: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros' = 'otros';
             if (m.accountId) {
               const pm = await this.paymentMethodRepo.findOne({
                 where: { financialAccountId: m.accountId },
               });
-              if (pm?.tipo) method = pm.tipo;
+              if (pm?.tipo) method = pm.tipo as 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
             }
-
             const monto = Number(m.monto) || 0;
-            // @ts-ignore
-            registerRealTotals[method] = (registerRealTotals[method] || 0) + monto;
-            registerRealTotal += monto;
-            registerRealCount++;
+            registerTotals[method] = (registerTotals[method] || 0) + monto;
+            registerTotal += monto;
+            registerCount++;
+            ingresos.push({ ...m, resolvedMethod: method });
+          } else if (m.tipo === 'TRANSFERENCIA_SALIDA') {
+            let method: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros' = 'otros';
+            if (m.accountId) {
+              const pm = await this.paymentMethodRepo.findOne({
+                where: { financialAccountId: m.accountId },
+              });
+              if (pm?.tipo) method = pm.tipo as 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+            }
+            const monto = Number(m.monto) || 0;
+            // Subtract from the source account
+            registerTotals[method] = (registerTotals[method] || 0) - monto;
+            registerTotal -= monto;
+            transferencias.push({ ...m, resolvedMethod: method, type: 'salida' });
+          } else if (m.tipo === 'TRANSFERENCIA_ENTRADA') {
+            let method: 'efectivo' | 'transferencia' | 'tarjeta' | 'otros' = 'otros';
+            if (m.accountId) {
+              const pm = await this.paymentMethodRepo.findOne({
+                where: { financialAccountId: m.accountId },
+              });
+              if (pm?.tipo) method = pm.tipo as 'efectivo' | 'transferencia' | 'tarjeta' | 'otros';
+            }
+            const monto = Number(m.monto) || 0;
+            // Add to the destination account
+            registerTotals[method] = (registerTotals[method] || 0) + monto;
+            registerTotal += monto;
+            transferencias.push({ ...m, resolvedMethod: method, type: 'entrada' });
           }
         }
 
         return {
           ...cr,
-          realTotals: registerRealTotals,
-          realTotalGeneral: registerRealTotal,
-          realTotalTransacciones: registerRealCount,
-          movementsCount: movements.length,
+          movements,
+          ingresos,
+          transferencias,
+          totals: registerTotals,
+          totalGeneral: registerTotal,
+          totalTransacciones: registerCount,
         };
       })
     );
 
-    // Sum up declared totals
-    for (const cr of data) {
-      declaredTotals.efectivo += Number(cr.totalEfectivo || 0);
-      declaredTotals.transferencia += Number(cr.totalTransferencia || 0);
-      declaredTotals.tarjeta += Number(cr.totalTarjeta || 0);
-      declaredTotals.otros += Number(cr.totalOtros || 0);
-      declaredTotalGeneral += Number(cr.totalVentas || 0);
-      declaredTotalTransacciones += Number(cr.cantidadTransacciones || 0);
-    }
-
-    // Sum up real totals
+    // Sum up totals across all registers
     for (const cr of registersWithMovements) {
-      realTotals.efectivo += cr.realTotals.efectivo || 0;
-      realTotals.transferencia += cr.realTotals.transferencia || 0;
-      realTotals.tarjeta += cr.realTotals.tarjeta || 0;
-      realTotals.otros += cr.realTotals.otros || 0;
-      realTotalGeneral += cr.realTotalGeneral || 0;
-      realTotalTransacciones += cr.realTotalTransacciones || 0;
+      totalsByMethod.efectivo += cr.totals.efectivo || 0;
+      totalsByMethod.transferencia += cr.totals.transferencia || 0;
+      totalsByMethod.tarjeta += cr.totals.tarjeta || 0;
+      totalsByMethod.otros += cr.totals.otros || 0;
+      totalGeneral += cr.totalGeneral || 0;
+      totalTransacciones += cr.totalTransacciones || 0;
     }
 
     return {
       data: registersWithMovements,
-      declaredTotals: {
-        ...declaredTotals,
-        totalGeneral: declaredTotalGeneral,
-        totalTransacciones: declaredTotalTransacciones,
-      },
-      realTotals: {
-        ...realTotals,
-        totalGeneral: realTotalGeneral,
-        totalTransacciones: realTotalTransacciones,
+      totals: {
+        ...totalsByMethod,
+        totalGeneral,
+        totalTransacciones,
       },
       count: data.length,
-    };
-  }
-
-  async getSalesReport(filters: SalesReportFilters) {
-    // Get all INGRESO movements (sales/ingressos)
-    const qb = this.financialMovementRepo.createQueryBuilder('fm')
-      .leftJoinAndSelect('fm.account', 'account')
-      .leftJoinAndSelect('fm.user', 'user')
-      .leftJoinAndSelect('fm.reservation', 'reservation')
-      .leftJoinAndSelect('reservation.guest', 'guest')
-      .leftJoinAndSelect('reservation.room', 'room')
-      .where('fm.tipo = :tipo', { tipo: 'INGRESO' })
-      .orderBy('fm.fechaMovimiento', 'DESC');
-
-    if (filters.desde) {
-      const desde = new Date(`${filters.desde}T00:00:00`);
-      qb.andWhere('fm.fechaMovimiento >= :desde', { desde });
-    }
-    if (filters.hasta) {
-      const hasta = new Date(`${filters.hasta}T23:59:59`);
-      qb.andWhere('fm.fechaMovimiento <= :hasta', { hasta });
-    }
-
-    const movements = await qb.getMany();
-
-    // Group by payment method
-    const methodTotals: Record<string, { ingresos: number; count: number }> = {};
-    
-    for (const m of movements) {
-      let method = 'otros';
-      
-      // Resolve payment method from account
-      if (m.accountId) {
-        const pm = await this.paymentMethodRepo.findOne({
-          where: { financialAccountId: m.accountId },
-        });
-        if (pm?.tipo) method = pm.tipo;
-      }
-      
-      // If not found via account, try via reference (payment)
-      if (method === 'otros' && m.referenciaTipo === 'payment' && m.referenciaId) {
-        const payment = await this.paymentRepo.findOne({
-          where: { id: m.referenciaId },
-          relations: ['metodoPago'],
-        });
-        if (payment?.metodoPago?.tipo) method = payment.metodoPago.tipo;
-      }
-
-      if (!methodTotals[method]) {
-        methodTotals[method] = { ingresos: 0, count: 0 };
-      }
-      methodTotals[method].ingresos += Number(m.monto) || 0;
-      methodTotals[method].count += 1;
-    }
-
-    // Also get payments directly for a more complete picture
-    const paymentQb = this.paymentRepo.createQueryBuilder('p')
-      .leftJoinAndSelect('p.metodoPago', 'metodoPago')
-      .leftJoinAndSelect('p.user', 'user')
-      .leftJoinAndSelect('p.reservation', 'reservation')
-      .leftJoinAndSelect('reservation.guest', 'guest')
-      .leftJoinAndSelect('reservation.room', 'room')
-      .orderBy('p.fecha', 'DESC');
-
-    if (filters.desde) {
-      const desde = new Date(`${filters.desde}T00:00:00`);
-      paymentQb.andWhere('p.fecha >= :desde', { desde });
-    }
-    if (filters.hasta) {
-      const hasta = new Date(`${filters.hasta}T23:59:59`);
-      paymentQb.andWhere('p.fecha <= :hasta', { hasta });
-    }
-
-    const payments = await paymentQb.getMany();
-
-    // Add payments that don't have financial movements
-    for (const p of payments) {
-      const method = p.metodoPago?.tipo || 'otros';
-      if (!methodTotals[method]) {
-        methodTotals[method] = { ingresos: 0, count: 0 };
-      }
-      methodTotals[method].ingresos += Number(p.monto) || 0;
-      methodTotals[method].count += 1;
-    }
-
-    const totalVentas = Object.values(methodTotals).reduce((sum, m) => sum + m.ingresos, 0);
-    const totalCount = Object.values(methodTotals).reduce((sum, m) => sum + m.count, 0);
-
-    return {
-      movements,
-      payments,
-      methodTotals,
-      totalVentas,
-      totalCount,
     };
   }
 
