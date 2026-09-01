@@ -43,8 +43,8 @@ import { ReportsPage } from '@/pages/reports/reports.page';
 import { InventoryReportPage } from '@/pages/reports/inventory-report.page';
 import { SuppliesReportPage } from '@/pages/reports/supplies-report.page';
 import { CashRegisterReportPage } from '@/pages/reports/cash-register-report.page';
-import { SalesReportPage } from '@/pages/reports/sales-report.page';
 import { ExpensesReportPage } from '@/pages/reports/expenses-report.page';
+import { RoomReportPage } from '@/pages/reports/room-report.page';
 import { GerencialPage } from '@/pages/statistics/gerencial.page';
 import { GerencialDashboardPage } from '@/pages/dashboard-gerencial/dashboard.page';
 import { CalendarGerencialPage } from '@/pages/dashboard-gerencial/calendar.page';
@@ -105,8 +105,8 @@ export const router = createBrowserRouter([
       { path: 'reports/inventory', element: <InventoryReportPage /> },
       { path: 'reports/supplies', element: <SuppliesReportPage /> },
       { path: 'reports/cash-register', element: <CashRegisterReportPage /> },
-      { path: 'reports/sales', element: <SalesReportPage /> },
       { path: 'reports/expenses', element: <ExpensesReportPage /> },
+      { path: 'reports/rooms', element: <RoomReportPage /> },
       { path: 'statistics/gerencial', element: <GerencialPage /> },
       { path: 'dashboard-gerencial', element: <GerencialDashboardPage /> },
       { path: 'calendar-gerencial', element: <CalendarGerencialPage /> },

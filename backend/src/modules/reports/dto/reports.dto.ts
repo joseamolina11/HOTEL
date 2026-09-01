@@ -57,3 +57,15 @@ export class ExpensesReportQueryDto {
   @IsDateString()
   hasta?: string;
 }
+
+export class RoomReportQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  desde?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  hasta?: string;
+}

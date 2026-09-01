@@ -16,13 +16,13 @@ export const reportsApi = {
     return data?.data ?? data;
   },
 
-  getSalesReport: async (params?: { desde?: string; hasta?: string }) => {
-    const { data } = await apiClient.get('/reports/sales', { params });
+  getExpensesReport: async (params?: { desde?: string; hasta?: string }) => {
+    const { data } = await apiClient.get('/reports/expenses', { params });
     return data?.data ?? data;
   },
 
-  getExpensesReport: async (params?: { desde?: string; hasta?: string }) => {
-    const { data } = await apiClient.get('/reports/expenses', { params });
+  getRoomReport: async (params?: { desde?: string; hasta?: string }) => {
+    const { data } = await apiClient.get('/reports/rooms', { params });
     return data?.data ?? data;
   },
 };

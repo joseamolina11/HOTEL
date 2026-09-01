@@ -6,6 +6,9 @@ import { CashRegister } from '../cash-register/entities/cash-register.entity';
 import { FinancialMovement } from '../financial-movements/entities/financial-movement.entity';
 import { Expense } from '../expenses/entities/expense.entity';
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
+import { Room } from '../rooms/entities/room.entity';
+import { Order } from '../orders/entities/order.entity';
+import { Consumption } from '../consumptions/entities/consumption.entity';
 
 export interface SurchargeReportFilters {
   desde?: string;
@@ -24,6 +27,11 @@ export interface ExpensesReportFilters {
   hasta?: string;
 }
 
+export interface RoomReportFilters {
+  desde?: string;
+  hasta?: string;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -37,6 +45,12 @@ export class ReportsService {
     private readonly expenseRepo: Repository<Expense>,
     @InjectRepository(PaymentMethod)
     private readonly paymentMethodRepo: Repository<PaymentMethod>,
+    @InjectRepository(Room)
+    private readonly roomRepo: Repository<Room>,
+    @InjectRepository(Order)
+    private readonly orderRepo: Repository<Order>,
+    @InjectRepository(Consumption)
+    private readonly consumptionRepo: Repository<Consumption>,
   ) {}
 
   async getSurchargesReport(filters: SurchargeReportFilters) {
@@ -324,6 +338,156 @@ export class ReportsService {
       methodTotals,
       totalEgresos,
       totalCount,
+    };
+  }
+
+  async getRoomReport(filters: RoomReportFilters) {
+    // Get all rooms
+    const rooms = await this.roomRepo.find({
+      order: { numero: 'ASC' },
+    });
+
+    // Build date filter for queries
+    const dateFilter: any = {};
+    if (filters.desde) {
+      dateFilter.fecha = { $gte: new Date(`${filters.desde}T00:00:00`) };
+    }
+    if (filters.hasta) {
+      if (!dateFilter.fecha) dateFilter.fecha = {};
+      dateFilter.fecha.$lte = new Date(`${filters.hasta}T23:59:59`);
+    }
+
+    // Get orders by room
+    const orderQb = this.orderRepo.createQueryBuilder('o')
+      .leftJoinAndSelect('o.room', 'room')
+      .where('o.estado != :cancelado', { cancelado: 'cancelado' });
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      orderQb.andWhere('o.fecha >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      orderQb.andWhere('o.fecha <= :hasta', { hasta });
+    }
+
+    const orders = await orderQb.getMany();
+
+    // Get surcharges by room (through reservation)
+    const surchargeQb = this.surchargeRepo.createQueryBuilder('s')
+      .leftJoinAndSelect('s.reservation', 'reservation')
+      .leftJoinAndSelect('reservation.room', 'room')
+      .where('s.deleted_at IS NULL')
+      .andWhere('s.estado != :anulado', { anulado: 'facturado' }); // exclude facturado?
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      surchargeQb.andWhere('s.fecha >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      surchargeQb.andWhere('s.fecha <= :hasta', { hasta });
+    }
+
+    const surcharges = await surchargeQb.getMany();
+
+    // Get consumptions (services) by room (through reservation)
+    const consumptionQb = this.consumptionRepo.createQueryBuilder('c')
+      .leftJoinAndSelect('c.reservation', 'reservation')
+      .leftJoinAndSelect('reservation.room', 'room')
+      .leftJoinAndSelect('c.inventoryItem', 'inventoryItem');
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      consumptionQb.andWhere('c.fecha >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      consumptionQb.andWhere('c.fecha <= :hasta', { hasta });
+    }
+
+    const consumptions = await consumptionQb.getMany();
+
+    // Aggregate by room
+    const roomData: Record<string, {
+      room: Room;
+      servicios: number;
+      recargos: number;
+      pedidos: number;
+      total: number;
+      serviciosCount: number;
+      recargosCount: number;
+      pedidosCount: number;
+    }> = {};
+
+    // Initialize all rooms
+    for (const room of rooms) {
+      roomData[room.id] = {
+        room,
+        servicios: 0,
+        recargos: 0,
+        pedidos: 0,
+        total: 0,
+        serviciosCount: 0,
+        recargosCount: 0,
+        pedidosCount: 0,
+      };
+    }
+
+    // Aggregate orders (pedidos)
+    for (const order of orders) {
+      if (order.roomId && roomData[order.roomId]) {
+        roomData[order.roomId].pedidos += Number(order.total) || 0;
+        roomData[order.roomId].pedidosCount += 1;
+      }
+    }
+
+    // Aggregate surcharges (recargos)
+    for (const surcharge of surcharges) {
+      const roomId = surcharge.reservation?.room?.id;
+      if (roomId && roomData[roomId]) {
+        roomData[roomId].recargos += Number(surcharge.subtotal) || 0;
+        roomData[roomId].recargosCount += 1;
+      }
+    }
+
+    // Aggregate consumptions (servicios)
+    for (const consumption of consumptions) {
+      const roomId = consumption.reservation?.room?.id;
+      if (roomId && roomData[roomId]) {
+        roomData[roomId].servicios += Number(consumption.subtotal) || 0;
+        roomData[roomId].serviciosCount += 1;
+      }
+    }
+
+    // Calculate totals
+    for (const roomId of Object.keys(roomData)) {
+      roomData[roomId].total = 
+        roomData[roomId].servicios + 
+        roomData[roomId].recargos + 
+        roomData[roomId].pedidos;
+    }
+
+    // Convert to array and sort by room number
+    const data = Object.values(roomData).sort((a, b) => 
+      a.room.numero.localeCompare(b.room.numero, undefined, { numeric: true })
+    );
+
+    // Calculate grand totals
+    const totales = {
+      servicios: data.reduce((sum, r) => sum + r.servicios, 0),
+      recargos: data.reduce((sum, r) => sum + r.recargos, 0),
+      pedidos: data.reduce((sum, r) => sum + r.pedidos, 0),
+      total: data.reduce((sum, r) => sum + r.total, 0),
+      serviciosCount: data.reduce((sum, r) => sum + r.serviciosCount, 0),
+      recargosCount: data.reduce((sum, r) => sum + r.recargosCount, 0),
+      pedidosCount: data.reduce((sum, r) => sum + r.pedidosCount, 0),
+    };
+
+    return {
+      data,
+      totales,
+      count: data.length,
     };
   }
 }

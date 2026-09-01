@@ -221,7 +221,7 @@ export function Sidebar() {
             { to: '/reports/inventory', label: 'Inventario', icon: Package, show: hasPerm('reports:view') },
             { to: '/reports/supplies', label: 'Suministros', icon: Boxes, show: hasPerm('reports:view') },
             { to: '/reports/cash-register', label: 'Caja', icon: DollarSign, show: hasPerm('reports:view') },
-            { to: '/reports/sales', label: 'Ventas', icon: ShoppingCart, show: hasPerm('reports:view') },
+            { to: '/reports/rooms', label: 'Habitaciones', icon: BedDouble, show: hasPerm('reports:view') },
             { to: '/reports/expenses', label: 'Gastos', icon: Receipt, show: hasPerm('reports:view') },
           ],
         },
