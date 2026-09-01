@@ -9,6 +9,8 @@ import { PaymentMethod } from '../payment-methods/entities/payment-method.entity
 import { Room } from '../rooms/entities/room.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Consumption } from '../consumptions/entities/consumption.entity';
+import { CheckIn } from '../check-in/entities/check-in.entity';
+import { Payment } from '../payments/entities/payment.entity';
 
 export interface SurchargeReportFilters {
   desde?: string;
@@ -51,6 +53,10 @@ export class ReportsService {
     private readonly orderRepo: Repository<Order>,
     @InjectRepository(Consumption)
     private readonly consumptionRepo: Repository<Consumption>,
+    @InjectRepository(CheckIn)
+    private readonly checkInRepo: Repository<CheckIn>,
+    @InjectRepository(Payment)
+    private readonly paymentRepo: Repository<Payment>,
   ) {}
 
   async getSurchargesReport(filters: SurchargeReportFilters) {
@@ -347,16 +353,6 @@ export class ReportsService {
       order: { numero: 'ASC' },
     });
 
-    // Build date filter for queries
-    const dateFilter: any = {};
-    if (filters.desde) {
-      dateFilter.fecha = { $gte: new Date(`${filters.desde}T00:00:00`) };
-    }
-    if (filters.hasta) {
-      if (!dateFilter.fecha) dateFilter.fecha = {};
-      dateFilter.fecha.$lte = new Date(`${filters.hasta}T23:59:59`);
-    }
-
     // Get orders by room
     const orderQb = this.orderRepo.createQueryBuilder('o')
       .leftJoinAndSelect('o.room', 'room')
@@ -377,8 +373,7 @@ export class ReportsService {
     const surchargeQb = this.surchargeRepo.createQueryBuilder('s')
       .leftJoinAndSelect('s.reservation', 'reservation')
       .leftJoinAndSelect('reservation.room', 'room')
-      .where('s.deleted_at IS NULL')
-      .andWhere('s.estado != :anulado', { anulado: 'facturado' }); // exclude facturado?
+      .where('s.deleted_at IS NULL');
 
     if (filters.desde) {
       const desde = new Date(`${filters.desde}T00:00:00`);
@@ -408,16 +403,52 @@ export class ReportsService {
 
     const consumptions = await consumptionQb.getMany();
 
+    // Get check-ins by room (through reservation) - use reservation's precioBase
+    const checkInQb = this.checkInRepo.createQueryBuilder('ci')
+      .leftJoinAndSelect('ci.reservation', 'reservation')
+      .leftJoinAndSelect('reservation.room', 'room');
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      checkInQb.andWhere('ci.fechaHora >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      checkInQb.andWhere('ci.fechaHora <= :hasta', { hasta });
+    }
+
+    const checkIns = await checkInQb.getMany();
+
+    // Get payments by room
+    const paymentQb = this.paymentRepo.createQueryBuilder('p')
+      .leftJoinAndSelect('p.room', 'room')
+      .leftJoinAndSelect('p.reservation', 'reservation');
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      paymentQb.andWhere('p.fecha >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      paymentQb.andWhere('p.fecha <= :hasta', { hasta });
+    }
+
+    const payments = await paymentQb.getMany();
+
     // Aggregate by room
     const roomData: Record<string, {
       room: Room;
       servicios: number;
       recargos: number;
       pedidos: number;
+      checkins: number;
+      pagos: number;
       total: number;
       serviciosCount: number;
       recargosCount: number;
       pedidosCount: number;
+      checkinsCount: number;
+      pagosCount: number;
     }> = {};
 
     // Initialize all rooms
@@ -427,10 +458,14 @@ export class ReportsService {
         servicios: 0,
         recargos: 0,
         pedidos: 0,
+        checkins: 0,
+        pagos: 0,
         total: 0,
         serviciosCount: 0,
         recargosCount: 0,
         pedidosCount: 0,
+        checkinsCount: 0,
+        pagosCount: 0,
       };
     }
 
@@ -460,12 +495,33 @@ export class ReportsService {
       }
     }
 
+    // Aggregate check-ins (use reservation precioBase)
+    for (const checkIn of checkIns) {
+      const roomId = checkIn.reservation?.room?.id;
+      if (roomId && roomData[roomId]) {
+        const precioBase = Number(checkIn.reservation?.precioBase) || 0;
+        roomData[roomId].checkins += precioBase;
+        roomData[roomId].checkinsCount += 1;
+      }
+    }
+
+    // Aggregate payments
+    for (const payment of payments) {
+      const roomId = payment.roomId || payment.reservation?.room?.id;
+      if (roomId && roomData[roomId]) {
+        roomData[roomId].pagos += Number(payment.monto) || 0;
+        roomData[roomId].pagosCount += 1;
+      }
+    }
+
     // Calculate totals
     for (const roomId of Object.keys(roomData)) {
       roomData[roomId].total = 
         roomData[roomId].servicios + 
         roomData[roomId].recargos + 
-        roomData[roomId].pedidos;
+        roomData[roomId].pedidos +
+        roomData[roomId].checkins +
+        roomData[roomId].pagos;
     }
 
     // Convert to array and sort by room number
@@ -478,10 +534,14 @@ export class ReportsService {
       servicios: data.reduce((sum, r) => sum + r.servicios, 0),
       recargos: data.reduce((sum, r) => sum + r.recargos, 0),
       pedidos: data.reduce((sum, r) => sum + r.pedidos, 0),
+      checkins: data.reduce((sum, r) => sum + r.checkins, 0),
+      pagos: data.reduce((sum, r) => sum + r.pagos, 0),
       total: data.reduce((sum, r) => sum + r.total, 0),
       serviciosCount: data.reduce((sum, r) => sum + r.serviciosCount, 0),
       recargosCount: data.reduce((sum, r) => sum + r.recargosCount, 0),
       pedidosCount: data.reduce((sum, r) => sum + r.pedidosCount, 0),
+      checkinsCount: data.reduce((sum, r) => sum + r.checkinsCount, 0),
+      pagosCount: data.reduce((sum, r) => sum + r.pagosCount, 0),
     };
 
     return {
