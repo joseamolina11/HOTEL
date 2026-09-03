@@ -353,23 +353,43 @@ export class ReportsService {
       order: { numero: 'ASC' },
     });
 
-    // Get orders by room
-    const orderQb = this.orderRepo.createQueryBuilder('o')
-      .leftJoinAndSelect('o.room', 'room')
-      .where('o.estado != :cancelado', { cancelado: 'cancelado' });
+    // Get all payments in date range with their relations
+    const paymentQb = this.paymentRepo.createQueryBuilder('p')
+      .leftJoinAndSelect('p.room', 'room')
+      .leftJoinAndSelect('p.reservation', 'reservation')
+      .leftJoinAndSelect('p.order', 'order')
+      .leftJoinAndSelect('reservation.room', 'reservationRoom')
+      .leftJoinAndSelect('reservation.consumptions', 'consumptions')
+      .leftJoinAndSelect('reservation.surcharges', 'surcharges')
+      .leftJoinAndSelect('reservation.checkIn', 'checkIn');
 
     if (filters.desde) {
       const desde = new Date(`${filters.desde}T00:00:00`);
-      orderQb.andWhere('o.fecha >= :desde', { desde });
+      paymentQb.andWhere('p.fecha >= :desde', { desde });
     }
     if (filters.hasta) {
       const hasta = new Date(`${filters.hasta}T23:59:59`);
-      orderQb.andWhere('o.fecha <= :hasta', { hasta });
+      paymentQb.andWhere('p.fecha <= :hasta', { hasta });
     }
 
-    const orders = await orderQb.getMany();
+    const payments = await paymentQb.getMany();
 
-    // Get surcharges by room (through reservation)
+    // Also get consumptions, surcharges, orders, check-ins for rooms without direct payments
+    // (for informational purposes - what was consumed/charged even if not paid yet)
+    const consumptionQb = this.consumptionRepo.createQueryBuilder('c')
+      .leftJoinAndSelect('c.reservation', 'reservation')
+      .leftJoinAndSelect('reservation.room', 'room');
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      consumptionQb.andWhere('c.fecha >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      consumptionQb.andWhere('c.fecha <= :hasta', { hasta });
+    }
+    const consumptions = await consumptionQb.getMany();
+
     const surchargeQb = this.surchargeRepo.createQueryBuilder('s')
       .leftJoinAndSelect('s.reservation', 'reservation')
       .leftJoinAndSelect('reservation.room', 'room')
@@ -383,27 +403,8 @@ export class ReportsService {
       const hasta = new Date(`${filters.hasta}T23:59:59`);
       surchargeQb.andWhere('s.fecha <= :hasta', { hasta });
     }
-
     const surcharges = await surchargeQb.getMany();
 
-    // Get consumptions (services) by room (through reservation)
-    const consumptionQb = this.consumptionRepo.createQueryBuilder('c')
-      .leftJoinAndSelect('c.reservation', 'reservation')
-      .leftJoinAndSelect('reservation.room', 'room')
-      .leftJoinAndSelect('c.inventoryItem', 'inventoryItem');
-
-    if (filters.desde) {
-      const desde = new Date(`${filters.desde}T00:00:00`);
-      consumptionQb.andWhere('c.fecha >= :desde', { desde });
-    }
-    if (filters.hasta) {
-      const hasta = new Date(`${filters.hasta}T23:59:59`);
-      consumptionQb.andWhere('c.fecha <= :hasta', { hasta });
-    }
-
-    const consumptions = await consumptionQb.getMany();
-
-    // Get check-ins by room (through reservation) - use reservation's precioBase
     const checkInQb = this.checkInRepo.createQueryBuilder('ci')
       .leftJoinAndSelect('ci.reservation', 'reservation')
       .leftJoinAndSelect('reservation.room', 'room');
@@ -416,34 +417,79 @@ export class ReportsService {
       const hasta = new Date(`${filters.hasta}T23:59:59`);
       checkInQb.andWhere('ci.fechaHora <= :hasta', { hasta });
     }
-
     const checkIns = await checkInQb.getMany();
 
-    // Get payments by room
-    const paymentQb = this.paymentRepo.createQueryBuilder('p')
-      .leftJoinAndSelect('p.room', 'room')
-      .leftJoinAndSelect('p.reservation', 'reservation');
+    const orderQb = this.orderRepo.createQueryBuilder('o')
+      .leftJoinAndSelect('o.room', 'room')
+      .where('o.estado != :cancelado', { cancelado: 'cancelado' });
 
     if (filters.desde) {
       const desde = new Date(`${filters.desde}T00:00:00`);
-      paymentQb.andWhere('p.fecha >= :desde', { desde });
+      orderQb.andWhere('o.fecha >= :desde', { desde });
     }
     if (filters.hasta) {
       const hasta = new Date(`${filters.hasta}T23:59:59`);
-      paymentQb.andWhere('p.fecha <= :hasta', { hasta });
+      orderQb.andWhere('o.fecha <= :hasta', { hasta });
+    }
+    const orders = await orderQb.getMany();
+
+    // Build maps for quick lookup
+    const consumptionsByRoom: Record<string, number> = {};
+    const consumptionsCountByRoom: Record<string, number> = {};
+    for (const c of consumptions) {
+      const roomId = c.reservation?.room?.id;
+      if (roomId) {
+        consumptionsByRoom[roomId] = (consumptionsByRoom[roomId] || 0) + Number(c.subtotal) || 0;
+        consumptionsCountByRoom[roomId] = (consumptionsCountByRoom[roomId] || 0) + 1;
+      }
     }
 
-    const payments = await paymentQb.getMany();
+    const surchargesByRoom: Record<string, number> = {};
+    const surchargesCountByRoom: Record<string, number> = {};
+    for (const s of surcharges) {
+      const roomId = s.reservation?.room?.id;
+      if (roomId) {
+        surchargesByRoom[roomId] = (surchargesByRoom[roomId] || 0) + Number(s.subtotal) || 0;
+        surchargesCountByRoom[roomId] = (surchargesCountByRoom[roomId] || 0) + 1;
+      }
+    }
 
-    // Aggregate by room
+    const checkInsByRoom: Record<string, number> = {};
+    const checkInsCountByRoom: Record<string, number> = {};
+    for (const ci of checkIns) {
+      const roomId = ci.reservation?.room?.id;
+      if (roomId) {
+        const precioBase = Number(ci.reservation?.precioBase) || 0;
+        checkInsByRoom[roomId] = (checkInsByRoom[roomId] || 0) + precioBase;
+        checkInsCountByRoom[roomId] = (checkInsCountByRoom[roomId] || 0) + 1;
+      }
+    }
+
+    const ordersByRoom: Record<string, number> = {};
+    const ordersCountByRoom: Record<string, number> = {};
+    for (const o of orders) {
+      if (o.roomId) {
+        ordersByRoom[o.roomId] = (ordersByRoom[o.roomId] || 0) + Number(o.total) || 0;
+        ordersCountByRoom[o.roomId] = (ordersCountByRoom[o.roomId] || 0) + 1;
+      }
+    }
+
+    // Now categorize PAYMENTS by what they paid for
+    // Payment can have: orderId, reservationId, roomId
     const roomData: Record<string, {
       room: Room;
-      servicios: number;
-      recargos: number;
-      pedidos: number;
-      checkins: number;
-      pagos: number;
-      total: number;
+      // What was charged/consumed (for reference)
+      serviciosCharged: number;
+      recargosCharged: number;
+      pedidosCharged: number;
+      checkinsCharged: number;
+      // What was actually PAID (categorized by payment)
+      serviciosPagados: number;
+      recargosPagados: number;
+      pedidosPagados: number;
+      checkinsPagados: number;
+      totalPagado: number;
+      // Counts
       serviciosCount: number;
       recargosCount: number;
       pedidosCount: number;
@@ -455,73 +501,103 @@ export class ReportsService {
     for (const room of rooms) {
       roomData[room.id] = {
         room,
-        servicios: 0,
-        recargos: 0,
-        pedidos: 0,
-        checkins: 0,
-        pagos: 0,
-        total: 0,
-        serviciosCount: 0,
-        recargosCount: 0,
-        pedidosCount: 0,
-        checkinsCount: 0,
+        serviciosCharged: consumptionsByRoom[room.id] || 0,
+        recargosCharged: surchargesByRoom[room.id] || 0,
+        pedidosCharged: ordersByRoom[room.id] || 0,
+        checkinsCharged: checkInsByRoom[room.id] || 0,
+        serviciosPagados: 0,
+        recargosPagados: 0,
+        pedidosPagados: 0,
+        checkinsPagados: 0,
+        totalPagado: 0,
+        serviciosCount: consumptionsCountByRoom[room.id] || 0,
+        recargosCount: surchargesCountByRoom[room.id] || 0,
+        pedidosCount: ordersCountByRoom[room.id] || 0,
+        checkinsCount: checkInsCountByRoom[room.id] || 0,
         pagosCount: 0,
       };
     }
 
-    // Aggregate orders (pedidos)
-    for (const order of orders) {
-      if (order.roomId && roomData[order.roomId]) {
-        roomData[order.roomId].pedidos += Number(order.total) || 0;
-        roomData[order.roomId].pedidosCount += 1;
-      }
-    }
-
-    // Aggregate surcharges (recargos)
-    for (const surcharge of surcharges) {
-      const roomId = surcharge.reservation?.room?.id;
-      if (roomId && roomData[roomId]) {
-        roomData[roomId].recargos += Number(surcharge.subtotal) || 0;
-        roomData[roomId].recargosCount += 1;
-      }
-    }
-
-    // Aggregate consumptions (servicios)
-    for (const consumption of consumptions) {
-      const roomId = consumption.reservation?.room?.id;
-      if (roomId && roomData[roomId]) {
-        roomData[roomId].servicios += Number(consumption.subtotal) || 0;
-        roomData[roomId].serviciosCount += 1;
-      }
-    }
-
-    // Aggregate check-ins (use reservation precioBase)
-    for (const checkIn of checkIns) {
-      const roomId = checkIn.reservation?.room?.id;
-      if (roomId && roomData[roomId]) {
-        const precioBase = Number(checkIn.reservation?.precioBase) || 0;
-        roomData[roomId].checkins += precioBase;
-        roomData[roomId].checkinsCount += 1;
-      }
-    }
-
-    // Aggregate payments
+    // Categorize each payment by what it paid for
     for (const payment of payments) {
-      const roomId = payment.roomId || payment.reservation?.room?.id;
-      if (roomId && roomData[roomId]) {
-        roomData[roomId].pagos += Number(payment.monto) || 0;
-        roomData[roomId].pagosCount += 1;
+      let roomId = payment.roomId;
+      
+      if (!roomId && payment.reservation?.room?.id) {
+        roomId = payment.reservation.room.id;
       }
-    }
+      if (!roomId && payment.order?.roomId) {
+        roomId = payment.order.roomId;
+      }
+      if (!roomId && payment.reservationId) {
+        // Try to get room from reservation using repository
+        const res = await this.paymentRepo.manager.getRepository('reservations').findOne({
+          where: { id: payment.reservationId },
+          relations: ['room'],
+        });
+        roomId = res?.room?.id;
+      }
 
-    // Calculate totals
-    for (const roomId of Object.keys(roomData)) {
-      roomData[roomId].total = 
-        roomData[roomId].servicios + 
-        roomData[roomId].recargos + 
-        roomData[roomId].pedidos +
-        roomData[roomId].checkins +
-        roomData[roomId].pagos;
+      if (!roomId || !roomData[roomId]) continue;
+
+      const monto = Number(payment.monto) || 0;
+      roomData[roomId].totalPagado += monto;
+      roomData[roomId].pagosCount += 1;
+
+      // Categorize by what the payment references
+      if (payment.orderId) {
+        // Payment for an order (pedidos)
+        roomData[roomId].pedidosPagados += monto;
+      } else if (payment.reservationId) {
+        // Payment for a reservation - could be services, surcharges, or room stay
+        const res = payment.reservation;
+        const hasConsumptions = (res.consumptions?.length || 0) > 0;
+        const hasSurcharges = (res.surcharges?.length || 0) > 0;
+        const hasCheckIn = !!res.checkIn;
+
+        if (hasConsumptions && !hasSurcharges && !hasCheckIn) {
+          // Only services
+          roomData[roomId].serviciosPagados += monto;
+        } else if (hasSurcharges && !hasConsumptions && !hasCheckIn) {
+          // Only surcharges
+          roomData[roomId].recargosPagados += monto;
+        } else if (hasCheckIn && !hasConsumptions && !hasSurcharges) {
+          // Only room stay
+          roomData[roomId].checkinsPagados += monto;
+        } else {
+          // Mixed - distribute proportionally based on charged amounts
+          const totalCharged = 
+            (consumptionsByRoom[roomId] || 0) + 
+            (surchargesByRoom[roomId] || 0) + 
+            (checkInsByRoom[roomId] || 0);
+          
+          if (totalCharged > 0) {
+            if (consumptionsByRoom[roomId]) {
+              roomData[roomId].serviciosPagados += monto * (consumptionsByRoom[roomId] / totalCharged);
+            }
+            if (surchargesByRoom[roomId]) {
+              roomData[roomId].recargosPagados += monto * (surchargesByRoom[roomId] / totalCharged);
+            }
+            if (checkInsByRoom[roomId]) {
+              roomData[roomId].checkinsPagados += monto * (checkInsByRoom[roomId] / totalCharged);
+            }
+          } else {
+            // Fallback: split equally among existing categories
+            const categories = [
+              consumptionsByRoom[roomId] ? 'servicios' : null,
+              surchargesByRoom[roomId] ? 'recargos' : null,
+              checkInsByRoom[roomId] ? 'checkins' : null,
+            ].filter(Boolean);
+            
+            const perCategory = monto / categories.length;
+            if (categories.includes('servicios')) roomData[roomId].serviciosPagados += perCategory;
+            if (categories.includes('recargos')) roomData[roomId].recargosPagados += perCategory;
+            if (categories.includes('checkins')) roomData[roomId].checkinsPagados += perCategory;
+          }
+        }
+      } else if (roomId) {
+        // Direct room payment - assume it's for room stay (checkin)
+        roomData[roomId].checkinsPagados += monto;
+      }
     }
 
     // Convert to array and sort by room number
@@ -531,12 +607,18 @@ export class ReportsService {
 
     // Calculate grand totals
     const totales = {
-      servicios: data.reduce((sum, r) => sum + r.servicios, 0),
-      recargos: data.reduce((sum, r) => sum + r.recargos, 0),
-      pedidos: data.reduce((sum, r) => sum + r.pedidos, 0),
-      checkins: data.reduce((sum, r) => sum + r.checkins, 0),
-      pagos: data.reduce((sum, r) => sum + r.pagos, 0),
-      total: data.reduce((sum, r) => sum + r.total, 0),
+      // Charged amounts (for reference)
+      serviciosCharged: data.reduce((sum, r) => sum + r.serviciosCharged, 0),
+      recargosCharged: data.reduce((sum, r) => sum + r.recargosCharged, 0),
+      pedidosCharged: data.reduce((sum, r) => sum + r.pedidosCharged, 0),
+      checkinsCharged: data.reduce((sum, r) => sum + r.checkinsCharged, 0),
+      // Actually paid amounts (the real totals)
+      serviciosPagados: data.reduce((sum, r) => sum + r.serviciosPagados, 0),
+      recargosPagados: data.reduce((sum, r) => sum + r.recargosPagados, 0),
+      pedidosPagados: data.reduce((sum, r) => sum + r.pedidosPagados, 0),
+      checkinsPagados: data.reduce((sum, r) => sum + r.checkinsPagados, 0),
+      totalPagado: data.reduce((sum, r) => sum + r.totalPagado, 0),
+      // Counts
       serviciosCount: data.reduce((sum, r) => sum + r.serviciosCount, 0),
       recargosCount: data.reduce((sum, r) => sum + r.recargosCount, 0),
       pedidosCount: data.reduce((sum, r) => sum + r.pedidosCount, 0),

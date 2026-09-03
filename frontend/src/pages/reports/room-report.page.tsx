@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Download, Printer, Loader2, FileSpreadsheet, BedDouble, Utensils, Tag, ShoppingCart } from 'lucide-react';
+import { Download, Printer, Loader2, FileSpreadsheet, BedDouble, Utensils, Tag, ShoppingCart, LogIn, CreditCard, AlertCircle } from 'lucide-react';
 import { formatDateShort, formatCurrency } from '@/lib/utils';
 import { toastSuccess } from '@/lib/notifications';
 
@@ -31,24 +31,26 @@ export function RoomReportPage() {
   };
 
   const downloadCsv = () => {
-    const header = ['Habitación', 'Tipo', 'Piso', 'Servicios', 'Recargos', 'Pedidos', 'Total'];
+    const header = ['Habitación', 'Tipo', 'Piso', 'Servicios Pagados', 'Recargos Pagados', 'Pedidos Pagados', 'Check-ins Pagados', 'Total Pagado'];
     const rows = data.map((r: any) => [
       r.room.numero,
       r.room.roomType?.nombre || '—',
       String(r.room.piso || '—'),
-      String(r.servicios),
-      String(r.recargos),
-      String(r.pedidos),
-      String(r.total),
+      String(r.serviciosPagados || 0),
+      String(r.recargosPagados || 0),
+      String(r.pedidosPagados || 0),
+      String(r.checkinsPagados || 0),
+      String(r.totalPagado || 0),
     ]);
     const totalRow = [
       'TOTAL',
       '',
       '',
-      String(totales.servicios || 0),
-      String(totales.recargos || 0),
-      String(totales.pedidos || 0),
-      String(totales.total || 0),
+      String(totales.serviciosPagados || 0),
+      String(totales.recargosPagados || 0),
+      String(totales.pedidosPagados || 0),
+      String(totales.checkinsPagados || 0),
+      String(totales.totalPagado || 0),
     ];
     const csv = [header, ...rows, totalRow]
       .map((row: string[]) => row.map((cell: string) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
@@ -64,24 +66,26 @@ export function RoomReportPage() {
   };
 
   const downloadExcel = () => {
-    const header = ['Habitación', 'Tipo', 'Piso', 'Servicios', 'Recargos', 'Pedidos', 'Total'];
+    const header = ['Habitación', 'Tipo', 'Piso', 'Servicios Pagados', 'Recargos Pagados', 'Pedidos Pagados', 'Check-ins Pagados', 'Total Pagado'];
     const rows: any[][] = data.map((r: any) => [
       r.room.numero,
       r.room.roomType?.nombre || '—',
       r.room.piso || '—',
-      r.servicios,
-      r.recargos,
-      r.pedidos,
-      r.total,
+      r.serviciosPagados || 0,
+      r.recargosPagados || 0,
+      r.pedidosPagados || 0,
+      r.checkinsPagados || 0,
+      r.totalPagado || 0,
     ]);
     const totalRow = [
       'TOTAL',
       '',
       '',
-      totales.servicios || 0,
-      totales.recargos || 0,
-      totales.pedidos || 0,
-      totales.total || 0,
+      totales.serviciosPagados || 0,
+      totales.recargosPagados || 0,
+      totales.pedidosPagados || 0,
+      totales.checkinsPagados || 0,
+      totales.totalPagado || 0,
     ];
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
     const thead = `<tr>${header.map((h) => `<th style="border:1px solid #999;background:#f1f1f1;font-weight:bold;padding:6px">${esc(h)}</th>`).join('')}</tr>`;
@@ -104,7 +108,7 @@ export function RoomReportPage() {
   return (
     <div className="space-y-6 print-area">
       <div className="flex items-center justify-between print:hidden">
-        <h1 className="text-2xl font-bold">Reporte por Habitación</h1>
+        <h1 className="text-2xl font-bold">Reporte por Habitación (Pagos Reales)</h1>
       </div>
 
       <Card className="print:hidden">
@@ -133,7 +137,7 @@ export function RoomReportPage() {
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {report.count} habitación(es) · Total: <span className="font-semibold text-foreground">{formatCurrency(totales.total)}</span>
+              {report.count} habitación(es) · Total Pagado: <span className="font-semibold text-foreground">{formatCurrency(totales.totalPagado)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={downloadCsv} disabled={data.length === 0}>
@@ -150,16 +154,19 @@ export function RoomReportPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-semibold">Totales Generales</CardTitle>
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                Totales Pagados (Lo que realmente se cobró)
+                <AlertCircle className="h-4 w-4 text-amber-500" title="El total refleja solo lo pagado, desglosado por concepto" />
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                 <div className="rounded-lg bg-green-50 p-4 border border-green-200 text-center">
                   <div className="flex items-center justify-center gap-1 mb-1">
                     <Utensils className="h-4 w-4 text-green-700" />
                     <p className="text-xs text-green-700 font-medium uppercase tracking-wider">Servicios</p>
                   </div>
-                  <p className="text-2xl font-bold text-green-700">{formatCurrency(totales.servicios)}</p>
+                  <p className="text-2xl font-bold text-green-700">{formatCurrency(totales.serviciosPagados)}</p>
                   <p className="text-xs text-muted-foreground">{totales.serviciosCount} consumos</p>
                 </div>
                 <div className="rounded-lg bg-orange-50 p-4 border border-orange-200 text-center">
@@ -167,7 +174,7 @@ export function RoomReportPage() {
                     <Tag className="h-4 w-4 text-orange-700" />
                     <p className="text-xs text-orange-700 font-medium uppercase tracking-wider">Recargos</p>
                   </div>
-                  <p className="text-2xl font-bold text-orange-700">{formatCurrency(totales.recargos)}</p>
+                  <p className="text-2xl font-bold text-orange-700">{formatCurrency(totales.recargosPagados)}</p>
                   <p className="text-xs text-muted-foreground">{totales.recargosCount} recargos</p>
                 </div>
                 <div className="rounded-lg bg-blue-50 p-4 border border-blue-200 text-center">
@@ -175,12 +182,21 @@ export function RoomReportPage() {
                     <ShoppingCart className="h-4 w-4 text-blue-700" />
                     <p className="text-xs text-blue-700 font-medium uppercase tracking-wider">Pedidos</p>
                   </div>
-                  <p className="text-2xl font-bold text-blue-700">{formatCurrency(totales.pedidos)}</p>
+                  <p className="text-2xl font-bold text-blue-700">{formatCurrency(totales.pedidosPagados)}</p>
                   <p className="text-xs text-muted-foreground">{totales.pedidosCount} pedidos</p>
                 </div>
+                <div className="rounded-lg bg-purple-50 p-4 border border-purple-200 text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <LogIn className="h-4 w-4 text-purple-700" />
+                    <p className="text-xs text-purple-700 font-medium uppercase tracking-wider">Check-ins</p>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-700">{formatCurrency(totales.checkinsPagados)}</p>
+                  <p className="text-xs text-muted-foreground">{totales.checkinsCount} check-ins</p>
+                </div>
                 <div className="rounded-lg bg-gray-100 p-4 border border-gray-200 text-center">
-                  <p className="text-xs text-gray-700 font-medium uppercase tracking-wider">Total General</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(totales.total)}</p>
+                  <p className="text-xs text-gray-700 font-medium uppercase tracking-wider">Total Pagado</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(totales.totalPagado)}</p>
+                  <p className="text-xs text-muted-foreground">{totales.pagosCount} pagos</p>
                 </div>
               </div>
             </CardContent>
@@ -210,7 +226,12 @@ export function RoomReportPage() {
                           <ShoppingCart className="h-4 w-4 text-blue-700" /> Pedidos
                         </div>
                       </th>
-                      <th className="px-4 py-3 text-right font-medium">Total</th>
+                      <th className="px-4 py-3 text-right font-medium">
+                        <div className="flex items-center justify-end gap-1">
+                          <LogIn className="h-4 w-4 text-purple-700" /> Check-ins
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 text-right font-medium">Total Pagado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -235,21 +256,39 @@ export function RoomReportPage() {
                             {r.serviciosCount > 0 && (
                               <Badge variant="secondary" className="mr-1 text-xs">{r.serviciosCount}</Badge>
                             )}
-                            {formatCurrency(r.servicios)}
+                            {formatCurrency(r.serviciosPagados || 0)}
+                            {r.serviciosCharged > r.serviciosPagados && (
+                              <span className="ml-1 text-xs text-amber-500">(Cargado: {formatCurrency(r.serviciosCharged)})</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right font-medium text-orange-700">
                             {r.recargosCount > 0 && (
                               <Badge variant="secondary" className="mr-1 text-xs">{r.recargosCount}</Badge>
                             )}
-                            {formatCurrency(r.recargos)}
+                            {formatCurrency(r.recargosPagados || 0)}
+                            {r.recargosCharged > r.recargosPagados && (
+                              <span className="ml-1 text-xs text-amber-500">(Cargado: {formatCurrency(r.recargosCharged)})</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right font-medium text-blue-700">
                             {r.pedidosCount > 0 && (
                               <Badge variant="secondary" className="mr-1 text-xs">{r.pedidosCount}</Badge>
                             )}
-                            {formatCurrency(r.pedidos)}
+                            {formatCurrency(r.pedidosPagados || 0)}
+                            {r.pedidosCharged > r.pedidosPagados && (
+                              <span className="ml-1 text-xs text-amber-500">(Cargado: {formatCurrency(r.pedidosCharged)})</span>
+                            )}
                           </td>
-                          <td className="px-4 py-3 text-right font-bold text-lg">{formatCurrency(r.total)}</td>
+                          <td className="px-4 py-3 text-right font-medium text-purple-700">
+                            {r.checkinsCount > 0 && (
+                              <Badge variant="secondary" className="mr-1 text-xs">{r.checkinsCount}</Badge>
+                            )}
+                            {formatCurrency(r.checkinsPagados || 0)}
+                            {r.checkinsCharged > r.checkinsPagados && (
+                              <span className="ml-1 text-xs text-amber-500">(Cargado: {formatCurrency(r.checkinsCharged)})</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-lg">{formatCurrency(r.totalPagado || 0)}</td>
                         </tr>
                       ))
                     )}
@@ -261,17 +300,21 @@ export function RoomReportPage() {
                       <th className="px-4 py-3"></th>
                       <th className="px-4 py-3 text-right font-medium text-green-700">
                         <Badge variant="secondary" className="mr-1 text-xs">{totales.serviciosCount}</Badge>
-                        {formatCurrency(totales.servicios)}
+                        {formatCurrency(totales.serviciosPagados)}
                       </th>
                       <th className="px-4 py-3 text-right font-medium text-orange-700">
                         <Badge variant="secondary" className="mr-1 text-xs">{totales.recargosCount}</Badge>
-                        {formatCurrency(totales.recargos)}
+                        {formatCurrency(totales.recargosPagados)}
                       </th>
                       <th className="px-4 py-3 text-right font-medium text-blue-700">
                         <Badge variant="secondary" className="mr-1 text-xs">{totales.pedidosCount}</Badge>
-                        {formatCurrency(totales.pedidos)}
+                        {formatCurrency(totales.pedidosPagados)}
                       </th>
-                      <th className="px-4 py-3 text-right font-bold text-lg">{formatCurrency(totales.total)}</th>
+                      <th className="px-4 py-3 text-right font-medium text-purple-700">
+                        <Badge variant="secondary" className="mr-1 text-xs">{totales.checkinsCount}</Badge>
+                        {formatCurrency(totales.checkinsPagados)}
+                      </th>
+                      <th className="px-4 py-3 text-right font-bold text-lg">{formatCurrency(totales.totalPagado)}</th>
                     </tr>
                   </tfoot>
                 </table>
