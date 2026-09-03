@@ -34,6 +34,11 @@ export interface RoomReportFilters {
   hasta?: string;
 }
 
+export interface CashRegisterByRoomReportFilters {
+  desde?: string;
+  hasta?: string;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -624,6 +629,174 @@ export class ReportsService {
       pedidosCount: data.reduce((sum, r) => sum + r.pedidosCount, 0),
       checkinsCount: data.reduce((sum, r) => sum + r.checkinsCount, 0),
       pagosCount: data.reduce((sum, r) => sum + r.pagosCount, 0),
+    };
+
+    return {
+      data,
+      totales,
+      count: data.length,
+    };
+  }
+
+  async getCashRegisterByRoomReport(filters: CashRegisterByRoomReportFilters) {
+    // Get closed cash registers in date range
+    const qb = this.cashRegisterRepo.createQueryBuilder('cr')
+      .leftJoinAndSelect('cr.user', 'user')
+      .where('cr.estado = :estado', { estado: 'cerrada' })
+      .orderBy('cr.fechaCierre', 'DESC');
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      qb.andWhere('cr.fechaCierre >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      qb.andWhere('cr.fechaCierre <= :hasta', { hasta });
+    }
+
+    const cashRegisters = await qb.getMany();
+    const cashRegisterIds = cashRegisters.map(cr => cr.id);
+
+    if (cashRegisterIds.length === 0) {
+      return {
+        data: [],
+        totales: {
+          efectivo: 0,
+          transferencia: 0,
+          tarjeta: 0,
+          otros: 0,
+          totalGeneral: 0,
+          totalTransacciones: 0,
+        },
+        count: 0,
+      };
+    }
+
+    // Get all financial movements for these cash registers (INGRESO only - income)
+    const movements = await this.financialMovementRepo.createQueryBuilder('fm')
+      .leftJoinAndSelect('fm.account', 'account')
+      .leftJoinAndSelect('fm.reservation', 'reservation')
+      .leftJoinAndSelect('reservation.room', 'room')
+      .leftJoinAndSelect('reservation.guest', 'guest')
+      .where('fm.cashRegisterId IN (:...ids)', { ids: cashRegisterIds })
+      .andWhere('fm.tipo = :tipo', { tipo: 'INGRESO' })
+      .orderBy('fm.fechaMovimiento', 'ASC')
+      .getMany();
+
+    // Get all rooms for reference
+    const rooms = await this.roomRepo.find({ order: { numero: 'ASC' } });
+
+    // Group movements by room
+    const roomData: Record<string, {
+      room: Room;
+      efectivo: number;
+      transferencia: number;
+      tarjeta: number;
+      otros: number;
+      total: number;
+      count: number;
+      movements: any[];
+      [key: string]: any;
+    }> = {};
+
+    type RoomReportData = {
+      room: Room;
+      efectivo: number;
+      transferencia: number;
+      tarjeta: number;
+      otros: number;
+      total: number;
+      count: number;
+      movements: any[];
+      [key: string]: any;
+    };
+
+    // Initialize all rooms
+    for (const room of rooms) {
+      roomData[room.id] = {
+        room,
+        efectivo: 0,
+        transferencia: 0,
+        tarjeta: 0,
+        otros: 0,
+        total: 0,
+        count: 0,
+        movements: [],
+      };
+    }
+
+    // Also track unassigned movements (no room)
+    let sinHabitacion: RoomReportData = {
+      room: { id: 'sin-habitacion', numero: 'SIN HABITACIÓN', nombre: 'Sin habitación asignada', piso: 0, roomType: null } as any,
+      efectivo: 0,
+      transferencia: 0,
+      tarjeta: 0,
+      otros: 0,
+      total: 0,
+      count: 0,
+      movements: [],
+    };
+
+    for (const m of movements) {
+      let method = 'otros';
+      
+      // Resolve payment method from account
+      if (m.accountId) {
+        const pm = await this.paymentMethodRepo.findOne({
+          where: { financialAccountId: m.accountId },
+        });
+        if (pm?.tipo) method = pm.tipo;
+      }
+
+      const monto = Number(m.monto) || 0;
+      const roomId = m.reservation?.room?.id;
+
+      const movementData = {
+        fecha: m.fechaMovimiento,
+        concepto: m.concepto,
+        monto,
+        metodo: method,
+        huesped: m.reservation?.guest ? `${m.reservation.guest.nombres} ${m.reservation.guest.apellidos}` : '—',
+        habitacion: m.reservation?.room?.numero || 'Sin habitación',
+        cashRegisterId: m.cashRegisterId,
+      };
+
+      if (roomId && roomData[roomId]) {
+        roomData[roomId][method] = (roomData[roomId][method] || 0) + monto;
+        roomData[roomId].total += monto;
+        roomData[roomId].count += 1;
+        roomData[roomId].movements.push(movementData);
+      } else {
+        sinHabitacion[method] = (sinHabitacion[method] || 0) + monto;
+        sinHabitacion.total += monto;
+        sinHabitacion.count += 1;
+        sinHabitacion.movements.push(movementData);
+      }
+    }
+
+    // Convert to array and sort by room number
+    const data = Object.values(roomData)
+      .filter(r => r.count > 0)
+      .sort((a, b) => 
+        a.room.numero.localeCompare(b.room.numero, undefined, { numeric: true })
+      );
+
+    // Add "Sin habitación" if there are unassigned movements
+    if (sinHabitacion.count > 0) {
+      data.push({
+        ...sinHabitacion,
+        room: { id: 'sin-habitacion', numero: 'SIN HABITACIÓN', nombre: 'Sin habitación asignada', piso: 0, roomType: null } as any,
+      });
+    }
+
+    // Calculate grand totals
+    const totales = {
+      efectivo: data.reduce((sum, r) => sum + r.efectivo, 0),
+      transferencia: data.reduce((sum, r) => sum + r.transferencia, 0),
+      tarjeta: data.reduce((sum, r) => sum + r.tarjeta, 0),
+      otros: data.reduce((sum, r) => sum + r.otros, 0),
+      totalGeneral: data.reduce((sum, r) => sum + r.total, 0),
+      totalTransacciones: data.reduce((sum, r) => sum + r.count, 0),
     };
 
     return {
