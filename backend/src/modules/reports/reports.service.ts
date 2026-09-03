@@ -676,8 +676,14 @@ export class ReportsService {
     const movements = await this.financialMovementRepo.createQueryBuilder('fm')
       .leftJoinAndSelect('fm.account', 'account')
       .leftJoinAndSelect('fm.reservation', 'reservation')
-      .leftJoinAndSelect('reservation.room', 'room')
+      .leftJoinAndSelect('reservation.room', 'reservationRoom')
       .leftJoinAndSelect('reservation.guest', 'guest')
+      // Also check for room via payment reference
+      .leftJoinAndSelect('fm.payment', 'payment')
+      .leftJoinAndSelect('payment.room', 'paymentRoom')
+      // Also check for room via order reference
+      .leftJoinAndSelect('fm.order', 'order')
+      .leftJoinAndSelect('order.room', 'orderRoom')
       .where('fm.cashRegisterId IN (:...ids)', { ids: cashRegisterIds })
       .andWhere('fm.tipo = :tipo', { tipo: 'INGRESO' })
       .orderBy('fm.fechaMovimiento', 'ASC')
@@ -749,7 +755,10 @@ export class ReportsService {
       }
 
       const monto = Number(m.monto) || 0;
-      const roomId = m.reservation?.room?.id;
+      // Try to get room from multiple sources
+      const roomId = m.reservation?.roomId
+
+      const room = m.reservation?.room 
 
       const movementData = {
         fecha: m.fechaMovimiento,
@@ -757,7 +766,7 @@ export class ReportsService {
         monto,
         metodo: method,
         huesped: m.reservation?.guest ? `${m.reservation.guest.nombres} ${m.reservation.guest.apellidos}` : '—',
-        habitacion: m.reservation?.room?.numero || 'Sin habitación',
+        habitacion: room?.numero || 'Sin habitación',
         cashRegisterId: m.cashRegisterId,
       };
 
