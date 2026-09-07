@@ -678,12 +678,6 @@ export class ReportsService {
       .leftJoinAndSelect('fm.reservation', 'reservation')
       .leftJoinAndSelect('reservation.room', 'reservationRoom')
       .leftJoinAndSelect('reservation.guest', 'guest')
-      // Also check for room via payment reference
-      .leftJoinAndSelect('fm.payment', 'payment')
-      .leftJoinAndSelect('payment.room', 'paymentRoom')
-      // Also check for room via order reference
-      .leftJoinAndSelect('fm.order', 'order')
-      .leftJoinAndSelect('order.room', 'orderRoom')
       .where('fm.cashRegisterId IN (:...ids)', { ids: cashRegisterIds })
       .andWhere('fm.tipo = :tipo', { tipo: 'INGRESO' })
       .orderBy('fm.fechaMovimiento', 'ASC')
@@ -755,10 +749,34 @@ export class ReportsService {
       }
 
       const monto = Number(m.monto) || 0;
-      // Try to get room from multiple sources
-      const roomId = m.reservation?.roomId
-
-      const room = m.reservation?.room 
+      
+      // Try to get room from reservation first
+      let roomId = m.reservation?.room?.id;
+      let room = m.reservation?.room;
+      
+      // If no room from reservation, try to get from payment reference
+      if (!roomId && m.referenciaTipo === 'payment' && m.referenciaId) {
+        const payment = await this.paymentRepo.findOne({
+          where: { id: m.referenciaId },
+          relations: ['room'],
+        });
+        if (payment?.room?.id) {
+          roomId = payment.room.id;
+          room = payment.room;
+        }
+      }
+      
+      // If still no room, try order reference
+      if (!roomId && m.referenciaTipo === 'order' && m.referenciaId) {
+        const order = await this.orderRepo.findOne({
+          where: { id: m.referenciaId },
+          relations: ['room'],
+        });
+        if (order?.room?.id) {
+          roomId = order.room.id;
+          room = order.room;
+        }
+      }
 
       const movementData = {
         fecha: m.fechaMovimiento,
