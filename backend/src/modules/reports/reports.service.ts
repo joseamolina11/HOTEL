@@ -29,6 +29,11 @@ export interface ExpensesReportFilters {
   hasta?: string;
 }
 
+export interface ExpensesByCategoryReportFilters {
+  desde?: string;
+  hasta?: string;
+}
+
 export interface RoomReportFilters {
   desde?: string;
   hasta?: string;
@@ -249,62 +254,7 @@ export class ReportsService {
   }
 
   async getExpensesReport(filters: ExpensesReportFilters) {
-    // Get all EGRESO movements (expenses/egresos) - exclude anulación/cancelaciones
-    const qb = this.financialMovementRepo.createQueryBuilder('fm')
-      .leftJoinAndSelect('fm.account', 'account')
-      .leftJoinAndSelect('fm.user', 'user')
-      .where('fm.tipo = :tipo', { tipo: 'EGRESO' })
-      // Exclude movements related to anulación/cancelación
-      .andWhere('fm.concepto NOT ILIKE :anulacion', { anulacion: '%anulacion%' })
-      .andWhere('fm.concepto NOT ILIKE :anulada', { anulada: '%anulada%' })
-      .andWhere('fm.concepto NOT ILIKE :anulado', { anulado: '%anulado%' })
-      .andWhere('fm.concepto NOT ILIKE :cancelacion', { cancelacion: '%cancelacion%' })
-      .andWhere('fm.concepto NOT ILIKE :cancelado', { cancelado: '%cancelado%' })
-      .andWhere('fm.concepto NOT ILIKE :void', { void: '%void%' })
-      .orderBy('fm.fechaMovimiento', 'DESC');
-
-    if (filters.desde) {
-      const desde = new Date(`${filters.desde}T00:00:00`);
-      qb.andWhere('fm.fechaMovimiento >= :desde', { desde });
-    }
-    if (filters.hasta) {
-      const hasta = new Date(`${filters.hasta}T23:59:59`);
-      qb.andWhere('fm.fechaMovimiento <= :hasta', { hasta });
-    }
-
-    const movements = await qb.getMany();
-
-    // Group by payment method
-    const methodTotals: Record<string, { egresos: number; count: number }> = {};
-    
-    for (const m of movements) {
-      let method = 'otros';
-      
-      // Resolve payment method from account
-      if (m.accountId) {
-        const pm = await this.paymentMethodRepo.findOne({
-          where: { financialAccountId: m.accountId },
-        });
-        if (pm?.tipo) method = pm.tipo;
-      }
-      
-      // If not found via account, try via reference (expense)
-      if (method === 'otros' && m.referenciaTipo === 'expense' && m.referenciaId) {
-        const expense = await this.expenseRepo.findOne({
-          where: { id: m.referenciaId },
-          relations: ['metodoPago', 'category'],
-        });
-        if (expense?.metodoPago?.tipo) method = expense.metodoPago.tipo;
-      }
-
-      if (!methodTotals[method]) {
-        methodTotals[method] = { egresos: 0, count: 0 };
-      }
-      methodTotals[method].egresos += Number(m.monto) || 0;
-      methodTotals[method].count += 1;
-    }
-
-    // Also get expenses directly for a more complete picture - exclude anulación
+    // SOLO origen GASTO (tabla expenses) - NO incluir financial movements
     const expenseQb = this.expenseRepo.createQueryBuilder('e')
       .leftJoinAndSelect('e.metodoPago', 'metodoPago')
       .leftJoinAndSelect('e.category', 'category')
@@ -330,7 +280,8 @@ export class ReportsService {
 
     const expenses = await expenseQb.getMany();
 
-    // Add expenses that don't have financial movements
+    // Group by payment method (solo desde expenses)
+    const methodTotals: Record<string, { egresos: number; count: number }> = {};
     for (const e of expenses) {
       const method = e.metodoPago?.tipo || 'otros';
       if (!methodTotals[method]) {
@@ -341,14 +292,100 @@ export class ReportsService {
     }
 
     const totalEgresos = Object.values(methodTotals).reduce((sum, m) => sum + m.egresos, 0);
-    const totalCount = Object.values(methodTotals).reduce((sum, m) => sum + m.count, 0);
+    const totalCount = expenses.length;
 
+    // Para compatibilidad, movements vacío (ya no se usa)
     return {
-      movements,
+      movements: [],
       expenses,
       methodTotals,
       totalEgresos,
       totalCount,
+    };
+  }
+
+  async getExpensesByCategoryReport(filters: ExpensesByCategoryReportFilters) {
+    // Agrupar gastos por categoría en rango de fechas
+    const qb = this.expenseRepo.createQueryBuilder('e')
+      .leftJoin('e.category', 'category')
+      .select('category.id', 'categoryId')
+      .addSelect('category.nombre', 'categoryNombre')
+      .addSelect('SUM(e.monto)', 'total')
+      .addSelect('COUNT(e.id)', 'count')
+      .where('e.concepto NOT ILIKE :anulacion', { anulacion: '%anulacion%' })
+      .andWhere('e.concepto NOT ILIKE :anulada', { anulada: '%anulada%' })
+      .andWhere('e.concepto NOT ILIKE :anulado', { anulado: '%anulado%' })
+      .andWhere('e.concepto NOT ILIKE :cancelacion', { cancelacion: '%cancelacion%' })
+      .andWhere('e.concepto NOT ILIKE :cancelado', { cancelado: '%cancelado%' })
+      .andWhere('e.concepto NOT ILIKE :void', { void: '%void%' })
+      .groupBy('category.id')
+      .addGroupBy('category.nombre')
+      .orderBy('SUM(e.monto)', 'DESC');
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      qb.andWhere('e.fecha >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      qb.andWhere('e.fecha <= :hasta', { hasta });
+    }
+
+    const raw = await qb.getRawMany();
+
+    // Obtener detalles completos para mostrar en tabla expandida si se desea
+    const detailQb = this.expenseRepo.createQueryBuilder('e')
+      .leftJoinAndSelect('e.category', 'category')
+      .leftJoinAndSelect('e.metodoPago', 'metodoPago')
+      .leftJoinAndSelect('e.supplier', 'supplier')
+      .leftJoinAndSelect('e.createdBy', 'createdBy')
+      .andWhere('e.concepto NOT ILIKE :anulacion', { anulacion: '%anulacion%' })
+      .andWhere('e.concepto NOT ILIKE :anulada', { anulada: '%anulada%' })
+      .andWhere('e.concepto NOT ILIKE :anulado', { anulado: '%anulado%' })
+      .andWhere('e.concepto NOT ILIKE :cancelacion', { cancelacion: '%cancelacion%' })
+      .andWhere('e.concepto NOT ILIKE :cancelado', { cancelado: '%cancelado%' })
+      .andWhere('e.concepto NOT ILIKE :void', { void: '%void%' })
+      .orderBy('e.fecha', 'DESC');
+
+    if (filters.desde) {
+      const desde = new Date(`${filters.desde}T00:00:00`);
+      detailQb.andWhere('e.fecha >= :desde', { desde });
+    }
+    if (filters.hasta) {
+      const hasta = new Date(`${filters.hasta}T23:59:59`);
+      detailQb.andWhere('e.fecha <= :hasta', { hasta });
+    }
+
+    const expenses = await detailQb.getMany();
+
+    const totalGeneral = raw.reduce((sum, r) => sum + Number(r.total || 0), 0);
+    const countGeneral = raw.reduce((sum, r) => sum + Number(r.count || 0), 0);
+
+    const data = raw.map((r) => {
+      const total = Number(r.total || 0);
+      return {
+        categoryId: r.categoryId || 'sin-categoria',
+        categoryNombre: r.categoryNombre || 'Sin categoría',
+        total,
+        count: Number(r.count || 0),
+        porcentaje: totalGeneral > 0 ? Number(((total / totalGeneral) * 100).toFixed(2)) : 0,
+      };
+    });
+
+    // Incluir categorías sin gastos? No, solo las que tienen movimientos
+
+    return {
+      data,
+      expenses,
+      totales: {
+        totalGeneral,
+        countGeneral,
+      },
+      count: data.length,
+      rango: {
+        desde: filters.desde || null,
+        hasta: filters.hasta || null,
+      },
     };
   }
 

@@ -1,6 +1,6 @@
 import { Controller, Get, Put, Query, Body } from '@nestjs/common';
 import { ReportsService } from './reports.service';
-import { SurchargeReportQueryDto, DisperseSurchargesDto, CashRegisterReportQueryDto, ExpensesReportQueryDto, RoomReportQueryDto, CashRegisterByRoomReportQueryDto } from './dto/reports.dto';
+import { SurchargeReportQueryDto, DisperseSurchargesDto, CashRegisterReportQueryDto, ExpensesReportQueryDto, ExpensesByCategoryReportQueryDto, RoomReportQueryDto, CashRegisterByRoomReportQueryDto } from './dto/reports.dto';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
 
 @Controller('reports')
@@ -35,6 +35,12 @@ export class ReportsController {
   @Permissions('reports:view')
   getExpensesReport(@Query() query: ExpensesReportQueryDto) {
     return this.service.getExpensesReport(query);
+  }
+
+  @Get('expenses/by-category')
+  @Permissions('reports:view')
+  getExpensesByCategoryReport(@Query() query: ExpensesByCategoryReportQueryDto) {
+    return this.service.getExpensesByCategoryReport(query);
   }
 
   @Get('rooms')
