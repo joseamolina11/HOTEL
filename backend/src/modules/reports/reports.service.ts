@@ -449,7 +449,9 @@ export class ReportsService {
 
     const checkInQb = this.checkInRepo.createQueryBuilder('ci')
       .leftJoinAndSelect('ci.reservation', 'reservation')
-      .leftJoinAndSelect('reservation.room', 'room');
+      .leftJoinAndSelect('reservation.room', 'room')
+      .leftJoinAndSelect('reservation.companions', 'companions')
+      .leftJoinAndSelect('reservation.guest', 'guest');
 
     if (filters.desde) {
       const desde = new Date(`${filters.desde}T00:00:00`);
@@ -498,12 +500,26 @@ export class ReportsService {
 
     const checkInsByRoom: Record<string, number> = {};
     const checkInsCountByRoom: Record<string, number> = {};
+    // Personas por habitación (incluyendo acompañantes)
+    const personasByRoom: Record<string, number> = {};
+    const acompanantesByRoom: Record<string, number> = {};
+    const reservasOcupadasByRoom: Record<string, number> = {};
     for (const ci of checkIns) {
       const roomId = ci.reservation?.room?.id;
       if (roomId) {
         const precioBase = Number(ci.reservation?.precioBase) || 0;
         checkInsByRoom[roomId] = (checkInsByRoom[roomId] || 0) + precioBase;
         checkInsCountByRoom[roomId] = (checkInsCountByRoom[roomId] || 0) + 1;
+
+        // Total personas = cantidadHuespedes (si existe) o 1 + companions
+        const companionsCount = (ci.reservation as any)?.companions?.length ?? 0;
+        const cantidad = Number((ci.reservation as any)?.cantidadHuespedes) || 0;
+        const totalPersonas = cantidad > 0 ? cantidad : (1 + companionsCount);
+        // Si cantidad es menor que 1+companions, usar el mayor (protege datos inconsistentes)
+        const safePersonas = Math.max(totalPersonas, 1 + companionsCount);
+        personasByRoom[roomId] = (personasByRoom[roomId] || 0) + safePersonas;
+        acompanantesByRoom[roomId] = (acompanantesByRoom[roomId] || 0) + companionsCount;
+        reservasOcupadasByRoom[roomId] = (reservasOcupadasByRoom[roomId] || 0) + 1;
       }
     }
 
@@ -537,6 +553,10 @@ export class ReportsService {
       pedidosCount: number;
       checkinsCount: number;
       pagosCount: number;
+      // Personas (incluyendo acompañantes)
+      totalPersonas: number;
+      totalAcompanantes: number;
+      reservasOcupadas: number;
     }> = {};
 
     // Initialize all rooms
@@ -557,6 +577,9 @@ export class ReportsService {
         pedidosCount: ordersCountByRoom[room.id] || 0,
         checkinsCount: checkInsCountByRoom[room.id] || 0,
         pagosCount: 0,
+        totalPersonas: personasByRoom[room.id] || 0,
+        totalAcompanantes: acompanantesByRoom[room.id] || 0,
+        reservasOcupadas: reservasOcupadasByRoom[room.id] || 0,
       };
     }
 
@@ -666,6 +689,10 @@ export class ReportsService {
       pedidosCount: data.reduce((sum, r) => sum + r.pedidosCount, 0),
       checkinsCount: data.reduce((sum, r) => sum + r.checkinsCount, 0),
       pagosCount: data.reduce((sum, r) => sum + r.pagosCount, 0),
+      // Personas
+      totalPersonas: data.reduce((sum, r) => sum + (r.totalPersonas || 0), 0),
+      totalAcompanantes: data.reduce((sum, r) => sum + (r.totalAcompanantes || 0), 0),
+      reservasOcupadas: data.reduce((sum, r) => sum + (r.reservasOcupadas || 0), 0),
     };
 
     return {
