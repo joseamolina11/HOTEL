@@ -731,6 +731,8 @@ export class ReportsService {
           otros: 0,
           totalGeneral: 0,
           totalTransacciones: 0,
+          totalPersonas: 0,
+          totalAcompanantes: 0,
         },
         count: 0,
       };
@@ -742,6 +744,7 @@ export class ReportsService {
       .leftJoinAndSelect('fm.reservation', 'reservation')
       .leftJoinAndSelect('reservation.room', 'reservationRoom')
       .leftJoinAndSelect('reservation.guest', 'guest')
+      .leftJoinAndSelect('reservation.companions', 'companions')
       .where('fm.cashRegisterId IN (:...ids)', { ids: cashRegisterIds })
       .andWhere('fm.tipo = :tipo', { tipo: 'INGRESO' })
       .orderBy('fm.fechaMovimiento', 'ASC')
@@ -759,6 +762,8 @@ export class ReportsService {
       otros: number;
       total: number;
       count: number;
+      totalPersonas: number;
+      totalAcompanantes: number;
       movements: any[];
       [key: string]: any;
     }> = {};
@@ -771,6 +776,8 @@ export class ReportsService {
       otros: number;
       total: number;
       count: number;
+      totalPersonas: number;
+      totalAcompanantes: number;
       movements: any[];
       [key: string]: any;
     };
@@ -785,6 +792,8 @@ export class ReportsService {
         otros: 0,
         total: 0,
         count: 0,
+        totalPersonas: 0,
+        totalAcompanantes: 0,
         movements: [],
       };
     }
@@ -798,8 +807,14 @@ export class ReportsService {
       otros: 0,
       total: 0,
       count: 0,
+      totalPersonas: 0,
+      totalAcompanantes: 0,
       movements: [],
     };
+
+    // Para no duplicar personas si una reserva tiene varios movimientos/pagos,
+    // contamos cada reserva una sola vez por habitación.
+    const reservasContadas = new Set<string>();
 
     for (const m of movements) {
       let method = 'otros';
@@ -857,11 +872,34 @@ export class ReportsService {
         roomData[roomId].total += monto;
         roomData[roomId].count += 1;
         roomData[roomId].movements.push(movementData);
+
+        // Total personas = huésped principal (titular) + acompañantes.
+        // Se cuenta cada reserva una sola vez aunque tenga varios pagos.
+        const resId = (m as any).reservation?.id;
+        if (resId && !reservasContadas.has(resId)) {
+          reservasContadas.add(resId);
+          const companionsCount = (m as any).reservation?.companions?.length ?? 0;
+          const cantidad = Number((m as any).reservation?.cantidadHuespedes) || 0;
+          const base = cantidad > 0 ? cantidad : 1 + companionsCount;
+          const safePersonas = Math.max(base, 1 + companionsCount);
+          roomData[roomId].totalPersonas += safePersonas;
+          roomData[roomId].totalAcompanantes += companionsCount;
+        }
       } else {
         sinHabitacion[method] = (sinHabitacion[method] || 0) + monto;
         sinHabitacion.total += monto;
         sinHabitacion.count += 1;
         sinHabitacion.movements.push(movementData);
+        const resId = (m as any).reservation?.id;
+        if (resId && !reservasContadas.has(resId)) {
+          reservasContadas.add(resId);
+          const companionsCount = (m as any).reservation?.companions?.length ?? 0;
+          const cantidad = Number((m as any).reservation?.cantidadHuespedes) || 0;
+          const base = cantidad > 0 ? cantidad : 1 + companionsCount;
+          const safePersonas = Math.max(base, 1 + companionsCount);
+          sinHabitacion.totalPersonas += safePersonas;
+          sinHabitacion.totalAcompanantes += companionsCount;
+        }
       }
     }
 
@@ -888,6 +926,8 @@ export class ReportsService {
       otros: data.reduce((sum, r) => sum + r.otros, 0),
       totalGeneral: data.reduce((sum, r) => sum + r.total, 0),
       totalTransacciones: data.reduce((sum, r) => sum + r.count, 0),
+      totalPersonas: data.reduce((sum, r) => sum + (r.totalPersonas || 0), 0),
+      totalAcompanantes: data.reduce((sum, r) => sum + (r.totalAcompanantes || 0), 0),
     };
 
     return {
