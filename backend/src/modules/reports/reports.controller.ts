@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Query, Body } from '@nestjs/common';
+import { Controller, Get, Put, Query, Body, Param } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import { SurchargeReportQueryDto, DisperseSurchargesDto, CashRegisterReportQueryDto, ExpensesReportQueryDto, ExpensesByCategoryReportQueryDto, RoomReportQueryDto, CashRegisterByRoomReportQueryDto } from './dto/reports.dto';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
@@ -29,6 +29,15 @@ export class ReportsController {
   @Permissions('reports:view')
   getCashRegisterByRoomReport(@Query() query: CashRegisterByRoomReportQueryDto) {
     return this.service.getCashRegisterByRoomReport(query);
+  }
+
+  @Get('cash-register/by-room/:roomId/personas')
+  @Permissions('reports:view')
+  getRoomPersonasDetalle(
+    @Param('roomId') roomId: string,
+    @Query() query: CashRegisterByRoomReportQueryDto,
+  ) {
+    return this.service.getRoomPersonasDetalle(roomId, query);
   }
 
   @Get('expenses')

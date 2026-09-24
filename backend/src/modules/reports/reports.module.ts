@@ -13,9 +13,11 @@ import { Room } from '../rooms/entities/room.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Consumption } from '../consumptions/entities/consumption.entity';
 import { CheckIn } from '../check-in/entities/check-in.entity';
+import { CheckOut } from '../check-out/entities/check-out.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Surcharge, CashRegister, FinancialMovement,Payment, Expense,PaymentMethod, Room, Order,Consumption, CheckIn]), CashRegisterModule],
+  imports: [TypeOrmModule.forFeature([Surcharge, CashRegister, FinancialMovement,Payment, Expense,PaymentMethod, Room, Order,Consumption, CheckIn, CheckOut, Reservation]), CashRegisterModule],
   controllers: [ReportsController],
   providers: [ReportsService],
 })

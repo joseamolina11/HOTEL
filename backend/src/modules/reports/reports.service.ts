@@ -10,6 +10,8 @@ import { Room } from '../rooms/entities/room.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Consumption } from '../consumptions/entities/consumption.entity';
 import { CheckIn } from '../check-in/entities/check-in.entity';
+import { CheckOut } from '../check-out/entities/check-out.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
 import { Payment } from '../payments/entities/payment.entity';
 
 export interface SurchargeReportFilters {
@@ -65,6 +67,10 @@ export class ReportsService {
     private readonly consumptionRepo: Repository<Consumption>,
     @InjectRepository(CheckIn)
     private readonly checkInRepo: Repository<CheckIn>,
+    @InjectRepository(CheckOut)
+    private readonly checkOutRepo: Repository<CheckOut>,
+    @InjectRepository(Reservation)
+    private readonly reservationRepo: Repository<Reservation>,
     @InjectRepository(Payment)
     private readonly paymentRepo: Repository<Payment>,
   ) {}
@@ -935,5 +941,90 @@ export class ReportsService {
       totales,
       count: data.length,
     };
+  }
+
+  /**
+   * Servicio separado (nada que ver con cierre de caja):
+   * busca dentro del rango de fechas, para una habitación,
+   * cuántas reservas se hicieron con CHECKOUT y sus acompañantes.
+   * Filtro por fecha de checkout (check_outs.fecha_hora).
+   * Total Personas = huésped principal (titular) + acompañantes.
+   */
+  async getRoomPersonasDetalle(roomId: string, filters: CashRegisterByRoomReportFilters) {
+    const room = await this.roomRepo.findOne({ where: { id: roomId } });
+    if (!room) {
+      return { room: null, totales: { totalPersonas: 0, totalAcompanantes: 0, totalTitulares: 0, reservas: 0 }, porFecha: [], detalle: [] };
+    }
+
+    const qb = this.reservationRepo.createQueryBuilder('r')
+      .leftJoinAndSelect('r.guest', 'guest')
+      .leftJoinAndSelect('r.companions', 'companions')
+      .innerJoinAndSelect('r.checkOut', 'checkOut')
+      .where('r.roomId = :roomId', { roomId });
+    if (filters.desde) {
+      qb.andWhere('checkOut.fechaHora >= :desde', { desde: new Date(`${filters.desde}T00:00:00`) });
+    }
+    if (filters.hasta) {
+      qb.andWhere('checkOut.fechaHora <= :hasta', { hasta: new Date(`${filters.hasta}T23:59:59`) });
+    }
+    qb.orderBy('checkOut.fechaHora', 'ASC');
+    const reservas = await qb.getMany();
+
+    const porFechaMap: Record<string, { fecha: string; totalPersonas: number; acompanantes: number; titulares: number; reservas: number }> = {};
+    const detalle: Array<{
+      reservaId: string;
+      codigo: string | null;
+      fechaEntrada: Date | null;
+      fechaCheckout: Date | null;
+      fecha: string;
+      huesped: string;
+      cantidadHuespedes: number;
+      acompanantes: number;
+      titulares: number;
+      totalPersonas: number;
+    }> = [];
+
+    for (const res of reservas as any[]) {
+      const companionsCount = res?.companions?.length ?? 0;
+      const cantidad = Number(res?.cantidadHuespedes) || 0;
+      const totalPersonas = Math.max(cantidad > 0 ? cantidad : 1 + companionsCount, 1 + companionsCount);
+      const titulares = Math.max(0, totalPersonas - companionsCount);
+      const fechaCheckout = res?.checkOut?.fechaHora ? new Date(res.checkOut.fechaHora) : null;
+      const fecha = fechaCheckout ? fechaCheckout.toISOString().slice(0, 10) : 'sin-fecha';
+      const huesped = res?.guest ? `${res.guest.nombres || ''} ${res.guest.apellidos || ''}`.trim() || '—' : '—';
+
+      if (!porFechaMap[fecha]) {
+        porFechaMap[fecha] = { fecha, totalPersonas: 0, acompanantes: 0, titulares: 0, reservas: 0 };
+      }
+      porFechaMap[fecha].totalPersonas += totalPersonas;
+      porFechaMap[fecha].acompanantes += companionsCount;
+      porFechaMap[fecha].titulares += titulares;
+      porFechaMap[fecha].reservas += 1;
+
+      detalle.push({
+        reservaId: res.id,
+        codigo: res.codigo || null,
+        fechaEntrada: res.fechaEntrada || null,
+        fechaCheckout,
+        fecha,
+        huesped,
+        cantidadHuespedes: cantidad,
+        acompanantes: companionsCount,
+        titulares,
+        totalPersonas,
+      });
+    }
+
+    const porFecha = Object.values(porFechaMap).sort((a, b) => a.fecha.localeCompare(b.fecha));
+    detalle.sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+    const totales = {
+      totalPersonas: porFecha.reduce((s, d) => s + d.totalPersonas, 0),
+      totalAcompanantes: porFecha.reduce((s, d) => s + d.acompanantes, 0),
+      totalTitulares: porFecha.reduce((s, d) => s + d.titulares, 0),
+      reservas: reservas.length,
+    };
+
+    return { room, totales, porFecha, detalle };
   }
 }
